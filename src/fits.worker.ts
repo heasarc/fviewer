@@ -76,6 +76,17 @@ self.onmessage = async (e: MessageEvent) => {
                 break;
             }
 
+            case 'SAVE_FILE': {
+                if (!activeFile) throw new Error("No file opened");
+                
+                // activeFile.save() flushes cfitsio and returns a Uint8Array
+                const fileBytes = activeFile.save(); 
+                
+                // Send the bytes back. (Modern browsers transfer Uint8Array efficiently)
+                self.postMessage({ id, success: true, data: fileBytes });
+                break;
+            }
+
             default:
                 throw new Error(`Unknown action: ${action}`);
         }

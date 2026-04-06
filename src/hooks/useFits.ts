@@ -56,6 +56,7 @@ export function useFits() {
     const writeCell = useCallback((colNum: number, rowNum: number, value: number) => {
         return sendCommand('WRITE_CELL', { colNum, rowNum, value });
     }, [sendCommand]);
+    const saveFile = useCallback(() => sendCommand('SAVE_FILE'), [sendCommand]);
 
-    return { openFile, readHeader, moveToHDU, getTableInfo, readColumn ,writeCell };
+    return { openFile, readHeader, moveToHDU, getTableInfo, readColumn ,writeCell, saveFile };
 }
