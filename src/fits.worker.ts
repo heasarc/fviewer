@@ -134,6 +134,21 @@ self.onmessage = async (e: MessageEvent) => {
                 break;
             }
 
+            case 'CHECK_WCS': {
+                if (!activeFile) throw new Error("No file opened");
+                const hasWCS = activeFile.hasWCS();
+                self.postMessage({ id, success: true, data: hasWCS });
+                break;
+            }
+
+            case 'PIX_TO_WORLD': {
+                if (!activeFile) throw new Error("No file opened");
+                const { x, y } = payload;
+                const coords = activeFile.pixToWorld(x, y); // returns {ra, dec} or null
+                self.postMessage({ id, success: true, data: coords });
+                break;
+            }
+
             default:
                 throw new Error(`Unknown action: ${action}`);
         }

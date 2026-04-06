@@ -5,7 +5,8 @@ import { FitsImage } from './components/FitsImage';
 import { FitsPlot } from './components/FitsPlot';
 
 function App() {
-    const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile, readImage, getHduList } = useFits();
+    const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile,
+      readImage, getHduList, checkWcs, pixToWorld } = useFits();
     
     // File & HDU State
     const [fileName, setFileName] = useState("edited_file.fits");
@@ -157,7 +158,13 @@ function App() {
                         <div className="card shadow-sm mb-4">
                             <div className="card-header bg-light"><h5>Image Viewer</h5></div>
                             <div className="card-body bg-secondary d-flex justify-content-center p-3">
-                                <FitsImage data={imageData.data} width={imageData.width} height={imageData.height} />
+                                <FitsImage 
+                                  data={imageData.data}
+                                  width={imageData.width}
+                                  height={imageData.height} 
+                                  checkWcs={checkWcs}
+                                  pixToWorld={pixToWorld}
+                                />
                             </div>
                         </div>
                     )}
