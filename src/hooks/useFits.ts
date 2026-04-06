@@ -50,6 +50,7 @@ export function useFits() {
     // Specific API methods for the React components to use
     const openFile = useCallback((fileData: Uint8Array) => sendCommand('OPEN_FILE', fileData), [sendCommand]);
     const readHeader = useCallback(() => sendCommand('READ_HEADER'), [sendCommand]);
+    const getHduList = useCallback(() => sendCommand('GET_HDU_LIST'), [sendCommand]);
     const moveToHDU = useCallback((hduNum: number) => sendCommand('MOVE_TO_HDU', { hduNum }), [sendCommand]);
     const getTableInfo = useCallback(() => sendCommand('GET_TABLE_INFO'), [sendCommand]);
     const readColumn = useCallback((colNum: number) => sendCommand('READ_COLUMN', { colNum }), [sendCommand]);
@@ -60,7 +61,7 @@ export function useFits() {
     const readImage = useCallback(() => sendCommand('READ_IMAGE'), [sendCommand]);
 
     return { 
-        openFile, readHeader, moveToHDU, getTableInfo, readColumn, writeCell, saveFile,
-        readImage
+        openFile, readHeader, getHduList, moveToHDU, getTableInfo, readColumn, writeCell, 
+        saveFile, readImage
     };
 }
