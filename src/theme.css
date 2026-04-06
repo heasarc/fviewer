@@ -1,0 +1,101 @@
+:root {
+  --fv-bg: #13151f;
+  --fv-panel: #1e2235;
+  --fv-panel-hover: #2a2e45;
+  --fv-border: #323854;
+  --fv-accent: #7ec8e3;
+  --fv-text: #c0c5ce;
+  --fv-text-bright: #ffffff;
+}
+
+/* Base Body Styles */
+body {
+  background-color: var(--fv-bg);
+  color: var(--fv-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Bootstrap Overrides for Dark Theme */
+.card {
+  background-color: var(--fv-panel);
+  border-color: var(--fv-border);
+}
+
+.card-header {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--fv-border);
+  color: var(--fv-text-bright);
+}
+
+.form-control, .form-select, .input-group-text {
+  background-color: var(--fv-bg);
+  border-color: var(--fv-border);
+  color: var(--fv-text-bright);
+}
+
+.form-control:focus, .form-select:focus {
+  background-color: var(--fv-bg);
+  border-color: var(--fv-accent);
+  color: var(--fv-text-bright);
+  box-shadow: 0 0 0 0.25rem rgba(126, 200, 227, 0.25);
+}
+
+.form-control:disabled {
+  background-color: var(--fv-panel-hover);
+  color: #6c757d;
+  border-color: var(--fv-border);
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: var(--fv-accent);
+  border-color: var(--fv-accent);
+  color: #000;
+  font-weight: 600;
+}
+
+.btn-primary:hover, .btn-primary:focus {
+  background-color: #6bb5d0;
+  border-color: #6bb5d0;
+  color: #000;
+}
+
+/* Custom Tabs styling */
+.nav-tabs {
+  border-bottom: 1px solid var(--fv-border);
+}
+
+.nav-tabs .nav-link {
+  color: var(--fv-text);
+  border: 1px solid transparent;
+  margin-bottom: -1px;
+}
+
+.nav-tabs .nav-link:hover {
+  border-color: transparent transparent var(--fv-border) transparent;
+  color: var(--fv-text-bright);
+}
+
+.nav-tabs .nav-link.active {
+  background-color: var(--fv-panel);
+  color: var(--fv-accent);
+  border-color: var(--fv-border) var(--fv-border) var(--fv-panel);
+}
+
+/* Typography and utilities */
+.text-primary {
+  color: var(--fv-accent) !important;
+}
+
+.border-bottom, .border, .border-end {
+  border-color: var(--fv-border) !important;
+}
+
+/* Fade in animation for tab switching */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

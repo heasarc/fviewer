@@ -65,7 +65,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                         left: 0,
                         width: totalWidth,
                         height: rowHeight,
-                        backgroundColor: i % 2 === 0 ? '#fff' : '#f8f9fa'
+                        backgroundColor: i % 2 === 0 ? 'var(--fv-panel)' : 'var(--fv-bg)',
+                        color: 'var(--fv-text)'
                     }}
                 >
                     <div 
@@ -73,7 +74,9 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                         className="d-flex align-items-center px-2 border-end text-muted fw-bold shadow-sm" 
                         style={{ 
                             width: rowNumWidth, flexShrink: 0, position: 'sticky', 
-                            left: 0, zIndex: 2, backgroundColor: '#e9ecef'
+                            left: 0, zIndex: 2,
+                            backgroundColor: 'var(--fv-panel-hover)',
+                            color: 'var(--fv-accent)'
                         }}
                     >
                         {i + 1}
