@@ -417,16 +417,6 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
         );
     };
 
-    const renderDrawModeIcon = (mode: DrawMode) => {
-        switch(mode) {
-            case 'pan': return <i className="bi bi-arrows-move"></i>;
-            case 'circle': return <i className="bi bi-circle"></i>;
-            case 'box': return <i className="bi bi-square"></i>;
-            case 'ellipse': return <span style={{ transform: 'scaleY(0.7)', display: 'inline-block' }}><i className="bi bi-circle"></i></span>;
-            case 'annulus': return <i className="bi bi-bullseye"></i>;
-        }
-    };
-
     return (
         <div className="d-flex flex-column w-100 h-100 border rounded overflow-hidden" style={{ borderColor: 'var(--fv-border)' }}>
             
