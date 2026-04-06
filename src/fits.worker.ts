@@ -27,7 +27,44 @@ self.onmessage = async (e: MessageEvent) => {
                 break;
             }
 
-            // We will add READ_IMAGE, READ_COLUMN, WRITE_CELL, etc. here later
+            case 'MOVE_TO_HDU': {
+                if (!activeFile) throw new Error("No file opened");
+                const status = activeFile.moveToHDU(payload.hduNum);
+                
+                // Determine HDU type by reading keywords
+                const xtension = activeFile.readKeyword("XTENSION")?.trim() || "";
+                const isTable = xtension === "BINTABLE" || xtension === "TABLE";
+                console.log(xtension, isTable);
+                const isImage = activeFile.readKeyword("SIMPLE") === "T" || xtension === "IMAGE";
+
+                self.postMessage({ id, success: true, data: { status, isTable, isImage } });
+                break;
+            }
+
+            case 'GET_TABLE_INFO': {
+                if (!activeFile) throw new Error("No file opened");
+                const numRows = activeFile.getNumRows();
+                const numCols = activeFile.getNumCols();
+                
+                // Fetch schema for all columns
+                const columns = [];
+                for (let i = 1; i <= numCols; i++) {
+                    columns.push(activeFile.getColumnInfo(i));
+                }
+
+                self.postMessage({ id, success: true, data: { numRows, numCols, columns } });
+                break;
+            }
+
+            case 'READ_COLUMN': {
+                if (!activeFile) throw new Error("No file opened");
+                // payload.colNum is 1-indexed
+                const colData = activeFile.readColumn(payload.colNum);
+                
+                // Transfer the TypedArray to the main thread efficiently
+                self.postMessage({ id, success: true, data: colData });
+                break;
+            }
 
             default:
                 throw new Error(`Unknown action: ${action}`);
