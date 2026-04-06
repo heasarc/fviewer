@@ -27,6 +27,34 @@ self.onmessage = async (e: MessageEvent) => {
                 break;
             }
 
+            case 'GET_HDU_LIST': {
+                if (!activeFile) throw new Error("No file opened");
+                const numHDUs = activeFile.getNumHDUs();
+                const hduList = [];
+                
+                for (let i = 1; i <= numHDUs; i++) {
+                    activeFile.moveToHDU(i);
+                    // Clean up the string by removing FITS quotes and spaces
+                    const xtension = (activeFile.readKeyword("XTENSION") || "").replace(/'/g, '').trim();
+                    const extname = (activeFile.readKeyword("EXTNAME") || "").replace(/'/g, '').trim() || `HDU ${i}`;
+                    const naxis = parseInt(activeFile.readKeyword("NAXIS") || "0", 10);
+                    
+                    let type = 'unknown';
+                    if (i === 1) {
+                        type = naxis > 0 ? 'image' : 'empty'; // Primary HDU is an image, but might be 0 pixels
+                    } else if (xtension === 'IMAGE') {
+                        type = naxis > 0 ? 'image' : 'empty';
+                    } else if (xtension === 'BINTABLE' || xtension === 'TABLE') {
+                        type = 'table';
+                    }
+
+                    hduList.push({ index: i, type, extname, naxis });
+                }
+                
+                self.postMessage({ id, success: true, data: hduList });
+                break;
+            }
+
             case 'MOVE_TO_HDU': {
                 if (!activeFile) throw new Error("No file opened");
                 const status = activeFile.moveToHDU(payload.hduNum);
