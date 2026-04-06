@@ -402,76 +402,74 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
     };
 
     return (
-        <div className="d-flex flex-column w-100 h-100">
-            {/* Toolbar */}
-            <div className="d-flex flex-wrap gap-3 mb-2 p-2 rounded align-items-center" style={{ backgroundColor: 'var(--fv-panel-hover)' }}>
-                <div className="btn-group btn-group-sm shadow-sm border border-dark">
-                    <button className={`btn btn-${drawMode === 'pan' ? 'primary' : 'secondary'} border-0`} onClick={() => setDrawMode('pan')} title="Pan / Pointer"><i className="bi bi-arrows-move"></i></button>
-                    <button className={`btn btn-${drawMode === 'circle' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('circle')} title="Draw Circle"><i className="bi bi-circle"></i></button>
-                    <button className={`btn btn-${drawMode === 'box' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('box')} title="Draw Box"><i className="bi bi-square"></i></button>
-                    <button className={`btn btn-${drawMode === 'ellipse' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('ellipse')} title="Draw Ellipse">
-                        <span style={{ display: 'inline-block', transform: 'scaleY(0.7)' }}><i className="bi bi-circle"></i></span>
-                    </button>
-                    <button className={`btn btn-${drawMode === 'annulus' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('annulus')} title="Draw Annulus"><i className="bi bi-bullseye"></i></button>
+        <div className="d-flex flex-column w-100 h-100 border rounded overflow-hidden" style={{ borderColor: 'var(--fv-border)' }}>
+            
+            {/* Compact Snapshot-Style Toolbar */}
+            <div className="fv-toolbar d-flex flex-wrap gap-2 align-items-center">
+                
+                {/* Drawing Modes */}
+                <div className="d-flex gap-1 me-2">
+                    <button className={`fv-btn ${drawMode === 'pan' ? 'active' : ''}`} onClick={() => setDrawMode('pan')} title="Pan / Pointer"><i className="bi bi-arrows-move"></i></button>
+                    <button className={`fv-btn ${drawMode === 'circle' ? 'active' : ''}`} onClick={() => setDrawMode('circle')} title="Draw Circle"><i className="bi bi-circle"></i></button>
+                    <button className={`fv-btn ${drawMode === 'box' ? 'active' : ''}`} onClick={() => setDrawMode('box')} title="Draw Box"><i className="bi bi-square"></i></button>
+                    <button className={`fv-btn ${drawMode === 'ellipse' ? 'active' : ''}`} onClick={() => setDrawMode('ellipse')} title="Draw Ellipse"><span style={{ transform: 'scaleY(0.7)' }}><i className="bi bi-circle"></i></span></button>
+                    <button className={`fv-btn ${drawMode === 'annulus' ? 'active' : ''}`} onClick={() => setDrawMode('annulus')} title="Draw Annulus"><i className="bi bi-bullseye"></i></button>
                     
-                    {/* NEW: Delete Selected Region Button */}
-                    <button className="btn btn-warning border-0 border-start border-dark" onClick={deleteSelectedRegion} disabled={!selectedRegionId} title="Delete Selected (Del/Backspace)">
-                        <i className="bi bi-eraser"></i>
-                    </button>
+                    <div style={{ width: '1px', background: 'var(--fv-border)', margin: '0 4px' }}></div> {/* Divider */}
                     
-                    <button className="btn btn-danger border-0 border-start border-dark" onClick={() => { setRegions([]); setSelectedRegionId(null); }} disabled={regions.length === 0} title="Clear All Regions">
-                        <i className="bi bi-trash"></i>
-                    </button>
+                    <button className="fv-btn" onClick={deleteSelectedRegion} disabled={!selectedRegionId} title="Delete Selected"><i className="bi bi-eraser"></i></button>
+                    <button className="fv-btn danger" onClick={() => { setRegions([]); setSelectedRegionId(null); }} disabled={regions.length === 0} title="Clear All"><i className="bi bi-trash"></i></button>
                 </div>
                 
-                <div className="input-group input-group-sm w-auto shadow-sm">
-                    <span className="input-group-text border-0 bg-dark text-white">Color</span>
-                    <select className="form-select border-0" value={colormap} onChange={e => setColormap(e.target.value)}>
+                {/* Color & Scale (Compact Inputs) */}
+                <div className="fv-input-group">
+                    <span className="fv-input-label">Color</span>
+                    <select className="fv-select" value={colormap} onChange={e => setColormap(e.target.value)}>
                         <option value="gray">Grayscale</option><option value="heat">Heat</option><option value="cool">Cool</option><option value="plasma">Plasma</option>
                     </select>
                 </div>
-                <div className="input-group input-group-sm w-auto shadow-sm">
-                    <span className="input-group-text border-0 bg-dark text-white">Scale</span>
-                    <select className="form-select border-0" value={stretch} onChange={e => setStretch(e.target.value)}>
-                        <option value="linear">Linear</option><option value="log">Log</option><option value="sqrt">Square Root</option><option value="asinh">ASINH</option>
+                <div className="fv-input-group">
+                    <span className="fv-input-label">Scale</span>
+                    <select className="fv-select" value={stretch} onChange={e => setStretch(e.target.value)}>
+                        <option value="linear">Linear</option><option value="log">Log</option><option value="sqrt">Sqrt</option><option value="asinh">ASINH</option>
                     </select>
                 </div>
 
-                <div className="input-group input-group-sm w-auto shadow-sm ms-2">
-                    <span className="input-group-text border-0 bg-dark text-white">View</span>
-                    <button className={`btn btn-${flipX ? 'primary' : 'secondary'} border-0`} onClick={() => setFlipX(!flipX)}><i className="bi bi-symmetry-vertical"></i></button>
-                    <button className={`btn btn-${flipY ? 'primary' : 'secondary'} border-0`} onClick={() => setFlipY(!flipY)}><i className="bi bi-symmetry-horizontal"></i></button>
-                    <button className="btn btn-secondary border-0 border-start border-dark" onClick={() => setRotation(r => r - 90)}><i className="bi bi-arrow-counterclockwise"></i></button>
-                    <button className="btn btn-secondary border-0" onClick={() => setRotation(r => r + 90)}><i className="bi bi-arrow-clockwise"></i></button>
-                    <span className="input-group-text border-0 border-start border-dark bg-secondary text-white" style={{ borderLeft: '1px solid #1e2235 !important' }}>Angle:</span>
-                    <input type="number" className="form-control border-0 text-center bg-secondary text-white" style={{ width: '65px', appearance: 'textfield' }} value={rotation} onChange={(e) => setRotation(Number(e.target.value) || 0)} step="1"/>
-                    <span className="input-group-text border-0 bg-secondary text-white">°</span>
+                {/* View Transforms */}
+                <div className="d-flex gap-1 ms-2">
+                    <button className={`fv-btn ${flipX ? 'active' : ''}`} onClick={() => setFlipX(!flipX)} title="Flip X"><i className="bi bi-symmetry-vertical"></i></button>
+                    <button className={`fv-btn ${flipY ? 'active' : ''}`} onClick={() => setFlipY(!flipY)} title="Flip Y"><i className="bi bi-symmetry-horizontal"></i></button>
+                    <button className="fv-btn" onClick={() => setRotation(r => r - 90)} title="Rotate CCW"><i className="bi bi-arrow-counterclockwise"></i></button>
+                    <button className="fv-btn" onClick={() => setRotation(r => r + 90)} title="Rotate CW"><i className="bi bi-arrow-clockwise"></i></button>
+                </div>
+                
+                <div className="fv-input-group ms-1">
+                    <span className="fv-input-label">Angle</span>
+                    <input type="number" className="fv-input text-center" style={{ width: '45px', appearance: 'textfield' }} value={rotation} onChange={(e) => setRotation(Number(e.target.value) || 0)} step="1"/>
+                    <span className="fv-input-label border-start border-end-0">°</span>
                 </div>
 
+                {/* Zoom */}
                 <div className="ms-auto d-flex gap-1 align-items-center">
-                    <span className="text-muted small me-2">{Math.round(zoom * 100)}%</span>
-                    <button className="btn btn-sm btn-outline-secondary text-light border-0" onClick={() => setZoom(z => Math.max(0.1, z * 0.8))}><i className="bi bi-zoom-out"></i></button>
-                    <button className="btn btn-sm btn-outline-secondary text-light border-0" onClick={() => setZoom(z => Math.min(50, z * 1.2))}><i className="bi bi-zoom-in"></i></button>
-                    <button className="btn btn-sm btn-outline-secondary text-light border-0" onClick={resetView}><i className="bi bi-arrow-repeat"></i></button>
+                    <span className="text-muted small me-2" style={{ fontFamily: 'monospace' }}>{Math.round(zoom * 100)}%</span>
+                    <button className="fv-btn" onClick={() => setZoom(z => Math.max(0.1, z * 0.8))}><i className="bi bi-zoom-out"></i></button>
+                    <button className="fv-btn" onClick={() => setZoom(z => Math.min(50, z * 1.2))}><i className="bi bi-zoom-in"></i></button>
+                    <button className="fv-btn" onClick={resetView} title="Reset View"><i className="bi bi-arrow-repeat"></i></button>
                 </div>
             </div>
 
-            {/* Viewport Container */}
+            {/* Viewport */}
             <div 
                 ref={viewportRef}
-                className="d-flex justify-content-center align-items-center rounded-top border overflow-hidden position-relative" 
-                style={{ 
-                    backgroundColor: '#000', minHeight: '600px', 
-                    cursor: drawMode === 'pan' ? (isDragging && !dragAction ? 'grabbing' : 'grab') : 'crosshair'
-                }}
+                className="flex-grow-1 position-relative overflow-hidden" 
+                style={{ backgroundColor: '#000', minHeight: '500px', cursor: drawMode === 'pan' ? (isDragging && !dragAction ? 'grabbing' : 'grab') : 'crosshair' }}
                 onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave} onWheel={handleWheel}
             >
                 <div style={{
                     position: 'relative', width, height, flexShrink: 0,
                     transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg) scaleX(${flipX ? -1 : 1}) scaleY(${flipY ? -1 : 1})`,
-                    transformOrigin: 'center center',
-                    transition: (isDragging && !dragAction) ? 'transform 0.1s ease-out' : 'none'
+                    transformOrigin: 'center center'
                 }}>
                     <canvas ref={canvasRef} width={width} height={height} style={{ imageRendering: 'pixelated', display: 'block', width: '100%', height: '100%' }} />
                     <svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}>
@@ -481,16 +479,19 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                 </div>
             </div>
 
-            {/* Status Bar */}
-            <div className="d-flex justify-content-between align-items-center px-3 py-1 rounded-bottom border border-top-0 shadow-sm" style={{ backgroundColor: 'var(--fv-panel)', fontSize: '0.85rem' }}>
-                <div className="d-flex gap-4">
-                    <span><span className="text-muted me-1">X:</span> <strong className="text-primary">{hoverInfo.x}</strong></span>
-                    <span><span className="text-muted me-1">Y:</span> <strong className="text-primary">{hoverInfo.y}</strong></span>
-                    <span><span className="text-muted me-1">Value:</span> <strong className="text-primary">{hoverInfo.val !== undefined ? Number(hoverInfo.val).toPrecision(4) : '...'}</strong></span>
+            {/* Compact Status Bar */}
+            <div className="fv-statusbar d-flex justify-content-between align-items-center">
+                <div className="d-flex gap-4" style={{ fontFamily: 'monospace' }}>
+                    <span><span className="text-muted">X:</span> <strong style={{ color: 'var(--fv-accent)' }}>{hoverInfo.x}</strong></span>
+                    <span><span className="text-muted">Y:</span> <strong style={{ color: 'var(--fv-accent)' }}>{hoverInfo.y}</strong></span>
+                    <span><span className="text-muted">Val:</span> <strong style={{ color: 'var(--fv-accent)' }}>{hoverInfo.val !== undefined ? Number(hoverInfo.val).toPrecision(4) : '...'}</strong></span>
                 </div>
-                <div className="d-flex gap-4">
+                <div className="d-flex gap-4" style={{ fontFamily: 'monospace' }}>
                     {hasWCS ? (
-                        <><span><span className="text-muted me-1">RA:</span> <strong className="text-warning">{hoverInfo.ra}</strong>°</span><span><span className="text-muted me-1">Dec:</span> <strong className="text-warning">{hoverInfo.dec}</strong>°</span></>
+                        <>
+                            <span><span className="text-muted">RA:</span> <strong className="text-warning">{hoverInfo.ra}</strong>°</span>
+                            <span><span className="text-muted">Dec:</span> <strong className="text-warning">{hoverInfo.dec}</strong>°</span>
+                        </>
                     ) : <span className="text-muted fst-italic">No WCS</span>}
                 </div>
             </div>
