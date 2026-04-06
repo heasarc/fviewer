@@ -3,10 +3,11 @@ import { useFits } from './hooks/useFits';
 import { VirtualTable } from './components/VirtualTable';
 
 function App() {
-    const { openFile, moveToHDU, getTableInfo, readColumn, writeCell } = useFits();
+    const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile } = useFits();
     const [tableInfo, setTableInfo] = useState<any>(null);
     const [tableData, setTableData] = useState<Record<string, any[]>>({});
     const [isLoading, setIsLoading] = useState(false);
+    const [fileName, setFileName] = useState("edited_file.fits");
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -71,6 +72,30 @@ function App() {
         }
     };
 
+    const handleSave = async () => {
+        try {
+            setIsLoading(true);
+            const fileBytes = await saveFile();
+            
+            // Create a Blob and trigger a download
+            const blob = new Blob([fileBytes], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+        } catch (error) {
+            console.error("Failed to save:", error);
+            alert("Failed to save file.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     return (
         <div className="container-fluid py-4">
@@ -104,9 +129,14 @@ function App() {
                 <div className="card shadow-sm">
                     <div className="card-header bg-light d-flex justify-content-between align-items-center">
                         <h5 className="mb-0">Table Data</h5>
-                        <span className="badge bg-secondary">
-                            {tableInfo.numRows} Rows | {tableInfo.numCols} Columns
-                        </span>
+                        <div>
+                          <span className="badge bg-secondary me-3">
+                              {tableInfo.numRows} Rows | {tableInfo.numCols} Columns
+                          </span>
+                          <button className="btn btn-sm btn-primary" onClick={handleSave} disabled={isLoading}>
+                              <i className="bi bi-save me-1"></i> Save FITS
+                          </button>
+                        </div>
                     </div>
                     <div className="card-body p-0">
                         <VirtualTable 
