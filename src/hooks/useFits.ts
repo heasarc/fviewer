@@ -59,9 +59,11 @@ export function useFits() {
     }, [sendCommand]);
     const saveFile = useCallback(() => sendCommand('SAVE_FILE'), [sendCommand]);
     const readImage = useCallback(() => sendCommand('READ_IMAGE'), [sendCommand]);
+    const checkWcs = useCallback(() => sendCommand('CHECK_WCS'), [sendCommand]);
+    const pixToWorld = useCallback((x: number, y: number) => sendCommand('PIX_TO_WORLD', { x, y }), [sendCommand]);
 
     return { 
         openFile, readHeader, getHduList, moveToHDU, getTableInfo, readColumn, writeCell, 
-        saveFile, readImage
+        saveFile, readImage, checkWcs, pixToWorld
     };
 }
