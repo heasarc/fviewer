@@ -3,7 +3,7 @@ import { useFits } from './hooks/useFits';
 import { VirtualTable } from './components/VirtualTable';
 
 function App() {
-    const { openFile, moveToHDU, getTableInfo, readColumn } = useFits();
+    const { openFile, moveToHDU, getTableInfo, readColumn, writeCell } = useFits();
     const [tableInfo, setTableInfo] = useState<any>(null);
     const [tableData, setTableData] = useState<Record<string, any[]>>({});
     const [isLoading, setIsLoading] = useState(false);
@@ -42,6 +42,35 @@ function App() {
             setIsLoading(false);
         }
     };
+
+        // Add this handler inside App component:
+    const handleCellEdit = async (colName: string, colNum: number, rowIndex: number, newValue: string) => {
+        try {
+            // FITS row numbers are 1-indexed (rowIndex is 0-indexed)
+            const numericValue = Number(newValue);
+            if (isNaN(numericValue)) {
+                alert("Only numeric edits are supported in this demo.");
+                return;
+            }
+
+            await writeCell(colNum, rowIndex + 1, numericValue);
+
+            // Optimistic UI Update: modify our local state so the UI updates instantly
+            setTableData(prevData => {
+                const newData = { ...prevData };
+                // Clone the column array so React detects the state change
+                const newCol = [...newData[colName]];
+                newCol[rowIndex] = numericValue;
+                newData[colName] = newCol;
+                return newData;
+            });
+
+        } catch (error) {
+            console.error("Failed to write cell:", error);
+            alert("Failed to write cell.");
+        }
+    };
+
 
     return (
         <div className="container-fluid py-4">
@@ -83,7 +112,8 @@ function App() {
                         <VirtualTable 
                             numRows={tableInfo.numRows} 
                             columns={tableInfo.columns} 
-                            dataMap={tableData} 
+                            dataMap={tableData}
+                            onCellEdit={handleCellEdit}
                         />
                     </div>
                 </div>

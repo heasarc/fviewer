@@ -53,6 +53,9 @@ export function useFits() {
     const moveToHDU = useCallback((hduNum: number) => sendCommand('MOVE_TO_HDU', { hduNum }), [sendCommand]);
     const getTableInfo = useCallback(() => sendCommand('GET_TABLE_INFO'), [sendCommand]);
     const readColumn = useCallback((colNum: number) => sendCommand('READ_COLUMN', { colNum }), [sendCommand]);
+    const writeCell = useCallback((colNum: number, rowNum: number, value: number) => {
+        return sendCommand('WRITE_CELL', { colNum, rowNum, value });
+    }, [sendCommand]);
 
-    return { openFile, readHeader, moveToHDU, getTableInfo, readColumn };
+    return { openFile, readHeader, moveToHDU, getTableInfo, readColumn ,writeCell };
 }
