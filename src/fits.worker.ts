@@ -87,6 +87,25 @@ self.onmessage = async (e: MessageEvent) => {
                 break;
             }
 
+            case 'READ_IMAGE': {
+                if (!activeFile) throw new Error("No file opened");
+                
+                const imageResult = activeFile.readImage();
+                if (!imageResult) throw new Error("Current HDU is not an image");
+                
+                // Read dimensions from the FITS header
+                const width = parseInt(activeFile.readKeyword("NAXIS1") || "0", 10);
+                const height = parseInt(activeFile.readKeyword("NAXIS2") || "0", 10);
+
+                // Send the dimensions along with the pixel data
+                self.postMessage({ 
+                    id, 
+                    success: true, 
+                    data: { ...imageResult, width, height } 
+                });
+                break;
+            }
+
             default:
                 throw new Error(`Unknown action: ${action}`);
         }
