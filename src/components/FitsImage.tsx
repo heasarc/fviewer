@@ -23,13 +23,14 @@ export interface Region {
 }
 
 export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, checkWcs, pixToWorld }) => {
+    const viewportRef = useRef<HTMLDivElement>(null); 
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const overlayRef = useRef<HTMLCanvasElement>(null); // New Overlay Canvas
     
+    // Rendering State
     const [colormap, setColormap] = useState('gray');
     const [stretch, setStretch] = useState('log');
 
-    // Interactivity & Transform
+    // Interactivity & Transform State
     const [zoom, setZoom] = useState(1);
     const [pan, setPan] = useState({ x: 0, y: 0 });
     const [flipX, setFlipX] = useState(false);
@@ -40,10 +41,14 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
     const [drawMode, setDrawMode] = useState<DrawMode>('pan');
     const [regions, setRegions] = useState<Region[]>([]);
     const [draftRegion, setDraftRegion] = useState<Region | null>(null);
-
+    
+    // Simple Drag State
+    const [draggingRegionId, setDraggingRegionId] = useState<string | null>(null);
+    const [hoveredRegionId, setHoveredRegionId] = useState<string | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, y: 0 });
 
+    // Status Bar & WCS
     const [hasWCS, setHasWCS] = useState(false);
     const [hoverInfo, setHoverInfo] = useState({ x: 0, y: 0, val: 0, ra: 'N/A', dec: 'N/A' });
     const isWcsPending = useRef(false);
@@ -64,7 +69,6 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
     useEffect(() => {
         const ctx = canvasRef.current?.getContext('2d');
         if (!ctx) return;
-
         const imgData = ctx.createImageData(width, height);
         const range = max - min;
         const lut = getColormapLUT(colormap);
@@ -73,7 +77,6 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
             const x = i % width;
             const y = height - 1 - Math.floor(i / width);
             const idx = (y * width + x) * 4;
-
             const norm = (data[i] - min) / range;
             const stretched = applyStretch(norm, stretch);
             const colorIdx = Math.max(0, Math.min(255, Math.floor(stretched * 255))) * 3;
@@ -84,75 +87,80 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
         ctx.putImageData(imgData, 0, 0);
     }, [data, width, height, colormap, stretch, min, max]);
 
-    // 2. Render Regions Overlay
-    useEffect(() => {
-        const ctx = overlayRef.current?.getContext('2d');
-        if (!ctx) return;
+    // --- MATHEMATICALLY PURE COORDINATE UN-PROJECTION ---
+    const getCanvasCoords = (clientX: number, clientY: number) => {
+        const viewport = viewportRef.current;
+        if (!viewport) return { x: 0, y: 0 };
         
-        ctx.clearRect(0, 0, width, height);
-        const allRegions = draftRegion ? [...regions, draftRegion] : regions;
+        const rect = viewport.getBoundingClientRect();
+        let cx = (clientX - rect.left) - rect.width / 2;
+        let cy = (clientY - rect.top) - rect.height / 2;
 
-        allRegions.forEach(r => {
-            ctx.beginPath();
-            ctx.strokeStyle = r.color;
-            ctx.lineWidth = 2 / zoom; // Keep lines thin even when zoomed in
-            
-            if (r.type === 'box') {
-                const w = r.endX - r.startX;
-                const h = r.endY - r.startY;
-                ctx.strokeRect(r.startX, r.startY, w, h);
-            } else if (r.type === 'circle') {
-                const radius = Math.sqrt(Math.pow(r.endX - r.startX, 2) + Math.pow(r.endY - r.startY, 2));
-                ctx.arc(r.startX, r.startY, radius, 0, 2 * Math.PI);
-                ctx.stroke();
-            }
-        });
-    }, [regions, draftRegion, zoom, width, height]);
+        cx -= pan.x; cy -= pan.y;
+        cx /= zoom; cy /= zoom;
+        
+        const rad = -rotation * (Math.PI / 180);
+        const cos = Math.cos(rad); const sin = Math.sin(rad);
+        let rx = cx * cos - cy * sin;
+        let ry = cx * sin + cy * cos;
 
-    // --- Mouse Handlers ---
-    // --- Mouse Handlers ---
-    const getCanvasCoords = (e: React.MouseEvent) => {
-        // Use the base canvas since the overlay has pointerEvents: 'none'
-        const canvas = canvasRef.current; 
-        if (!canvas) return { x: 0, y: 0 };
-        const scaleX = width / canvas.offsetWidth;
-        const scaleY = height / canvas.offsetHeight;
-        return { x: e.nativeEvent.offsetX * scaleX, y: e.nativeEvent.offsetY * scaleY };
+        if (flipX) rx = -rx; if (flipY) ry = -ry;
+
+        return { x: rx + width / 2, y: ry + height / 2 };
     };
 
+    // --- MOUSE HANDLERS ---
     const handleMouseDown = (e: React.MouseEvent) => {
+        // If we clicked a region line, the SVG's onMouseDown handles it and calls stopPropagation.
+        // So if this runs, we know we clicked the background image.
+        const { x, y } = getCanvasCoords(e.clientX, e.clientY);
         setIsDragging(true);
+
         if (drawMode === 'pan') {
             dragStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-        } else if (e.target === canvasRef.current) {
-            const { x, y } = getCanvasCoords(e);
-            // Default color for regions, you can change this later!
-            setDraftRegion({ id: Date.now().toString(), type: drawMode, startX: x, startY: y, endX: x, endY: y, color: '#00ff00' });
+        } else {
+            dragStart.current = { x, y }; 
+            setDraftRegion({ 
+                id: Date.now().toString(), type: drawMode, 
+                startX: x, startY: y, endX: x, endY: y, color: '#00ff00' 
+            });
         }
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
-        // 1. Handle Panning
+        // 1. Handle Region Dragging
+        if (draggingRegionId) {
+            const { x, y } = getCanvasCoords(e.clientX, e.clientY);
+            const dx = x - dragStart.current.x;
+            const dy = y - dragStart.current.y;
+            
+            setRegions(prev => prev.map(r => r.id === draggingRegionId ? { 
+                ...r, startX: r.startX + dx, startY: r.startY + dy, endX: r.endX + dx, endY: r.endY + dy 
+            } : r));
+            
+            dragStart.current = { x, y }; // Reset anchor point for smooth continuous dragging
+            return;
+        }
+
+        // 2. Handle Image Panning
         if (isDragging && drawMode === 'pan') {
             setPan({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y });
-            return; // Skip status bar updates while panning to save performance
+            return;
         }
 
-        // 2. Handle Region Drafting
-        if (isDragging && draftRegion && e.target === canvasRef.current) {
-            const { x, y } = getCanvasCoords(e);
+        // 3. Handle Region Drafting
+        if (isDragging && draftRegion) {
+            const { x, y } = getCanvasCoords(e.clientX, e.clientY);
             setDraftRegion({ ...draftRegion, endX: x, endY: y });
+            return; 
         }
 
-        // 3. Handle Status Bar (Pixel & WCS lookup)
-        // Note: We check canvasRef.current because the overlay has pointerEvents: 'none'
-        if (e.target === canvasRef.current) {
-            const { x: imgX, y: imgY } = getCanvasCoords(e);
-            const fitsX = Math.floor(imgX) + 1;
-            const fitsY = height - Math.floor(imgY);
-            
-            if (fitsX < 1 || fitsX > width || fitsY < 1 || fitsY > height) return;
-
+        // 4. Handle Status Bar
+        const { x: imgX, y: imgY } = getCanvasCoords(e.clientX, e.clientY);
+        const fitsX = Math.floor(imgX) + 1;
+        const fitsY = height - Math.floor(imgY);
+        
+        if (fitsX >= 1 && fitsX <= width && fitsY >= 1 && fitsY <= height) {
             const val = data[(fitsY - 1) * width + (fitsX - 1)];
             setHoverInfo(prev => ({ ...prev, x: fitsX, y: fitsY, val }));
 
@@ -168,10 +176,12 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
 
     const handleMouseUpOrLeave = () => {
         setIsDragging(false);
+        setDraggingRegionId(null); // Drop the region if we were holding it
+
         if (draftRegion) {
-            // Only save if the user actually dragged a distance
-            if (Math.abs(draftRegion.endX - draftRegion.startX) > 2) {
+            if (Math.abs(draftRegion.endX - draftRegion.startX) > 2 || Math.abs(draftRegion.endY - draftRegion.startY) > 2) {
                 setRegions([...regions, draftRegion]);
+                setDrawMode('pan'); 
             }
             setDraftRegion(null);
         }
@@ -184,28 +194,71 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
         setFlipX(false); setFlipY(false); setRotation(0);
     };
 
+    // --- SVG REGION RENDERER ---
+    const renderRegionSVG = (r: Region, isDraft = false) => {
+        const isHovered = r.id === hoveredRegionId;
+        
+        // Define SVG tags based on region type
+        let shapeElement;
+        if (r.type === 'box') {
+            const minX = Math.min(r.startX, r.endX);
+            const minY = Math.min(r.startY, r.endY);
+            const w = Math.abs(r.endX - r.startX);
+            const h = Math.abs(r.endY - r.startY);
+            shapeElement = <rect x={minX} y={minY} width={w} height={h} />;
+        } else {
+            const radius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
+            shapeElement = <circle cx={r.startX} cy={r.startY} r={radius} />;
+        }
+
+        const handleRegionMouseDown = (e: React.MouseEvent) => {
+            if (drawMode !== 'pan') return;
+            e.stopPropagation(); // Prevents parent canvas from panning
+            setDraggingRegionId(r.id);
+            dragStart.current = getCanvasCoords(e.clientX, e.clientY);
+        };
+
+        return (
+            <g key={r.id}>
+                {/* 1. Invisible Fat Click Target */}
+                {React.cloneElement(shapeElement, {
+                    style: {
+                        stroke: 'rgba(255,255,255,0.01)', 
+                        strokeWidth: Math.max(10, 20 / zoom), 
+                        fill: 'none',
+                        pointerEvents: isDraft || drawMode !== 'pan' ? 'none' : 'stroke',
+                        cursor: drawMode === 'pan' ? 'move' : 'crosshair'
+                    },
+                    onMouseDown: handleRegionMouseDown,
+                    onMouseEnter: () => setHoveredRegionId(r.id),
+                    onMouseLeave: () => setHoveredRegionId(null)
+                })}
+                
+                {/* 2. Thin Visual Outline */}
+                {React.cloneElement(shapeElement, {
+                    style: {
+                        stroke: isHovered && drawMode === 'pan' && !isDraft ? '#fff' : r.color, 
+                        strokeWidth: (isHovered && drawMode === 'pan' && !isDraft ? 4 : 2) / zoom, 
+                        fill: 'none', 
+                        pointerEvents: 'none',
+                        transition: 'stroke 0.1s, stroke-width 0.1s'
+                    }
+                })}
+            </g>
+        );
+    };
+
     return (
         <div className="d-flex flex-column w-100 h-100">
             {/* Toolbar */}
             <div className="d-flex flex-wrap gap-3 mb-2 p-2 rounded align-items-center" style={{ backgroundColor: 'var(--fv-panel-hover)' }}>
-                
-                {/* Drawing Modes */}
                 <div className="btn-group btn-group-sm shadow-sm border border-dark">
-                    <button className={`btn btn-${drawMode === 'pan' ? 'primary' : 'secondary'} border-0`} onClick={() => setDrawMode('pan')} title="Pan / Pointer">
-                        <i className="bi bi-arrows-move"></i>
-                    </button>
-                    <button className={`btn btn-${drawMode === 'circle' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('circle')} title="Draw Circle">
-                        <i className="bi bi-circle"></i>
-                    </button>
-                    <button className={`btn btn-${drawMode === 'box' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('box')} title="Draw Box">
-                        <i className="bi bi-square"></i>
-                    </button>
-                    <button className="btn btn-danger border-0 border-start border-dark" onClick={() => setRegions([])} title="Clear Regions" disabled={regions.length === 0}>
-                        <i className="bi bi-trash"></i>
-                    </button>
+                    <button className={`btn btn-${drawMode === 'pan' ? 'primary' : 'secondary'} border-0`} onClick={() => setDrawMode('pan')}><i className="bi bi-arrows-move"></i></button>
+                    <button className={`btn btn-${drawMode === 'circle' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('circle')}><i className="bi bi-circle"></i></button>
+                    <button className={`btn btn-${drawMode === 'box' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('box')}><i className="bi bi-square"></i></button>
+                    <button className="btn btn-danger border-0 border-start border-dark" onClick={() => setRegions([])} disabled={regions.length === 0}><i className="bi bi-trash"></i></button>
                 </div>
-
-                {/* Color & Scale */}
+                
                 <div className="input-group input-group-sm w-auto shadow-sm">
                     <span className="input-group-text border-0 bg-dark text-white">Color</span>
                     <select className="form-select border-0" value={colormap} onChange={e => setColormap(e.target.value)}>
@@ -219,61 +272,47 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                     </select>
                 </div>
 
-                {/* View Transforms (Restored!) */}
                 <div className="input-group input-group-sm w-auto shadow-sm ms-2">
                     <span className="input-group-text border-0 bg-dark text-white">View</span>
-                    <button className={`btn btn-${flipX ? 'primary' : 'secondary'} border-0`} onClick={() => setFlipX(!flipX)} title="Flip X">
-                        <i className="bi bi-symmetry-vertical"></i>
-                    </button>
-                    <button className={`btn btn-${flipY ? 'primary' : 'secondary'} border-0`} onClick={() => setFlipY(!flipY)} title="Flip Y">
-                        <i className="bi bi-symmetry-horizontal"></i>
-                    </button>
-                    <button className="btn btn-secondary border-0 border-start border-dark" onClick={() => setRotation(r => r - 90)} title="Rotate CCW">
-                        <i className="bi bi-arrow-counterclockwise"></i>
-                    </button>
-                    <button className="btn btn-secondary border-0" onClick={() => setRotation(r => r + 90)} title="Rotate CW">
-                        <i className="bi bi-arrow-clockwise"></i>
-                    </button>
+                    <button className={`btn btn-${flipX ? 'primary' : 'secondary'} border-0`} onClick={() => setFlipX(!flipX)}><i className="bi bi-symmetry-vertical"></i></button>
+                    <button className={`btn btn-${flipY ? 'primary' : 'secondary'} border-0`} onClick={() => setFlipY(!flipY)}><i className="bi bi-symmetry-horizontal"></i></button>
+                    <button className="btn btn-secondary border-0 border-start border-dark" onClick={() => setRotation(r => r - 90)}><i className="bi bi-arrow-counterclockwise"></i></button>
+                    <button className="btn btn-secondary border-0" onClick={() => setRotation(r => r + 90)}><i className="bi bi-arrow-clockwise"></i></button>
                     <span className="input-group-text border-0 border-start border-dark bg-secondary text-white" style={{ borderLeft: '1px solid #1e2235 !important' }}>Angle:</span>
-                    <input 
-                        type="number" 
-                        className="form-control border-0 text-center bg-secondary text-white" 
-                        style={{ width: '65px', appearance: 'textfield' }} 
-                        value={rotation} 
-                        onChange={(e) => setRotation(Number(e.target.value) || 0)} 
-                        step="1"
-                    />
+                    <input type="number" className="form-control border-0 text-center bg-secondary text-white" style={{ width: '65px', appearance: 'textfield' }} value={rotation} onChange={(e) => setRotation(Number(e.target.value) || 0)} step="1"/>
                     <span className="input-group-text border-0 bg-secondary text-white">°</span>
                 </div>
 
-                {/* Zoom & Pan */}
                 <div className="ms-auto d-flex gap-1 align-items-center">
                     <span className="text-muted small me-2">{Math.round(zoom * 100)}%</span>
                     <button className="btn btn-sm btn-outline-secondary text-light border-0" onClick={() => setZoom(z => Math.max(0.1, z * 0.8))}><i className="bi bi-zoom-out"></i></button>
                     <button className="btn btn-sm btn-outline-secondary text-light border-0" onClick={() => setZoom(z => Math.min(50, z * 1.2))}><i className="bi bi-zoom-in"></i></button>
-                    <button className="btn btn-sm btn-outline-secondary text-light border-0" onClick={resetView} title="Reset View"><i className="bi bi-arrow-repeat"></i></button>
+                    <button className="btn btn-sm btn-outline-secondary text-light border-0" onClick={resetView}><i className="bi bi-arrow-repeat"></i></button>
                 </div>
             </div>
 
-            {/* Viewport */}
+            {/* Viewport Container */}
             <div 
+                ref={viewportRef}
                 className="d-flex justify-content-center align-items-center rounded-top border overflow-hidden position-relative" 
-                style={{ backgroundColor: '#000', minHeight: '600px', cursor: drawMode === 'pan' ? (isDragging ? 'grabbing' : 'grab') : 'crosshair' }}
+                style={{ 
+                    backgroundColor: '#000', minHeight: '600px', 
+                    cursor: drawMode === 'pan' ? (isDragging && !draggingRegionId ? 'grabbing' : 'grab') : 'crosshair'
+                }}
                 onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave} onWheel={handleWheel}
             >
-                {/* Transform Layer groups both canvases so they pan/zoom/rotate together */}
                 <div style={{
-                    position: 'relative',
+                    position: 'relative', width, height, flexShrink: 0,
                     transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg) scaleX(${flipX ? -1 : 1}) scaleY(${flipY ? -1 : 1})`,
                     transformOrigin: 'center center',
-                    transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+                    transition: (isDragging && !draggingRegionId) ? 'transform 0.1s ease-out' : 'none'
                 }}>
-                    {/* Base Image */}
-                    <canvas ref={canvasRef} width={width} height={height} style={{ imageRendering: 'pixelated', display: 'block' }} />
-                    
-                    {/* Region Overlay */}
-                    <canvas ref={overlayRef} width={width} height={height} style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }} />
+                    <canvas ref={canvasRef} width={width} height={height} style={{ imageRendering: 'pixelated', display: 'block', width: '100%', height: '100%' }} />
+                    <svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}>
+                        {regions.map(r => renderRegionSVG(r))}
+                        {draftRegion && renderRegionSVG(draftRegion, true)}
+                    </svg>
                 </div>
             </div>
 
@@ -284,16 +323,10 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                     <span><span className="text-muted me-1">Y:</span> <strong className="text-primary">{hoverInfo.y}</strong></span>
                     <span><span className="text-muted me-1">Value:</span> <strong className="text-primary">{hoverInfo.val !== undefined ? Number(hoverInfo.val).toPrecision(4) : '...'}</strong></span>
                 </div>
-                
                 <div className="d-flex gap-4">
                     {hasWCS ? (
-                        <>
-                            <span><span className="text-muted me-1">RA:</span> <strong className="text-warning">{hoverInfo.ra}</strong>°</span>
-                            <span><span className="text-muted me-1">Dec:</span> <strong className="text-warning">{hoverInfo.dec}</strong>°</span>
-                        </>
-                    ) : (
-                        <span className="text-muted fst-italic">No WCS</span>
-                    )}
+                        <><span><span className="text-muted me-1">RA:</span> <strong className="text-warning">{hoverInfo.ra}</strong>°</span><span><span className="text-muted me-1">Dec:</span> <strong className="text-warning">{hoverInfo.dec}</strong>°</span></>
+                    ) : <span className="text-muted fst-italic">No WCS</span>}
                 </div>
             </div>
         </div>
