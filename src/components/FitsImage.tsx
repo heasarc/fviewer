@@ -30,10 +30,10 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
     
     // Rendering State
     const [colormap, setColormap] = useState('gray');
-    const [stretch, setStretch] = useState('log');
+    const [stretch, setStretch] = useState('linear');
 
     // Interactivity & Transform State
-    const [zoom, setZoom] = useState(1);
+    const [zoom, setZoom] = useState<number | null>(1);
     const [pan, setPan] = useState({ x: 0, y: 0 });
     const [flipX, setFlipX] = useState(false);
     const [flipY, setFlipY] = useState(false);
@@ -135,6 +135,22 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [selectedRegionId]);
+
+    // --- Auto "Fit-to-Window" Zoom ---
+    useEffect(() => {
+        if (!viewportRef.current || width === 0 || height === 0) return;
+        
+        const rect = viewportRef.current.getBoundingClientRect();
+        
+        const scaleX = rect.width / width;
+        const scaleY = rect.height / height;
+        
+        // Take the smaller scale to ensure the whole image fits, with a 5% margin
+        const fitZoom = Math.min(scaleX, scaleY) * 0.95;
+        
+        setZoom(fitZoom);
+        setPan({ x: 0, y: 0 }); // Center the pan
+    }, [width, height]);
 
     // --- MATHEMATICALLY PURE COORDINATE UN-PROJECTION ---
     const getCanvasCoords = (clientX: number, clientY: number) => {
@@ -606,7 +622,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                 <div className="ms-auto d-flex gap-1 align-items-center">
                     <div className="dropdown">
                         <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown" title="Zoom Menu">
-                            <i className="bi bi-zoom-in"></i> <span className="ms-1">Zoom ({Math.round(zoom * 100)}%)</span>
+                            <i className="bi bi-zoom-in"></i> <span className="ms-1">Zoom ({zoom !== null ? Math.round(zoom * 100) : 0}%)</span>
                         </button>
                         <ul className="dropdown-menu dropdown-menu-end fv-dropdown-menu shadow">
                             <li>
@@ -634,25 +650,24 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
             <div 
                 ref={viewportRef}
                 className="flex-grow-1 position-relative overflow-hidden d-flex justify-content-center align-items-center" 
-                style={{ 
-                    backgroundColor: '#000', 
-                    // REMOVED minHeight entirely!
-                    cursor: drawMode === 'pan' ? (isDragging && !dragAction ? 'grabbing' : 'grab') : 'crosshair' 
-                }}
+                style={{ backgroundColor: '#000', cursor: drawMode === 'pan' ? (isDragging ? 'grabbing' : 'grab') : 'crosshair' }}
                 onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave}
             >
-                <div style={{
-                    position: 'relative', width, height, flexShrink: 0,
-                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg) scaleX(${flipX ? -1 : 1}) scaleY(${flipY ? -1 : 1})`,
-                    transformOrigin: 'center center'
-                }}>
-                    <canvas ref={canvasRef} width={width} height={height} style={{ imageRendering: 'pixelated', display: 'block', width: '100%', height: '100%' }} />
-                    <svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}>
-                        {regions.map(r => renderRegionSVG(r))}
-                        {draftRegion && renderRegionSVG(draftRegion, true)}
-                    </svg>
-                </div>
+                {/* ONLY RENDER IF ZOOM IS READY */}
+                {zoom !== null && (
+                    <div style={{
+                        position: 'relative', width, height, flexShrink: 0,
+                        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg) scaleX(${flipX ? -1 : 1}) scaleY(${flipY ? -1 : 1})`,
+                        transformOrigin: 'center center',
+                    }}>
+                        <canvas ref={canvasRef} width={width} height={height} style={{ imageRendering: 'pixelated', display: 'block', width: '100%', height: '100%' }} />
+                        <svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}>
+                            {regions.map(r => renderRegionSVG(r))}
+                            {draftRegion && renderRegionSVG(draftRegion, true)}
+                        </svg>
+                    </div>
+                )}
             </div>
 
             {/* Compact Status Bar */}
