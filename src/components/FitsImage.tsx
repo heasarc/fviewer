@@ -42,9 +42,12 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
     const [regions, setRegions] = useState<Region[]>([]);
     const [draftRegion, setDraftRegion] = useState<Region | null>(null);
     
-    // Simple Drag State
-    const [draggingRegionId, setDraggingRegionId] = useState<string | null>(null);
+    // Selection and Drag State
+    const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
     const [hoveredRegionId, setHoveredRegionId] = useState<string | null>(null);
+    
+    // Tracks if we are moving the whole shape or just resizing the corner
+    const [dragAction, setDragAction] = useState<{ id: string, type: 'move' | 'resize' } | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, y: 0 });
 
@@ -111,14 +114,14 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
 
     // --- MOUSE HANDLERS ---
     const handleMouseDown = (e: React.MouseEvent) => {
-        // If we clicked a region line, the SVG's onMouseDown handles it and calls stopPropagation.
-        // So if this runs, we know we clicked the background image.
         const { x, y } = getCanvasCoords(e.clientX, e.clientY);
         setIsDragging(true);
 
         if (drawMode === 'pan') {
+            setSelectedRegionId(null); // Deselect any active region if we click the background
             dragStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
         } else {
+            setSelectedRegionId(null);
             dragStart.current = { x, y }; 
             setDraftRegion({ 
                 id: Date.now().toString(), type: drawMode, 
@@ -128,17 +131,25 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
-        // 1. Handle Region Dragging
-        if (draggingRegionId) {
+        // 1. Handle Region Dragging & Resizing
+        if (dragAction) {
             const { x, y } = getCanvasCoords(e.clientX, e.clientY);
             const dx = x - dragStart.current.x;
             const dy = y - dragStart.current.y;
             
-            setRegions(prev => prev.map(r => r.id === draggingRegionId ? { 
-                ...r, startX: r.startX + dx, startY: r.startY + dy, endX: r.endX + dx, endY: r.endY + dy 
-            } : r));
+            setRegions(prev => prev.map(r => {
+                if (r.id === dragAction.id) {
+                    if (dragAction.type === 'move') {
+                        return { ...r, startX: r.startX + dx, startY: r.startY + dy, endX: r.endX + dx, endY: r.endY + dy };
+                    } else if (dragAction.type === 'resize') {
+                        // Resizing only updates the end coordinate!
+                        return { ...r, endX: r.endX + dx, endY: r.endY + dy };
+                    }
+                }
+                return r;
+            }));
             
-            dragStart.current = { x, y }; // Reset anchor point for smooth continuous dragging
+            dragStart.current = { x, y }; 
             return;
         }
 
@@ -176,11 +187,12 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
 
     const handleMouseUpOrLeave = () => {
         setIsDragging(false);
-        setDraggingRegionId(null); // Drop the region if we were holding it
+        setDragAction(null); // Drop the region/handle if we were holding it
 
         if (draftRegion) {
             if (Math.abs(draftRegion.endX - draftRegion.startX) > 2 || Math.abs(draftRegion.endY - draftRegion.startY) > 2) {
                 setRegions([...regions, draftRegion]);
+                setSelectedRegionId(draftRegion.id); // Auto-select new region
                 setDrawMode('pan'); 
             }
             setDraftRegion(null);
@@ -196,9 +208,10 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
 
     // --- SVG REGION RENDERER ---
     const renderRegionSVG = (r: Region, isDraft = false) => {
+        const isSelected = r.id === selectedRegionId;
         const isHovered = r.id === hoveredRegionId;
+        const handleSize = 10 / zoom;
         
-        // Define SVG tags based on region type
         let shapeElement;
         if (r.type === 'box') {
             const minX = Math.min(r.startX, r.endX);
@@ -213,8 +226,9 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
 
         const handleRegionMouseDown = (e: React.MouseEvent) => {
             if (drawMode !== 'pan') return;
-            e.stopPropagation(); // Prevents parent canvas from panning
-            setDraggingRegionId(r.id);
+            e.stopPropagation(); 
+            setSelectedRegionId(r.id);
+            setDragAction({ id: r.id, type: 'move' }); // Clicked shape = move
             dragStart.current = getCanvasCoords(e.clientX, e.clientY);
         };
 
@@ -244,6 +258,26 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                         transition: 'stroke 0.1s, stroke-width 0.1s'
                     }
                 })}
+
+                {/* 3. Resize Handle (Only visible when selected) */}
+                {isSelected && !isDraft && (
+                    <rect 
+                        x={r.endX - handleSize / 2} 
+                        y={r.endY - handleSize / 2} 
+                        width={handleSize} 
+                        height={handleSize} 
+                        fill="#fff" 
+                        stroke={r.color} 
+                        strokeWidth={2 / zoom}
+                        style={{ cursor: 'nwse-resize', pointerEvents: 'all' }}
+                        onMouseDown={(e) => {
+                            if (drawMode !== 'pan') return;
+                            e.stopPropagation(); // Don't trigger the move logic
+                            setDragAction({ id: r.id, type: 'resize' }); // Clicked handle = resize
+                            dragStart.current = getCanvasCoords(e.clientX, e.clientY);
+                        }}
+                    />
+                )}
             </g>
         );
     };
@@ -256,7 +290,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                     <button className={`btn btn-${drawMode === 'pan' ? 'primary' : 'secondary'} border-0`} onClick={() => setDrawMode('pan')}><i className="bi bi-arrows-move"></i></button>
                     <button className={`btn btn-${drawMode === 'circle' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('circle')}><i className="bi bi-circle"></i></button>
                     <button className={`btn btn-${drawMode === 'box' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('box')}><i className="bi bi-square"></i></button>
-                    <button className="btn btn-danger border-0 border-start border-dark" onClick={() => setRegions([])} disabled={regions.length === 0}><i className="bi bi-trash"></i></button>
+                    <button className="btn btn-danger border-0 border-start border-dark" onClick={() => { setRegions([]); setSelectedRegionId(null); }} disabled={regions.length === 0}><i className="bi bi-trash"></i></button>
                 </div>
                 
                 <div className="input-group input-group-sm w-auto shadow-sm">
@@ -297,7 +331,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                 className="d-flex justify-content-center align-items-center rounded-top border overflow-hidden position-relative" 
                 style={{ 
                     backgroundColor: '#000', minHeight: '600px', 
-                    cursor: drawMode === 'pan' ? (isDragging && !draggingRegionId ? 'grabbing' : 'grab') : 'crosshair'
+                    cursor: drawMode === 'pan' ? (isDragging && !dragAction ? 'grabbing' : 'grab') : 'crosshair'
                 }}
                 onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave} onWheel={handleWheel}
@@ -306,7 +340,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                     position: 'relative', width, height, flexShrink: 0,
                     transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg) scaleX(${flipX ? -1 : 1}) scaleY(${flipY ? -1 : 1})`,
                     transformOrigin: 'center center',
-                    transition: (isDragging && !draggingRegionId) ? 'transform 0.1s ease-out' : 'none'
+                    transition: (isDragging && !dragAction) ? 'transform 0.1s ease-out' : 'none'
                 }}>
                     <canvas ref={canvasRef} width={width} height={height} style={{ imageRendering: 'pixelated', display: 'block', width: '100%', height: '100%' }} />
                     <svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}>
