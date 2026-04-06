@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useFits } from './hooks/useFits';
 import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
 import { FitsPlot } from './components/FitsPlot';
 
 function App() {
-    const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile,
-      readImage, getHduList, checkWcs, pixToWorld } = useFits();
+    const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile, readImage, getHduList, checkWcs, pixToWorld } = useFits();
     
     // File & HDU State
-    const [fileName, setFileName] = useState("edited_file.fits");
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [fileName, setFileName] = useState("No file loaded");
     const [hduList, setHduList] = useState<any[]>([]);
     const [activeHdu, setActiveHdu] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -21,7 +21,7 @@ function App() {
     const [plotX, setPlotX] = useState<string>('');
     const [plotY, setPlotY] = useState<string>('');
 
-    // 1. Initial File Upload (Just scans the HDUs)
+    // 1. File Upload Handler
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -35,7 +35,6 @@ function App() {
             const list = await getHduList();
             setHduList(list);
             
-            // Automatically select the first non-empty HDU
             const firstValid = list.find((h: any) => h.type !== 'empty');
             setActiveHdu(firstValid ? firstValid.index : 1);
         } catch (error) {
@@ -43,10 +42,12 @@ function App() {
             alert("Failed to load FITS file.");
         } finally {
             setIsLoading(false);
+            // Reset input so the same file can be selected again if needed
+            if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
-    // 2. Load Data when the Active HDU changes
+    // 2. Load Data when Active HDU changes
     useEffect(() => {
         if (!activeHdu) return;
 
@@ -56,7 +57,6 @@ function App() {
                 const targetHdu = hduList.find(h => h.index === activeHdu);
                 await moveToHDU(activeHdu);
 
-                // Clear previous data
                 setImageData(null);
                 setTableInfo(null);
                 setTableData({});
@@ -93,129 +93,208 @@ function App() {
         };
 
         loadHduData();
-    }, [activeHdu]); // Re-run whenever user clicks a new tab
+    }, [activeHdu]);
 
-    // Cell Edit & Save Handlers (Keep your existing implementations here)
+    // 3. Cell Edit & Save Handlers
     const handleCellEdit = async (colName: string, colNum: number, rowIndex: number, newValue: string) => {
-        // ... (Keep your existing handleCellEdit code)
+        try {
+            const numericValue = Number(newValue);
+            if (isNaN(numericValue)) {
+                alert("Only numeric edits are supported in this demo.");
+                return;
+            }
+            await writeCell(colNum, rowIndex + 1, numericValue);
+            setTableData(prevData => {
+                const newData = { ...prevData };
+                const newCol = [...newData[colName]];
+                newCol[rowIndex] = numericValue;
+                newData[colName] = newCol;
+                return newData;
+            });
+        } catch (error) {
+            console.error("Failed to write cell:", error);
+            alert("Failed to write cell.");
+        }
     };
 
     const handleSave = async () => {
-        // ... (Keep your existing handleSave code)
+        try {
+            setIsLoading(true);
+            const fileBytes = await saveFile();
+            const blob = new Blob([fileBytes], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `edited_${fileName}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+        } catch (error) {
+            console.error("Failed to save:", error);
+            alert("Failed to save file.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
-        <div className="container-fluid py-4">
-            <header className="mb-4 pb-3 border-bottom d-flex justify-content-between align-items-center">
-                <div>
-                    <h1 className="h3 text-primary mb-0"><i className="bi bi-stars"></i> FViewer</h1>
-                    <p className="text-muted mb-0">High-performance FITS Viewer</p>
-                </div>
-                {hduList.length > 0 && (
-                    <button className="btn btn-primary shadow-sm" onClick={handleSave} disabled={isLoading}>
-                        <i className="bi bi-save me-1"></i> Save FITS
-                    </button>
-                )}
-            </header>
+        <div className="fv-layout">
             
-            <div className="row mb-4">
-                <div className="col-md-6">
-                    <div className="input-group shadow-sm">
-                        <input type="file" className="form-control" accept=".fits,.fit,.fts" onChange={handleFileUpload} disabled={isLoading} />
-                        {isLoading && (
-                            <span className="input-group-text bg-light">
-                                <div className="spinner-border spinner-border-sm text-primary" role="status"></div>
-                            </span>
-                        )}
-                    </div>
+            {/* Hidden File Input */}
+            <input type="file" ref={fileInputRef} accept=".fits,.fit,.fts" style={{ display: 'none' }} onChange={handleFileUpload} />
+
+            {/* Top Menubar */}
+            <div className="fv-menubar pe-3">
+                <div className="fv-logo">
+                    <i className="bi bi-stars"></i> FViewer
+                </div>
+
+                <div className="dropdown h-100">
+                    <button className="fv-menu-btn" data-bs-toggle="dropdown">File</button>
+                    <ul className="dropdown-menu fv-dropdown-menu">
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => fileInputRef.current?.click()}>
+                                <i className="bi bi-folder2-open"></i> Open Local File...
+                            </button>
+                        </li>
+                        <li><hr className="dropdown-divider border-secondary my-1" /></li>
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={handleSave} disabled={hduList.length === 0 || isLoading}>
+                                <i className="bi bi-save"></i> Save Edited FITS
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+
+                <div className="dropdown h-100">
+                    <button className="fv-menu-btn" data-bs-toggle="dropdown">Edit</button>
+                    <ul className="dropdown-menu fv-dropdown-menu">
+                        <li><button className="dropdown-item fv-dropdown-item"><i className="bi bi-card-heading"></i> Edit Header</button></li>
+                        <li><button className="dropdown-item fv-dropdown-item"><i className="bi bi-layout-three-columns"></i> Manage Columns</button></li>
+                    </ul>
+                </div>
+
+                <div className="dropdown h-100">
+                    <button className="fv-menu-btn" data-bs-toggle="dropdown">View</button>
+                    <ul className="dropdown-menu fv-dropdown-menu">
+                        <li><button className="dropdown-item fv-dropdown-item"><i className="bi bi-aspect-ratio"></i> Reset View</button></li>
+                    </ul>
+                </div>
+
+                <div className="ms-auto d-flex align-items-center gap-3">
+                    <span className="text-muted" style={{ fontSize: '0.8rem' }}>{fileName}</span>
+                    {isLoading && <div className="spinner-border spinner-border-sm text-primary" role="status"></div>}
                 </div>
             </div>
 
-            {/* HDU Navigation Tabs */}
-            {hduList.length > 0 && (
-                <ul className="nav nav-tabs mb-4">
-                    {hduList.map((hdu) => (
-                        <li className="nav-item" key={hdu.index}>
-                            <button 
-                                className={`nav-link ${activeHdu === hdu.index ? 'active fw-bold' : ''} ${hdu.type === 'empty' ? 'text-muted' : ''}`}
-                                onClick={() => setActiveHdu(hdu.index)}
-                            >
-                                {hdu.extname} <span className="badge bg-secondary ms-1">{hdu.type}</span>
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            )}
+            {/* IDE Tabs for HDUs */}
+            <div className="fv-tabs-container">
+                {hduList.length === 0 ? (
+                    <div className="fv-tab text-muted fst-italic cursor-default">No file loaded</div>
+                ) : (
+                    hduList.map((hdu) => (
+                        <button 
+                            key={hdu.index}
+                            className={`fv-tab ${activeHdu === hdu.index ? 'active' : ''} ${hdu.type === 'empty' ? 'text-muted' : ''}`}
+                            onClick={() => setActiveHdu(hdu.index)}
+                        >
+                            {hdu.extname} <span className="opacity-50 ms-2" style={{ fontSize: '0.7rem' }}>[{hdu.type.toUpperCase()}]</span>
+                        </button>
+                    ))
+                )}
+            </div>
 
-            {/* Render Active Data */}
-            {activeHdu && (
-                <div className="fade-in">
-                    {hduList.find(h => h.index === activeHdu)?.type === 'empty' && (
-                        <div className="alert alert-secondary">This HDU contains no data (NAXIS=0).</div>
-                    )}
-
-                    {imageData && imageData.width > 0 && (
-                        <div className="card shadow-sm mb-4">
-                            <div className="card-header bg-light"><h5>Image Viewer</h5></div>
-                            <div className="card-body bg-secondary d-flex justify-content-center p-3">
-                                <FitsImage 
-                                  data={imageData.data}
-                                  width={imageData.width}
-                                  height={imageData.height} 
-                                  checkWcs={checkWcs}
-                                  pixToWorld={pixToWorld}
-                                />
+            {/* Main Workspace Area */}
+            <div className="flex-grow-1 overflow-auto p-3 d-flex flex-column">
+                {activeHdu && (
+                    <div className="fade-in d-flex flex-column flex-grow-1 gap-3">
+                        
+                        {hduList.find(h => h.index === activeHdu)?.type === 'empty' && (
+                            <div className="alert alert-secondary border-secondary bg-dark text-white">
+                                <i className="bi bi-info-circle me-2"></i> This HDU contains no data (NAXIS=0).
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    {tableInfo && (
-                        <>
-                            {/* Table Component */}
-                            <div className="card shadow-sm">
-                                <div className="card-header bg-light d-flex justify-content-between align-items-center">
-                                    <h5 className="mb-0">Table Data</h5>
-                                    <span className="badge bg-secondary">{tableInfo.numRows} Rows | {tableInfo.numCols} Columns</span>
-                                </div>
-                                <div className="card-body p-0">
-                                    <VirtualTable 
-                                        numRows={tableInfo.numRows} columns={tableInfo.columns} 
-                                        dataMap={tableData} onCellEdit={handleCellEdit}
-                                    />
+                        {/* Image Viewer */}
+                        {imageData && imageData.width > 0 && (
+                            <div className="d-flex justify-content-center w-100 mb-3">
+                                {/* Rigid width and height constraints */}
+                                <div className="fv-panel-box d-flex flex-column w-100" style={{ maxWidth: '800px', height: '650px' }}>
+                                    <div className="fv-panel-header">
+                                        <span><i className="bi bi-image me-2"></i> Image Display</span>
+                                    </div>
+                                    <div className="flex-grow-1 position-relative d-flex flex-column" style={{ minHeight: 0 }}>
+                                        <FitsImage 
+                                            data={imageData.data} 
+                                            width={imageData.width} 
+                                            height={imageData.height} 
+                                            checkWcs={checkWcs}
+                                            pixToWorld={pixToWorld}
+                                        />
+                                    </div>
                                 </div>
                             </div>
+                        )}
 
-                            {/* Plotter Component */}
-                            <div className="card shadow-sm mb-4 border-primary">
-                                <div className="card-header bg-primary text-white d-flex align-items-center gap-3">
-                                    <h5 className="mb-0"><i className="bi bi-graph-up"></i> Plotter</h5>
-                                    <div className="d-flex gap-2 ms-auto">
-                                        <div className="input-group input-group-sm">
-                                            <span className="input-group-text bg-light">X</span>
-                                            <select className="form-select" value={plotX} onChange={(e) => setPlotX(e.target.value)}>
-                                                {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                                            </select>
+                        {/* Table Workspace */}
+                        {tableInfo && (
+                            <div className="row g-3 flex-grow-1">
+                                {/* Table Left Side */}
+                                <div className="col-lg-7 d-flex flex-column">
+                                    <div className="fv-panel-box d-flex flex-column flex-grow-1">
+                                        <div className="fv-panel-header">
+                                            <span><i className="bi bi-table me-2"></i> Binary Table</span>
+                                            <span className="badge bg-secondary">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
                                         </div>
-                                        <div className="input-group input-group-sm">
-                                            <span className="input-group-text bg-light">Y</span>
-                                            <select className="form-select" value={plotY} onChange={(e) => setPlotY(e.target.value)}>
-                                                {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                                            </select>
+                                        <div className="flex-grow-1 overflow-hidden" style={{ minHeight: '400px' }}>
+                                            <VirtualTable 
+                                                numRows={tableInfo.numRows} 
+                                                columns={tableInfo.columns} 
+                                                dataMap={tableData} 
+                                                onCellEdit={handleCellEdit}
+                                                containerHeight={undefined} 
+                                            />
                                         </div>
                                     </div>
                                 </div>
-                                <div className="card-body">
-                                    {plotX && plotY && tableData[plotX] && tableData[plotY] ? (
-                                        <FitsPlot xData={tableData[plotX]} yData={tableData[plotY]} xLabel={plotX} yLabel={plotY} />
-                                    ) : (
-                                        <p className="text-muted text-center my-4">Select columns to plot</p>
-                                    )}
+
+                                {/* Plotter Right Side */}
+                                <div className="col-lg-5 d-flex flex-column">
+                                    <div className="fv-panel-box d-flex flex-column flex-grow-1">
+                                        <div className="fv-panel-header">
+                                            <span><i className="bi bi-graph-up me-2"></i> Plotter</span>
+                                            <div className="d-flex gap-2">
+                                                <div className="fv-input-group">
+                                                    <span className="fv-input-label">X</span>
+                                                    <select className="fv-select" value={plotX} onChange={(e) => setPlotX(e.target.value)}>
+                                                        {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="fv-input-group">
+                                                    <span className="fv-input-label">Y</span>
+                                                    <select className="fv-select" value={plotY} onChange={(e) => setPlotY(e.target.value)}>
+                                                        {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="p-2 flex-grow-1">
+                                            {plotX && plotY && tableData[plotX] && tableData[plotY] ? (
+                                                <FitsPlot xData={tableData[plotX]} yData={tableData[plotY]} xLabel={plotX} yLabel={plotY} />
+                                            ) : (
+                                                <div className="text-muted text-center py-5">Select columns to plot</div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </>
-                    )}
-                </div>
-            )}
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

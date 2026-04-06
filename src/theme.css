@@ -96,3 +96,130 @@ body {
   font-size: 0.8rem;
   padding: 4px 12px;
 }
+
+/* App Layout & Menubar */
+.fv-layout {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--fv-bg);
+  overflow: hidden;
+}
+
+.fv-menubar {
+  background-color: #13151f;
+  border-bottom: 1px solid var(--fv-border);
+  padding: 0 16px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+  flex-shrink: 0; 
+}
+
+.fv-logo {
+  font-weight: 700;
+  color: var(--fv-accent);
+  margin-right: 24px;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Menubar Buttons & Dropdowns */
+.fv-menu-btn {
+  color: var(--fv-text);
+  background: transparent;
+  border: none;
+  padding: 4px 12px;
+  cursor: pointer;
+  height: 100%;
+  transition: background 0.1s;
+}
+
+.fv-menu-btn:hover, .fv-menu-btn:focus {
+  background-color: var(--fv-panel);
+  color: var(--fv-text-bright);
+}
+
+.fv-dropdown-menu {
+  background-color: var(--fv-panel);
+  border: 1px solid var(--fv-border);
+  border-radius: 3px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  margin-top: 0;
+  padding: 4px 0;
+}
+
+.fv-dropdown-item {
+  color: var(--fv-text);
+  font-size: 0.85rem;
+  padding: 6px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fv-dropdown-item:hover {
+  background-color: var(--fv-panel-hover);
+  color: var(--fv-text-bright);
+}
+
+/* IDE-Style Tabs */
+.fv-tabs-container {
+  background-color: #181b26;
+  display: flex;
+  border-bottom: 1px solid var(--fv-border);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.fv-tab {
+  padding: 6px 20px;
+  color: #8c92a4;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--fv-border);
+  border-top: 2px solid transparent;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.fv-tabs-container::-webkit-scrollbar {
+  display: none; /* Hides the scrollbar but keeps it scrollable with the mouse wheel/trackpad */
+}
+
+.fv-tab:hover {
+  background-color: var(--fv-panel-hover);
+  color: var(--fv-text-bright);
+}
+
+.fv-tab.active {
+  background-color: var(--fv-bg);
+  color: var(--fv-accent);
+  border-top: 2px solid var(--fv-accent);
+  font-weight: 700;
+}
+
+/* Component Panels (replaces Bootstrap Cards) */
+.fv-panel-box {
+  background-color: var(--fv-bg);
+  border: 1px solid var(--fv-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.fv-panel-header {
+  background-color: var(--fv-panel);
+  border-bottom: 1px solid var(--fv-border);
+  padding: 6px 12px;
+  font-weight: bold;
+  color: var(--fv-text-bright);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
