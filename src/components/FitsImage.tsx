@@ -93,6 +93,31 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
         ctx.putImageData(imgData, 0, 0);
     }, [data, width, height, colormap, stretch, min, max]);
 
+    // --- REGION DELETION ---
+    const deleteSelectedRegion = () => {
+        if (selectedRegionId) {
+            setRegions(prev => prev.filter(r => r.id !== selectedRegionId));
+            setSelectedRegionId(null);
+            setDragAction(null);
+        }
+    };
+
+    // Keyboard listener for Backspace / Delete
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore keystrokes if the user is typing inside an input field (like the Angle box)
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+                return;
+            }
+            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedRegionId) {
+                deleteSelectedRegion();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedRegionId]);
+
     // --- MATHEMATICALLY PURE COORDINATE UN-PROJECTION ---
     const getCanvasCoords = (clientX: number, clientY: number) => {
         const viewport = viewportRef.current;
@@ -384,15 +409,19 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                     <button className={`btn btn-${drawMode === 'pan' ? 'primary' : 'secondary'} border-0`} onClick={() => setDrawMode('pan')} title="Pan / Pointer"><i className="bi bi-arrows-move"></i></button>
                     <button className={`btn btn-${drawMode === 'circle' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('circle')} title="Draw Circle"><i className="bi bi-circle"></i></button>
                     <button className={`btn btn-${drawMode === 'box' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('box')} title="Draw Box"><i className="bi bi-square"></i></button>
-                    
                     <button className={`btn btn-${drawMode === 'ellipse' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('ellipse')} title="Draw Ellipse">
                         <span style={{ display: 'inline-block', transform: 'scaleY(0.7)' }}><i className="bi bi-circle"></i></span>
                     </button>
-                    <button className={`btn btn-${drawMode === 'annulus' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('annulus')} title="Draw Annulus">
-                        <i className="bi bi-bullseye"></i>
+                    <button className={`btn btn-${drawMode === 'annulus' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('annulus')} title="Draw Annulus"><i className="bi bi-bullseye"></i></button>
+                    
+                    {/* NEW: Delete Selected Region Button */}
+                    <button className="btn btn-warning border-0 border-start border-dark" onClick={deleteSelectedRegion} disabled={!selectedRegionId} title="Delete Selected (Del/Backspace)">
+                        <i className="bi bi-eraser"></i>
                     </button>
-
-                    <button className="btn btn-danger border-0 border-start border-dark" onClick={() => { setRegions([]); setSelectedRegionId(null); }} disabled={regions.length === 0} title="Clear Regions"><i className="bi bi-trash"></i></button>
+                    
+                    <button className="btn btn-danger border-0 border-start border-dark" onClick={() => { setRegions([]); setSelectedRegionId(null); }} disabled={regions.length === 0} title="Clear All Regions">
+                        <i className="bi bi-trash"></i>
+                    </button>
                 </div>
                 
                 <div className="input-group input-group-sm w-auto shadow-sm">
