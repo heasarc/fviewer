@@ -93,6 +93,24 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
         ctx.putImageData(imgData, 0, 0);
     }, [data, width, height, colormap, stretch, min, max]);
 
+    // --- Native Wheel Handler (Prevents Page Scroll) ---
+    useEffect(() => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+
+        const handleNativeWheel = (e: WheelEvent) => {
+            e.preventDefault(); // Blocks the browser from scrolling the webpage!
+            setZoom(prev => Math.max(0.1, Math.min(prev * (e.deltaY < 0 ? 1.1 : 0.9), 50)));
+        };
+
+        // { passive: false } is absolutely required here
+        viewport.addEventListener('wheel', handleNativeWheel, { passive: false });
+
+        return () => {
+            viewport.removeEventListener('wheel', handleNativeWheel);
+        };
+    }, []);
+
     // --- REGION DELETION ---
     const deleteSelectedRegion = () => {
         if (selectedRegionId) {
@@ -257,8 +275,6 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
         }
     };
 
-    const handleWheel = (e: React.WheelEvent) => setZoom(prev => Math.max(0.1, Math.min(prev * (e.deltaY < 0 ? 1.1 : 0.9), 50)));
-
     const resetView = () => {
         setZoom(1); setPan({ x: 0, y: 0 });
         setFlipX(false); setFlipY(false); setRotation(0);
@@ -401,70 +417,240 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
         );
     };
 
+    const renderDrawModeIcon = (mode: DrawMode) => {
+        switch(mode) {
+            case 'pan': return <i className="bi bi-arrows-move"></i>;
+            case 'circle': return <i className="bi bi-circle"></i>;
+            case 'box': return <i className="bi bi-square"></i>;
+            case 'ellipse': return <span style={{ transform: 'scaleY(0.7)', display: 'inline-block' }}><i className="bi bi-circle"></i></span>;
+            case 'annulus': return <i className="bi bi-bullseye"></i>;
+        }
+    };
+
     return (
         <div className="d-flex flex-column w-100 h-100 border rounded overflow-hidden" style={{ borderColor: 'var(--fv-border)' }}>
             
             {/* Compact Snapshot-Style Toolbar */}
             <div className="fv-toolbar d-flex flex-wrap gap-2 align-items-center">
                 
-                {/* Drawing Modes */}
-                <div className="d-flex gap-1 me-2">
-                    <button className={`fv-btn ${drawMode === 'pan' ? 'active' : ''}`} onClick={() => setDrawMode('pan')} title="Pan / Pointer"><i className="bi bi-arrows-move"></i></button>
-                    <button className={`fv-btn ${drawMode === 'circle' ? 'active' : ''}`} onClick={() => setDrawMode('circle')} title="Draw Circle"><i className="bi bi-circle"></i></button>
-                    <button className={`fv-btn ${drawMode === 'box' ? 'active' : ''}`} onClick={() => setDrawMode('box')} title="Draw Box"><i className="bi bi-square"></i></button>
-                    <button className={`fv-btn ${drawMode === 'ellipse' ? 'active' : ''}`} onClick={() => setDrawMode('ellipse')} title="Draw Ellipse"><span style={{ transform: 'scaleY(0.7)' }}><i className="bi bi-circle"></i></span></button>
-                    <button className={`fv-btn ${drawMode === 'annulus' ? 'active' : ''}`} onClick={() => setDrawMode('annulus')} title="Draw Annulus"><i className="bi bi-bullseye"></i></button>
-                    
-                    <div style={{ width: '1px', background: 'var(--fv-border)', margin: '0 4px' }}></div> {/* Divider */}
-                    
-                    <button className="fv-btn" onClick={deleteSelectedRegion} disabled={!selectedRegionId} title="Delete Selected"><i className="bi bi-eraser"></i></button>
-                    <button className="fv-btn danger" onClick={() => { setRegions([]); setSelectedRegionId(null); }} disabled={regions.length === 0} title="Clear All"><i className="bi bi-trash"></i></button>
+                {/* Regions Menu */}
+                <div className="d-flex gap-1 me-2 align-items-center">
+                    <div className="dropdown">
+                        <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown" title="Regions Menu">
+                            <i className="bi bi-bounding-box"></i> <span className="ms-1">Regions</span>
+                        </button>
+                        <ul className="dropdown-menu fv-dropdown-menu shadow">
+                            {/* Drawing Tools */}
+                            <li>
+                                <button className="dropdown-item fv-dropdown-item" onClick={() => setDrawMode('pan')}>
+                                    <span style={{ width: '16px' }}>{drawMode === 'pan' && <i className="bi bi-check2"></i>}</span>
+                                    <i className="bi bi-arrows-move"></i> Pointer / Pan
+                                </button>
+                            </li>
+                            <li>
+                                <button className="dropdown-item fv-dropdown-item" onClick={() => setDrawMode('circle')}>
+                                    <span style={{ width: '16px' }}>{drawMode === 'circle' && <i className="bi bi-check2"></i>}</span>
+                                    <i className="bi bi-circle"></i> Circle
+                                </button>
+                            </li>
+                            <li>
+                                <button className="dropdown-item fv-dropdown-item" onClick={() => setDrawMode('box')}>
+                                    <span style={{ width: '16px' }}>{drawMode === 'box' && <i className="bi bi-check2"></i>}</span>
+                                    <i className="bi bi-square"></i> Box
+                                </button>
+                            </li>
+                            <li>
+                                <button className="dropdown-item fv-dropdown-item" onClick={() => setDrawMode('ellipse')}>
+                                    <span style={{ width: '16px' }}>{drawMode === 'ellipse' && <i className="bi bi-check2"></i>}</span>
+                                    <span style={{ transform: 'scaleY(0.7)', display: 'inline-block' }}><i className="bi bi-circle"></i></span> Ellipse
+                                </button>
+                            </li>
+                            <li>
+                                <button className="dropdown-item fv-dropdown-item" onClick={() => setDrawMode('annulus')}>
+                                    <span style={{ width: '16px' }}>{drawMode === 'annulus' && <i className="bi bi-check2"></i>}</span>
+                                    <i className="bi bi-bullseye"></i> Annulus
+                                </button>
+                            </li>
+
+                            {/* Separator */}
+                            <li><hr className="dropdown-divider border-secondary my-1" /></li>
+
+                            {/* Deletion Actions */}
+                            <li>
+                                <button 
+                                    className={`dropdown-item fv-dropdown-item ${selectedRegionId ? 'text-warning' : ''}`} 
+                                    onClick={deleteSelectedRegion} 
+                                    disabled={!selectedRegionId}
+                                >
+                                    <span style={{ width: '16px' }}></span>
+                                    <i className="bi bi-eraser"></i> Delete Selected (Del)
+                                </button>
+                            </li>
+                            <li>
+                                <button 
+                                    className={`dropdown-item fv-dropdown-item ${regions.length > 0 ? 'text-danger' : ''}`} 
+                                    onClick={() => { setRegions([]); setSelectedRegionId(null); }} 
+                                    disabled={regions.length === 0}
+                                >
+                                    <span style={{ width: '16px' }}></span>
+                                    <i className="bi bi-trash"></i> Clear All Regions
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
                 
-                {/* Color & Scale (Compact Inputs) */}
-                <div className="fv-input-group">
-                    <span className="fv-input-label">Color</span>
-                    <select className="fv-select" value={colormap} onChange={e => setColormap(e.target.value)}>
-                        <option value="gray">Grayscale</option><option value="heat">Heat</option><option value="cool">Cool</option><option value="plasma">Plasma</option>
-                    </select>
-                </div>
-                <div className="fv-input-group">
-                    <span className="fv-input-label">Scale</span>
-                    <select className="fv-select" value={stretch} onChange={e => setStretch(e.target.value)}>
-                        <option value="linear">Linear</option><option value="log">Log</option><option value="sqrt">Sqrt</option><option value="asinh">ASINH</option>
-                    </select>
+                {/* Color Menu */}
+                <div className="dropdown">
+                    <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown" title="Colormap">
+                        <i className="bi bi-palette"></i> <span className="ms-1">Color</span>
+                    </button>
+                    <ul className="dropdown-menu fv-dropdown-menu shadow">
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => setColormap('gray')}>
+                                <span style={{ width: '16px' }}>{colormap === 'gray' && <i className="bi bi-check2"></i>}</span>
+                                Grayscale
+                            </button>
+                        </li>
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => setColormap('heat')}>
+                                <span style={{ width: '16px' }}>{colormap === 'heat' && <i className="bi bi-check2"></i>}</span>
+                                Heat
+                            </button>
+                        </li>
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => setColormap('cool')}>
+                                <span style={{ width: '16px' }}>{colormap === 'cool' && <i className="bi bi-check2"></i>}</span>
+                                Cool
+                            </button>
+                        </li>
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => setColormap('plasma')}>
+                                <span style={{ width: '16px' }}>{colormap === 'plasma' && <i className="bi bi-check2"></i>}</span>
+                                Plasma
+                            </button>
+                        </li>
+                    </ul>
                 </div>
 
-                {/* View Transforms */}
-                <div className="d-flex gap-1 ms-2">
-                    <button className={`fv-btn ${flipX ? 'active' : ''}`} onClick={() => setFlipX(!flipX)} title="Flip X"><i className="bi bi-symmetry-vertical"></i></button>
-                    <button className={`fv-btn ${flipY ? 'active' : ''}`} onClick={() => setFlipY(!flipY)} title="Flip Y"><i className="bi bi-symmetry-horizontal"></i></button>
-                    <button className="fv-btn" onClick={() => setRotation(r => r - 90)} title="Rotate CCW"><i className="bi bi-arrow-counterclockwise"></i></button>
-                    <button className="fv-btn" onClick={() => setRotation(r => r + 90)} title="Rotate CW"><i className="bi bi-arrow-clockwise"></i></button>
-                </div>
-                
-                <div className="fv-input-group ms-1">
-                    <span className="fv-input-label">Angle</span>
-                    <input type="number" className="fv-input text-center" style={{ width: '45px', appearance: 'textfield' }} value={rotation} onChange={(e) => setRotation(Number(e.target.value) || 0)} step="1"/>
-                    <span className="fv-input-label border-start border-end-0">°</span>
+                {/* Scale Menu */}
+                <div className="dropdown">
+                    <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown" title="Scale / Stretch">
+                        <i className="bi bi-graph-up"></i> <span className="ms-1">Scale</span>
+                    </button>
+                    <ul className="dropdown-menu fv-dropdown-menu shadow">
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('linear')}>
+                                <span style={{ width: '16px' }}>{stretch === 'linear' && <i className="bi bi-check2"></i>}</span>
+                                Linear
+                            </button>
+                        </li>
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('log')}>
+                                <span style={{ width: '16px' }}>{stretch === 'log' && <i className="bi bi-check2"></i>}</span>
+                                Log
+                            </button>
+                        </li>
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('sqrt')}>
+                                <span style={{ width: '16px' }}>{stretch === 'sqrt' && <i className="bi bi-check2"></i>}</span>
+                                Square Root
+                            </button>
+                        </li>
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('asinh')}>
+                                <span style={{ width: '16px' }}>{stretch === 'asinh' && <i className="bi bi-check2"></i>}</span>
+                                ASINH
+                            </button>
+                        </li>
+                    </ul>
                 </div>
 
-                {/* Zoom */}
+                {/* Transform Menu */}
+                <div className="dropdown">
+                    <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown" title="View Transformations">
+                        <i className="bi bi-arrows-collapse"></i> <span className="ms-1">Transform</span>
+                    </button>
+                    <ul className="dropdown-menu fv-dropdown-menu shadow">
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => setFlipX(!flipX)}>
+                                <span style={{ width: '16px' }}>{flipX && <i className="bi bi-check2"></i>}</span>
+                                <i className="bi bi-symmetry-vertical"></i> Flip X
+                            </button>
+                        </li>
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => setFlipY(!flipY)}>
+                                <span style={{ width: '16px' }}>{flipY && <i className="bi bi-check2"></i>}</span>
+                                <i className="bi bi-symmetry-horizontal"></i> Flip Y
+                            </button>
+                        </li>
+                        <li><hr className="dropdown-divider border-secondary my-1" /></li>
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => setRotation(r => r - 90)}>
+                                <span style={{ width: '16px' }}></span><i className="bi bi-arrow-counterclockwise"></i> Rotate CCW (90°)
+                            </button>
+                        </li>
+                        <li>
+                            <button className="dropdown-item fv-dropdown-item" onClick={() => setRotation(r => r + 90)}>
+                                <span style={{ width: '16px' }}></span><i className="bi bi-arrow-clockwise"></i> Rotate CW (90°)
+                            </button>
+                        </li>
+                        <li><hr className="dropdown-divider border-secondary my-1" /></li>
+                        
+                        {/* Custom Rotation Input nested right inside the dropdown! */}
+                        <li className="px-3 py-1">
+                            <label className="text-muted mb-1" style={{ fontSize: '0.75rem' }}>Custom Angle (°)</label>
+                            <input 
+                                type="number" 
+                                className="form-control form-control-sm border-secondary bg-dark text-white" 
+                                style={{ appearance: 'textfield' }} 
+                                value={rotation} 
+                                onChange={(e) => setRotation(Number(e.target.value) || 0)} 
+                                step="1"
+                            />
+                        </li>
+                    </ul>
+                </div>
+
+                {/* Zoom Menu */}
                 <div className="ms-auto d-flex gap-1 align-items-center">
-                    <span className="text-muted small me-2" style={{ fontFamily: 'monospace' }}>{Math.round(zoom * 100)}%</span>
-                    <button className="fv-btn" onClick={() => setZoom(z => Math.max(0.1, z * 0.8))}><i className="bi bi-zoom-out"></i></button>
-                    <button className="fv-btn" onClick={() => setZoom(z => Math.min(50, z * 1.2))}><i className="bi bi-zoom-in"></i></button>
-                    <button className="fv-btn" onClick={resetView} title="Reset View"><i className="bi bi-arrow-repeat"></i></button>
+                    <div className="dropdown">
+                        <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown" title="Zoom Menu">
+                            <i className="bi bi-zoom-in"></i> <span className="ms-1">Zoom ({Math.round(zoom * 100)}%)</span>
+                        </button>
+                        <ul className="dropdown-menu dropdown-menu-end fv-dropdown-menu shadow">
+                            <li>
+                                <button className="dropdown-item fv-dropdown-item" onClick={() => setZoom(z => Math.min(50, z * 1.2))}>
+                                    <span style={{ width: '16px' }}></span><i className="bi bi-zoom-in"></i> Zoom In
+                                </button>
+                            </li>
+                            <li>
+                                <button className="dropdown-item fv-dropdown-item" onClick={() => setZoom(z => Math.max(0.1, z * 0.8))}>
+                                    <span style={{ width: '16px' }}></span><i className="bi bi-zoom-out"></i> Zoom Out
+                                </button>
+                            </li>
+                            <li><hr className="dropdown-divider border-secondary my-1" /></li>
+                            <li>
+                                <button className="dropdown-item fv-dropdown-item" onClick={resetView}>
+                                    <span style={{ width: '16px' }}></span><i className="bi bi-arrow-repeat"></i> Reset View
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
             {/* Viewport */}
             <div 
                 ref={viewportRef}
-                className="flex-grow-1 position-relative overflow-hidden" 
-                style={{ backgroundColor: '#000', minHeight: '500px', cursor: drawMode === 'pan' ? (isDragging && !dragAction ? 'grabbing' : 'grab') : 'crosshair' }}
+                className="flex-grow-1 position-relative overflow-hidden d-flex justify-content-center align-items-center" 
+                style={{ 
+                    backgroundColor: '#000', 
+                    // REMOVED minHeight entirely!
+                    cursor: drawMode === 'pan' ? (isDragging && !dragAction ? 'grabbing' : 'grab') : 'crosshair' 
+                }}
                 onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave} onWheel={handleWheel}
+                onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave}
             >
                 <div style={{
                     position: 'relative', width, height, flexShrink: 0,

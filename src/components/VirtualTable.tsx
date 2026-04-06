@@ -124,7 +124,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
 
     return (
         <div className="w-100 border">
-            <div onScroll={handleScroll} style={{ height: containerHeight, width: '100%', overflow: 'auto', position: 'relative' }}>
+            <div onScroll={handleScroll} style={{ height: '100%', width: '100%', overflow: 'auto', position: 'relative' }}>
                 <div className="d-flex bg-dark text-white fw-bold shadow-sm" style={{ width: totalWidth, height: '45px', position: 'sticky', top: 0, zIndex: 3 }}>
                     <div className="d-flex align-items-center px-2 border-end border-secondary bg-dark" style={{ width: rowNumWidth, flexShrink: 0, position: 'sticky', left: 0, zIndex: 4 }}>
                         Row
