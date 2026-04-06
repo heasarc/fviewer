@@ -2,13 +2,16 @@ import React, { useState } from 'react';
 import { useFits } from './hooks/useFits';
 import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
+import { FitsPlot } from './components/FitsPlot';
 
 function App() {
-    const { openFile, moveToHDU, getTableInfo, writeCell, saveFile, readImage } = useFits();
+    const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile, readImage } = useFits();
     const [tableInfo, setTableInfo] = useState<any>(null);
     const [tableData, setTableData] = useState<Record<string, any[]>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [imageData, setImageData] = useState<any>(null);
+    const [plotX, setPlotX] = useState<string>('');
+    const [plotY, setPlotY] = useState<string>('');
     const [fileName, setFileName] = useState("edited_file.fits");
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -20,32 +23,55 @@ function App() {
         
         try {
             const { numHDUs } = await openFile(new Uint8Array(buffer));
+            let dataLoaded = false;
             
             if (numHDUs >= 1) {
-                // Check Primary HDU (HDU 1) first!
-                const { isImage, isTable } = await moveToHDU(1);
+                // 1. Try to load HDU 1 as an image
+                const { isImage } = await moveToHDU(1);
                 
                 if (isImage) {
-                    const img = await readImage();
-                    // Assuming your wrapper returns { data, naxis1 (width), naxis2 (height) }
-                    setImageData(img);
-                    setTableInfo(null); // Clear table UI
-                } else {
-                    // It's not an image, let's try HDU 2 (common for tables)
-                    if (numHDUs > 1) {
-                        const hdu2 = await moveToHDU(2);
-                        if (hdu2.isTable) {
-                            const info = await getTableInfo();
-                            setTableInfo(info);
-                            setImageData(null); // Clear image UI
-                            
-                            // (keep the rest of your table loading loop here...)
+                    try {
+                        const img = await readImage();
+                        setImageData(img);
+                        setTableInfo(null);
+                        dataLoaded = true;
+                    } catch (imgError) {
+                        // This is perfectly normal for Table FITS files. 
+                        // HDU 1 is just an empty header (NAXIS=0). We ignore the error and move on.
+                        console.log("HDU 1 is empty or not a valid image, checking extensions...");
+                    }
+                }
+                
+                // 2. If HDU 1 was empty and we have more HDUs, check HDU 2 for a Table
+                if (!dataLoaded && numHDUs > 1) {
+                    const hdu2 = await moveToHDU(2);
+                    if (hdu2.isTable) {
+                        const info = await getTableInfo();
+                        setTableInfo(info);
+                        setImageData(null); // Clear image UI
+                        
+                        const dataMap: Record<string, any[]> = {};
+                        for (let i = 1; i <= info.numCols; i++) {
+                            const colResult = await readColumn(i);
+                            if (colResult && colResult.data) {
+                                dataMap[info.columns[i-1].name] = colResult.data;
+                            } else {
+                                dataMap[info.columns[i-1].name] = new Array(info.numRows).fill('Unsupported');
+                            }
+                        }
+                        setTableData(dataMap);
+                        
+                        // Set default plot columns
+                        if (info.numCols >= 2) {
+                            setPlotX(info.columns[0].name);
+                            setPlotY(info.columns[1].name);
                         }
                     }
                 }
             }
         } catch (error) {
-            console.error("Failed to load table:", error);
+            console.error("Failed to load file:", error);
+            alert("Failed to load FITS file.");
         } finally {
             setIsLoading(false);
         }
@@ -167,6 +193,48 @@ function App() {
                             width={imageData.width} 
                             height={imageData.height} 
                         />
+                    </div>
+                </div>
+            )}
+
+            {tableInfo && (
+                <div className="card shadow-sm mb-4 border-primary">
+                    <div className="card-header bg-primary text-white d-flex align-items-center gap-3">
+                        <h5 className="mb-0"><i className="bi bi-graph-up"></i> Plotter</h5>
+                        
+                        {/* Column Selectors */}
+                        <div className="d-flex gap-2 ms-auto">
+                            <div className="input-group input-group-sm">
+                                <span className="input-group-text bg-light">X Axis</span>
+                                <select className="form-select" value={plotX} onChange={(e) => setPlotX(e.target.value)}>
+                                    {tableInfo.columns.map((c: any) => (
+                                        <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="input-group input-group-sm">
+                                <span className="input-group-text bg-light">Y Axis</span>
+                                <select className="form-select" value={plotY} onChange={(e) => setPlotY(e.target.value)}>
+                                    {tableInfo.columns.map((c: any) => (
+                                        <option key={c.name} value={c.name}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* The Plot Component */}
+                    <div className="card-body">
+                        {plotX && plotY && tableData[plotX] && tableData[plotY] ? (
+                            <FitsPlot 
+                                xData={tableData[plotX]} 
+                                yData={tableData[plotY]} 
+                                xLabel={plotX} 
+                                yLabel={plotY} 
+                            />
+                        ) : (
+                            <p className="text-muted text-center my-4">Select columns to plot</p>
+                        )}
                     </div>
                 </div>
             )}
