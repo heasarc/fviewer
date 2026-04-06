@@ -10,17 +10,17 @@ interface FitsImageProps {
     pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>;
 }
 
-export type DrawMode = 'pan' | 'circle' | 'box';
+export type DrawMode = 'pan' | 'circle' | 'box' | 'ellipse' | 'annulus';
 
 export interface Region {
     id: string;
-    type: 'circle' | 'box';
+    type: 'circle' | 'box' | 'ellipse' | 'annulus';
     startX: number;
     startY: number;
     endX: number;
     endY: number;
     color: string;
-    angle: number;
+    angle?: number;
 }
 
 export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, checkWcs, pixToWorld }) => {
@@ -230,26 +230,44 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
         const handleSize = 10 / zoom;
         
         let shapeElement;
-        let cx: number, cy: number, topEdgeY: number;
+        let cx: number, cy: number, topEdgeY: number = 0;
 
         if (r.type === 'box') {
             const minX = Math.min(r.startX, r.endX);
             const minY = Math.min(r.startY, r.endY);
             const w = Math.abs(r.endX - r.startX);
             const h = Math.abs(r.endY - r.startY);
-            
             cx = (r.startX + r.endX) / 2;
             cy = (r.startY + r.endY) / 2;
-            topEdgeY = minY; // Top edge of the box
-            
+            topEdgeY = minY;
             shapeElement = <rect x={minX} y={minY} width={w} height={h} />;
-        } else {
-            const radius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
-            
-            cx = r.startX; // True center of the circle
+        } 
+        else if (r.type === 'ellipse') {
+            cx = r.startX;
             cy = r.startY;
-            topEdgeY = r.startY - radius; // Top edge of the circle
-            
+            const rx = Math.abs(r.endX - r.startX);
+            const ry = Math.abs(r.endY - r.startY);
+            topEdgeY = cy - ry;
+            shapeElement = <ellipse cx={cx} cy={cy} rx={rx} ry={ry} />;
+        }
+        else if (r.type === 'annulus') {
+            cx = r.startX;
+            cy = r.startY;
+            const outerRadius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
+            const innerRadius = outerRadius * 0.5; // Default annulus inner radius is 50% of outer
+            // We wrap both circles in a <g> so the hit styles apply to both lines simultaneously
+            shapeElement = (
+                <g>
+                    <circle cx={cx} cy={cy} r={outerRadius} />
+                    <circle cx={cx} cy={cy} r={innerRadius} />
+                </g>
+            );
+        }
+        else { // 'circle'
+            const radius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
+            cx = r.startX;
+            cy = r.startY;
+            topEdgeY = cy - radius;
             shapeElement = <circle cx={cx} cy={cy} r={radius} />;
         }
 
@@ -290,8 +308,8 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                 {/* 3. Handles (Only visible when selected) */}
                 {isSelected && !isDraft && (
                     <>
-                        {/* Rotation Handle (Only for boxes!) */}
-                        {r.type === 'box' && (
+                        {/* Rotation Handle (Only for Box and Ellipse) */}
+                        {(r.type === 'box' || r.type === 'ellipse') && (
                             <>
                                 <line x1={cx} y1={topEdgeY} x2={cx} y2={topEdgeY - (25/zoom)} stroke={r.color} strokeWidth={1/zoom} pointerEvents="none" />
                                 <circle 
@@ -331,10 +349,18 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
             {/* Toolbar */}
             <div className="d-flex flex-wrap gap-3 mb-2 p-2 rounded align-items-center" style={{ backgroundColor: 'var(--fv-panel-hover)' }}>
                 <div className="btn-group btn-group-sm shadow-sm border border-dark">
-                    <button className={`btn btn-${drawMode === 'pan' ? 'primary' : 'secondary'} border-0`} onClick={() => setDrawMode('pan')}><i className="bi bi-arrows-move"></i></button>
-                    <button className={`btn btn-${drawMode === 'circle' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('circle')}><i className="bi bi-circle"></i></button>
-                    <button className={`btn btn-${drawMode === 'box' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('box')}><i className="bi bi-square"></i></button>
-                    <button className="btn btn-danger border-0 border-start border-dark" onClick={() => { setRegions([]); setSelectedRegionId(null); }} disabled={regions.length === 0}><i className="bi bi-trash"></i></button>
+                    <button className={`btn btn-${drawMode === 'pan' ? 'primary' : 'secondary'} border-0`} onClick={() => setDrawMode('pan')} title="Pan / Pointer"><i className="bi bi-arrows-move"></i></button>
+                    <button className={`btn btn-${drawMode === 'circle' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('circle')} title="Draw Circle"><i className="bi bi-circle"></i></button>
+                    <button className={`btn btn-${drawMode === 'box' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('box')} title="Draw Box"><i className="bi bi-square"></i></button>
+                    
+                    <button className={`btn btn-${drawMode === 'ellipse' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('ellipse')} title="Draw Ellipse">
+                        <span style={{ display: 'inline-block', transform: 'scaleY(0.7)' }}><i className="bi bi-circle"></i></span>
+                    </button>
+                    <button className={`btn btn-${drawMode === 'annulus' ? 'primary' : 'secondary'} border-0 border-start border-dark`} onClick={() => setDrawMode('annulus')} title="Draw Annulus">
+                        <i className="bi bi-bullseye"></i>
+                    </button>
+
+                    <button className="btn btn-danger border-0 border-start border-dark" onClick={() => { setRegions([]); setSelectedRegionId(null); }} disabled={regions.length === 0} title="Clear Regions"><i className="bi bi-trash"></i></button>
                 </div>
                 
                 <div className="input-group input-group-sm w-auto shadow-sm">
