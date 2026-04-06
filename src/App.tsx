@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useFits } from './hooks/useFits';
 import { VirtualTable } from './components/VirtualTable';
+import { FitsImage } from './components/FitsImage';
 
 function App() {
-    const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile } = useFits();
+    const { openFile, moveToHDU, getTableInfo, writeCell, saveFile, readImage } = useFits();
     const [tableInfo, setTableInfo] = useState<any>(null);
     const [tableData, setTableData] = useState<Record<string, any[]>>({});
     const [isLoading, setIsLoading] = useState(false);
+    const [imageData, setImageData] = useState<any>(null);
     const [fileName, setFileName] = useState("edited_file.fits");
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -19,22 +21,27 @@ function App() {
         try {
             const { numHDUs } = await openFile(new Uint8Array(buffer));
             
-            if (numHDUs > 1) {
-                const { isTable } = await moveToHDU(2);
-                if (isTable) {
-                    const info = await getTableInfo();
-                    setTableInfo(info);
-
-                    const dataMap: Record<string, any[]> = {};
-                    for (let i = 1; i <= info.numCols; i++) {
-                        const colResult = await readColumn(i);
-                        if (colResult && colResult.data) {
-                            dataMap[info.columns[i-1].name] = colResult.data;
-                        } else {
-                            dataMap[info.columns[i-1].name] = new Array(info.numRows).fill('Unsupported');
+            if (numHDUs >= 1) {
+                // Check Primary HDU (HDU 1) first!
+                const { isImage, isTable } = await moveToHDU(1);
+                
+                if (isImage) {
+                    const img = await readImage();
+                    // Assuming your wrapper returns { data, naxis1 (width), naxis2 (height) }
+                    setImageData(img);
+                    setTableInfo(null); // Clear table UI
+                } else {
+                    // It's not an image, let's try HDU 2 (common for tables)
+                    if (numHDUs > 1) {
+                        const hdu2 = await moveToHDU(2);
+                        if (hdu2.isTable) {
+                            const info = await getTableInfo();
+                            setTableInfo(info);
+                            setImageData(null); // Clear image UI
+                            
+                            // (keep the rest of your table loading loop here...)
                         }
                     }
-                    setTableData(dataMap);
                 }
             }
         } catch (error) {
@@ -144,6 +151,21 @@ function App() {
                             columns={tableInfo.columns} 
                             dataMap={tableData}
                             onCellEdit={handleCellEdit}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {imageData && imageData.width > 0 && imageData.height > 0 && (
+                <div className="card shadow-sm mb-4">
+                    <div className="card-header bg-light">
+                        <h5 className="mb-0">Image Data</h5>
+                    </div>
+                    <div className="card-body bg-secondary d-flex justify-content-center p-3">
+                        <FitsImage 
+                            data={imageData.data} 
+                            width={imageData.width} 
+                            height={imageData.height} 
                         />
                     </div>
                 </div>
