@@ -1,75 +1,91 @@
 import React, { useState } from 'react';
 import { useFits } from './hooks/useFits';
+import { VirtualTable } from './components/VirtualTable';
 
 function App() {
     const { openFile, moveToHDU, getTableInfo, readColumn } = useFits();
     const [tableInfo, setTableInfo] = useState<any>(null);
     const [tableData, setTableData] = useState<Record<string, any[]>>({});
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        setIsLoading(true);
         const buffer = await file.arrayBuffer();
         
         try {
             const { numHDUs } = await openFile(new Uint8Array(buffer));
             
             if (numHDUs > 1) {
-                // Move to the first extension (usually a BINTABLE)
                 const { isTable } = await moveToHDU(2);
-                
                 if (isTable) {
                     const info = await getTableInfo();
                     setTableInfo(info);
 
-                    // Fetch data for all columns
                     const dataMap: Record<string, any[]> = {};
                     for (let i = 1; i <= info.numCols; i++) {
                         const colResult = await readColumn(i);
-                        // Store just the first 100 rows for our basic DOM test
-                        dataMap[info.columns[i-1].name] = Array.from(colResult.data.slice(0, 100));
+                        if (colResult && colResult.data) {
+                            dataMap[info.columns[i-1].name] = colResult.data;
+                        } else {
+                            dataMap[info.columns[i-1].name] = new Array(info.numRows).fill('Unsupported');
+                        }
                     }
                     setTableData(dataMap);
-                } else {
-                    console.log("HDU 2 is not a table.");
                 }
             }
         } catch (error) {
             console.error("Failed to load table:", error);
+        } finally {
+            setIsLoading(false);
         }
     };
 
     return (
-        <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-            <h1>FViewer - Table Test</h1>
-            <input type="file" accept=".fits" onChange={handleFileUpload} />
+        <div className="container-fluid py-4">
+            <header className="mb-4 pb-3 border-bottom">
+                <h1 className="h3 text-primary">
+                    <i className="bi bi-stars"></i> FViewer
+                </h1>
+                <p className="text-muted mb-0">High-performance FITS Table Viewer</p>
+            </header>
             
+            <div className="row mb-4">
+                <div className="col-md-6">
+                    <div className="input-group">
+                        <input 
+                            type="file" 
+                            className="form-control" 
+                            accept=".fits,.fit,.fts" 
+                            onChange={handleFileUpload} 
+                            disabled={isLoading}
+                        />
+                        {isLoading && (
+                            <span className="input-group-text bg-light">
+                                <div className="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+
             {tableInfo && (
-                <div style={{ marginTop: '20px' }}>
-                    <h3>Table: {tableInfo.numRows} Rows, {tableInfo.numCols} Columns</h3>
-                    
-                    <table border={1} cellPadding={5} style={{ borderCollapse: 'collapse', marginTop: '10px' }}>
-                        <thead>
-                            <tr>
-                                {tableInfo.columns.map((col: any, idx: number) => (
-                                    <th key={idx}>{col.name} <br/><small>({col.unit || 'no unit'})</small></th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {/* Render up to 100 rows */}
-                            {Array.from({ length: Math.min(tableInfo.numRows, 100) }).map((_, rowIndex) => (
-                                <tr key={rowIndex}>
-                                    {tableInfo.columns.map((col: any, colIndex: number) => (
-                                        <td key={colIndex}>
-                                            {String(tableData[col.name]?.[rowIndex] ?? '...')}
-                                        </td>
-                                    ))}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                <div className="card shadow-sm">
+                    <div className="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h5 className="mb-0">Table Data</h5>
+                        <span className="badge bg-secondary">
+                            {tableInfo.numRows} Rows | {tableInfo.numCols} Columns
+                        </span>
+                    </div>
+                    <div className="card-body p-0">
+                        <VirtualTable 
+                            numRows={tableInfo.numRows} 
+                            columns={tableInfo.columns} 
+                            dataMap={tableData} 
+                        />
+                    </div>
                 </div>
             )}
         </div>

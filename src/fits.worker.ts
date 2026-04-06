@@ -34,7 +34,6 @@ self.onmessage = async (e: MessageEvent) => {
                 // Determine HDU type by reading keywords
                 const xtension = activeFile.readKeyword("XTENSION")?.trim() || "";
                 const isTable = xtension === "BINTABLE" || xtension === "TABLE";
-                console.log(xtension, isTable);
                 const isImage = activeFile.readKeyword("SIMPLE") === "T" || xtension === "IMAGE";
 
                 self.postMessage({ id, success: true, data: { status, isTable, isImage } });
