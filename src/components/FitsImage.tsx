@@ -21,6 +21,7 @@ export interface Region {
     endY: number;
     color: string;
     angle?: number;
+    innerR?: number;
 }
 
 export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, checkWcs, pixToWorld }) => {
@@ -48,7 +49,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
     const [hoveredRegionId, setHoveredRegionId] = useState<string | null>(null);
     
     // Tracks if we are moving the whole shape or just resizing the corner
-    const [dragAction, setDragAction] = useState<{ id: string, type: 'move' | 'resize' | 'rotate' } | null>(null);
+    const [dragAction, setDragAction] = useState<{ id: string, type: 'move' | 'resize' | 'rotate' | 'resize-inner' } | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, y: 0 });
 
@@ -162,6 +163,13 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                         const localDy = dx * sin + dy * cos;
                         return { ...r, endX: r.endX + localDx, endY: r.endY + localDy };
                     }
+                    else if (dragAction.type === 'resize-inner') {
+                    // Calculate the new inner radius based on mouse distance from center
+                    const cx = r.type === 'box' ? (r.startX + r.endX) / 2 : r.startX;
+                    const cy = r.type === 'box' ? (r.startY + r.endY) / 2 : r.startY;
+                    const newInnerR = Math.max(1, Math.hypot(x - cx, y - cy));
+                    return { ...r, innerR: newInnerR };
+                }
                 }
                 return r;
             }));
@@ -204,12 +212,20 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
 
     const handleMouseUpOrLeave = () => {
         setIsDragging(false);
-        setDragAction(null); // Drop the region/handle if we were holding it
+        setDragAction(null);
 
         if (draftRegion) {
             if (Math.abs(draftRegion.endX - draftRegion.startX) > 2 || Math.abs(draftRegion.endY - draftRegion.startY) > 2) {
-                setRegions([...regions, draftRegion]);
-                setSelectedRegionId(draftRegion.id); // Auto-select new region
+                const newRegion = { ...draftRegion };
+                
+                // Set default inner radius for newly drawn annuli
+                if (newRegion.type === 'annulus') {
+                    const outerRadius = Math.hypot(newRegion.endX - newRegion.startX, newRegion.endY - newRegion.startY);
+                    newRegion.innerR = outerRadius * 0.5;
+                }
+
+                setRegions([...regions, newRegion]);
+                setSelectedRegionId(newRegion.id); 
                 setDrawMode('pan'); 
             }
             setDraftRegion(null);
@@ -254,8 +270,8 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
             cx = r.startX;
             cy = r.startY;
             const outerRadius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
-            const innerRadius = outerRadius * 0.5; // Default annulus inner radius is 50% of outer
-            // We wrap both circles in a <g> so the hit styles apply to both lines simultaneously
+            const innerRadius = r.innerR ?? (outerRadius * 0.5); // Use the saved inner radius
+            topEdgeY = cy - outerRadius;
             shapeElement = (
                 <g>
                     <circle cx={cx} cy={cy} r={outerRadius} />
@@ -325,7 +341,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                             </>
                         )}
 
-                        {/* Resize Handle (Bottom Right Corner / Perimeter - For both shapes) */}
+                        {/* Outer Resize Handle (Bottom Right / Outer Perimeter) */}
                         <rect 
                             x={r.endX - handleSize / 2} y={r.endY - handleSize / 2} 
                             width={handleSize} height={handleSize} 
@@ -338,6 +354,22 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                                 dragStart.current = getCanvasCoords(e.clientX, e.clientY);
                             }}
                         />
+                        {/* Inner Resize Handle (Only for Annulus - placed at 3 o'clock on inner ring) */}
+                        {r.type === 'annulus' && (
+                            <rect 
+                                x={cx + (r.innerR ?? (Math.hypot(r.endX - r.startX, r.endY - r.startY) * 0.5)) - handleSize / 2} 
+                                y={cy - handleSize / 2} 
+                                width={handleSize} height={handleSize} 
+                                fill="#fff" stroke={r.color} strokeWidth={1/zoom}
+                                style={{ cursor: 'e-resize', pointerEvents: 'all' }}
+                                onMouseDown={(e) => {
+                                    if (drawMode !== 'pan') return;
+                                    e.stopPropagation();
+                                    setDragAction({ id: r.id, type: 'resize-inner' });
+                                    dragStart.current = getCanvasCoords(e.clientX, e.clientY);
+                                }}
+                            />
+                        )}
                     </>
                 )}
             </g>
