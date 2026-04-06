@@ -190,110 +190,124 @@ function App() {
                 </div>
             </div>
 
-            {/* IDE Tabs for HDUs */}
-            <div className="fv-tabs-container">
-                {hduList.length === 0 ? (
-                    <div className="fv-tab text-muted fst-italic cursor-default">No file loaded</div>
-                ) : (
-                    hduList.map((hdu) => (
-                        <button 
-                            key={hdu.index}
-                            className={`fv-tab ${activeHdu === hdu.index ? 'active' : ''} ${hdu.type === 'empty' ? 'text-muted' : ''}`}
-                            onClick={() => setActiveHdu(hdu.index)}
-                        >
-                            {hdu.extname} <span className="opacity-50 ms-2" style={{ fontSize: '0.7rem' }}>[{hdu.type.toUpperCase()}]</span>
-                        </button>
-                    ))
-                )}
-            </div>
-
-            {/* Main Workspace Area */}
-            <div className="flex-grow-1 overflow-auto p-3 d-flex flex-column">
-                {activeHdu && (
-                    <div className="fade-in d-flex flex-column flex-grow-1 gap-3">
-                        
-                        {hduList.find(h => h.index === activeHdu)?.type === 'empty' && (
-                            <div className="alert alert-secondary border-secondary bg-dark text-white">
-                                <i className="bi bi-info-circle me-2"></i> This HDU contains no data (NAXIS=0).
-                            </div>
-                        )}
-
-                        {/* Image Viewer */}
-                        {imageData && imageData.width > 0 && (
-                            <div className="d-flex justify-content-center w-100 mb-3">
-                                {/* Rigid width and height constraints */}
-                                <div className="fv-panel-box d-flex flex-column w-100" style={{ maxWidth: '800px', height: '650px' }}>
-                                    <div className="fv-panel-header">
-                                        <span><i className="bi bi-image me-2"></i> Image Display</span>
-                                    </div>
-                                    <div className="flex-grow-1 position-relative d-flex flex-column" style={{ minHeight: 0 }}>
-                                        <FitsImage 
-                                            data={imageData.data} 
-                                            width={imageData.width} 
-                                            height={imageData.height} 
-                                            checkWcs={checkWcs}
-                                            pixToWorld={pixToWorld}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Table Workspace */}
-                        {tableInfo && (
-                            <div className="row g-3 flex-grow-1">
-                                {/* Table Left Side */}
-                                <div className="col-lg-7 d-flex flex-column">
-                                    <div className="fv-panel-box d-flex flex-column flex-grow-1">
-                                        <div className="fv-panel-header">
-                                            <span><i className="bi bi-table me-2"></i> Binary Table</span>
-                                            <span className="badge bg-secondary">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
-                                        </div>
-                                        <div className="flex-grow-1 overflow-hidden" style={{ minHeight: '400px' }}>
-                                            <VirtualTable 
-                                                numRows={tableInfo.numRows} 
-                                                columns={tableInfo.columns} 
-                                                dataMap={tableData} 
-                                                onCellEdit={handleCellEdit}
-                                                containerHeight={undefined} 
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Plotter Right Side */}
-                                <div className="col-lg-5 d-flex flex-column">
-                                    <div className="fv-panel-box d-flex flex-column flex-grow-1">
-                                        <div className="fv-panel-header">
-                                            <span><i className="bi bi-graph-up me-2"></i> Plotter</span>
-                                            <div className="d-flex gap-2">
-                                                <div className="fv-input-group">
-                                                    <span className="fv-input-label">X</span>
-                                                    <select className="fv-select" value={plotX} onChange={(e) => setPlotX(e.target.value)}>
-                                                        {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                                                    </select>
-                                                </div>
-                                                <div className="fv-input-group">
-                                                    <span className="fv-input-label">Y</span>
-                                                    <select className="fv-select" value={plotY} onChange={(e) => setPlotY(e.target.value)}>
-                                                        {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="p-2 flex-grow-1">
-                                            {plotX && plotY && tableData[plotX] && tableData[plotY] ? (
-                                                <FitsPlot xData={tableData[plotX]} yData={tableData[plotY]} xLabel={plotX} yLabel={plotY} />
-                                            ) : (
-                                                <div className="text-muted text-center py-5">Select columns to plot</div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+            {/* Application Body (Sidebar + Workspace) */}
+            <div className="d-flex flex-row flex-grow-1 overflow-hidden">
+                
+                {/* Left Sidebar: HDU List */}
+                <div className="fv-sidebar overflow-auto">
+                    <div className="fv-sidebar-header">
+                        <i className="bi bi-layers me-2"></i> HDU Explorer
                     </div>
-                )}
+                    
+                    {hduList.length === 0 ? (
+                        <div className="p-3 text-muted fst-italic" style={{ fontSize: '0.8rem' }}>No file loaded</div>
+                    ) : (
+                        hduList.map((hdu) => (
+                            <button 
+                                key={hdu.index}
+                                className={`fv-sidebar-item ${activeHdu === hdu.index ? 'active' : ''} ${hdu.type === 'empty' ? 'text-muted' : ''}`}
+                                onClick={() => setActiveHdu(hdu.index)}
+                            >
+                                <span className="text-truncate" style={{ maxWidth: '140px' }} title={hdu.extname}>
+                                    {hdu.extname}
+                                </span>
+                                <span className="badge border border-secondary text-secondary bg-dark" style={{ fontSize: '0.65rem', fontWeight: 'normal' }}>
+                                    {hdu.type.toUpperCase()}
+                                </span>
+                            </button>
+                        ))
+                    )}
+                </div>
+            
+
+            {/* Main Workspace Area (Right Side) */}
+              <div className="flex-grow-1 overflow-auto p-3 d-flex flex-column">
+                  {activeHdu && (
+                      <div className="fade-in d-flex flex-column flex-grow-1 gap-3">
+                          
+                          {hduList.find(h => h.index === activeHdu)?.type === 'empty' && (
+                              <div className="alert alert-secondary border-secondary bg-dark text-white">
+                                  <i className="bi bi-info-circle me-2"></i> This HDU contains no data (NAXIS=0).
+                              </div>
+                          )}
+
+                          {/* Image Viewer */}
+                          {imageData && imageData.width > 0 && (
+                              <div className="d-flex justify-content-center w-100 mb-3">
+                                  {/* Rigid width and height constraints */}
+                                  <div className="fv-panel-box d-flex flex-column w-100" style={{ maxWidth: '800px', height: '650px' }}>
+                                      <div className="fv-panel-header">
+                                          <span><i className="bi bi-image me-2"></i> Image Display</span>
+                                      </div>
+                                      <div className="flex-grow-1 position-relative d-flex flex-column" style={{ minHeight: 0 }}>
+                                          <FitsImage 
+                                              data={imageData.data} 
+                                              width={imageData.width} 
+                                              height={imageData.height} 
+                                              checkWcs={checkWcs}
+                                              pixToWorld={pixToWorld}
+                                          />
+                                      </div>
+                                  </div>
+                              </div>
+                          )}
+
+                          {/* Table Workspace */}
+                          {tableInfo && (
+                              <div className="row g-3 flex-grow-1">
+                                  {/* Table Left Side */}
+                                  <div className="col-lg-7 d-flex flex-column">
+                                      <div className="fv-panel-box d-flex flex-column flex-grow-1">
+                                          <div className="fv-panel-header">
+                                              <span><i className="bi bi-table me-2"></i> Binary Table</span>
+                                              <span className="badge bg-secondary">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
+                                          </div>
+                                          <div className="flex-grow-1 overflow-hidden" style={{ minHeight: '400px' }}>
+                                              <VirtualTable 
+                                                  numRows={tableInfo.numRows} 
+                                                  columns={tableInfo.columns} 
+                                                  dataMap={tableData} 
+                                                  onCellEdit={handleCellEdit}
+                                                  containerHeight={undefined} 
+                                              />
+                                          </div>
+                                      </div>
+                                  </div>
+
+                                  {/* Plotter Right Side */}
+                                  <div className="col-lg-5 d-flex flex-column">
+                                      <div className="fv-panel-box d-flex flex-column flex-grow-1">
+                                          <div className="fv-panel-header">
+                                              <span><i className="bi bi-graph-up me-2"></i> Plotter</span>
+                                              <div className="d-flex gap-2">
+                                                  <div className="fv-input-group">
+                                                      <span className="fv-input-label">X</span>
+                                                      <select className="fv-select" value={plotX} onChange={(e) => setPlotX(e.target.value)}>
+                                                          {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                                      </select>
+                                                  </div>
+                                                  <div className="fv-input-group">
+                                                      <span className="fv-input-label">Y</span>
+                                                      <select className="fv-select" value={plotY} onChange={(e) => setPlotY(e.target.value)}>
+                                                          {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                                      </select>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                          <div className="p-2 flex-grow-1">
+                                              {plotX && plotY && tableData[plotX] && tableData[plotY] ? (
+                                                  <FitsPlot xData={tableData[plotX]} yData={tableData[plotY]} xLabel={plotX} yLabel={plotY} />
+                                              ) : (
+                                                  <div className="text-muted text-center py-5">Select columns to plot</div>
+                                              )}
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                          )}
+                      </div>
+                  )}
+              </div>
             </div>
         </div>
     );
