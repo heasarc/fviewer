@@ -20,6 +20,7 @@ export interface Region {
     endX: number;
     endY: number;
     color: string;
+    angle: number;
 }
 
 export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, checkWcs, pixToWorld }) => {
@@ -47,7 +48,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
     const [hoveredRegionId, setHoveredRegionId] = useState<string | null>(null);
     
     // Tracks if we are moving the whole shape or just resizing the corner
-    const [dragAction, setDragAction] = useState<{ id: string, type: 'move' | 'resize' } | null>(null);
+    const [dragAction, setDragAction] = useState<{ id: string, type: 'move' | 'resize' | 'rotate' } | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, y: 0 });
 
@@ -55,6 +56,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
     const [hasWCS, setHasWCS] = useState(false);
     const [hoverInfo, setHoverInfo] = useState({ x: 0, y: 0, val: 0, ra: 'N/A', dec: 'N/A' });
     const isWcsPending = useRef(false);
+    
 
     useEffect(() => { checkWcs().then(setHasWCS).catch(() => setHasWCS(false)); }, [checkWcs]);
 
@@ -125,13 +127,14 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
             dragStart.current = { x, y }; 
             setDraftRegion({ 
                 id: Date.now().toString(), type: drawMode, 
-                startX: x, startY: y, endX: x, endY: y, color: '#00ff00' 
+                startX: x, startY: y, endX: x, endY: y, color: '#00ff00',
+                angle: 0
             });
         }
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
-        // 1. Handle Region Dragging & Resizing
+        // 1. Handle Region Dragging, Resizing, and Rotating
         if (dragAction) {
             const { x, y } = getCanvasCoords(e.clientX, e.clientY);
             const dx = x - dragStart.current.x;
@@ -141,9 +144,23 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                 if (r.id === dragAction.id) {
                     if (dragAction.type === 'move') {
                         return { ...r, startX: r.startX + dx, startY: r.startY + dy, endX: r.endX + dx, endY: r.endY + dy };
-                    } else if (dragAction.type === 'resize') {
-                        // Resizing only updates the end coordinate!
-                        return { ...r, endX: r.endX + dx, endY: r.endY + dy };
+                    } 
+                    else if (dragAction.type === 'rotate') {
+                        // Get the true center based on the shape type
+                        const cx = r.type === 'box' ? (r.startX + r.endX) / 2 : r.startX;
+                        const cy = r.type === 'box' ? (r.startY + r.endY) / 2 : r.startY;
+                        
+                        const angleRad = Math.atan2(y - cy, x - cx);
+                        return { ...r, angle: (angleRad * 180 / Math.PI) + 90 };
+                    }
+                    else if (dragAction.type === 'resize') {
+                        // Un-rotate the mouse delta so we scale along the shape's local axes
+                        const rad = -(r.angle || 0) * (Math.PI / 180);
+                        const cos = Math.cos(rad);
+                        const sin = Math.sin(rad);
+                        const localDx = dx * cos - dy * sin;
+                        const localDy = dx * sin + dy * cos;
+                        return { ...r, endX: r.endX + localDx, endY: r.endY + localDy };
                     }
                 }
                 return r;
@@ -213,33 +230,45 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
         const handleSize = 10 / zoom;
         
         let shapeElement;
+        let cx: number, cy: number, topEdgeY: number;
+
         if (r.type === 'box') {
             const minX = Math.min(r.startX, r.endX);
             const minY = Math.min(r.startY, r.endY);
             const w = Math.abs(r.endX - r.startX);
             const h = Math.abs(r.endY - r.startY);
+            
+            cx = (r.startX + r.endX) / 2;
+            cy = (r.startY + r.endY) / 2;
+            topEdgeY = minY; // Top edge of the box
+            
             shapeElement = <rect x={minX} y={minY} width={w} height={h} />;
         } else {
             const radius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
-            shapeElement = <circle cx={r.startX} cy={r.startY} r={radius} />;
+            
+            cx = r.startX; // True center of the circle
+            cy = r.startY;
+            topEdgeY = r.startY - radius; // Top edge of the circle
+            
+            shapeElement = <circle cx={cx} cy={cy} r={radius} />;
         }
 
         const handleRegionMouseDown = (e: React.MouseEvent) => {
             if (drawMode !== 'pan') return;
             e.stopPropagation(); 
             setSelectedRegionId(r.id);
-            setDragAction({ id: r.id, type: 'move' }); // Clicked shape = move
+            setDragAction({ id: r.id, type: 'move' }); 
             dragStart.current = getCanvasCoords(e.clientX, e.clientY);
         };
 
         return (
-            <g key={r.id}>
+            <g key={r.id} transform={`rotate(${r.angle || 0} ${cx} ${cy})`}>
+                
                 {/* 1. Invisible Fat Click Target */}
                 {React.cloneElement(shapeElement, {
                     style: {
                         stroke: 'rgba(255,255,255,0.01)', 
-                        strokeWidth: Math.max(10, 20 / zoom), 
-                        fill: 'none',
+                        strokeWidth: Math.max(10, 20 / zoom), fill: 'none',
                         pointerEvents: isDraft || drawMode !== 'pan' ? 'none' : 'stroke',
                         cursor: drawMode === 'pan' ? 'move' : 'crosshair'
                     },
@@ -253,30 +282,45 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                     style: {
                         stroke: isHovered && drawMode === 'pan' && !isDraft ? '#fff' : r.color, 
                         strokeWidth: (isHovered && drawMode === 'pan' && !isDraft ? 4 : 2) / zoom, 
-                        fill: 'none', 
-                        pointerEvents: 'none',
+                        fill: 'none', pointerEvents: 'none',
                         transition: 'stroke 0.1s, stroke-width 0.1s'
                     }
                 })}
 
-                {/* 3. Resize Handle (Only visible when selected) */}
+                {/* 3. Handles (Only visible when selected) */}
                 {isSelected && !isDraft && (
-                    <rect 
-                        x={r.endX - handleSize / 2} 
-                        y={r.endY - handleSize / 2} 
-                        width={handleSize} 
-                        height={handleSize} 
-                        fill="#fff" 
-                        stroke={r.color} 
-                        strokeWidth={2 / zoom}
-                        style={{ cursor: 'nwse-resize', pointerEvents: 'all' }}
-                        onMouseDown={(e) => {
-                            if (drawMode !== 'pan') return;
-                            e.stopPropagation(); // Don't trigger the move logic
-                            setDragAction({ id: r.id, type: 'resize' }); // Clicked handle = resize
-                            dragStart.current = getCanvasCoords(e.clientX, e.clientY);
-                        }}
-                    />
+                    <>
+                        {/* Rotation Handle (Only for boxes!) */}
+                        {r.type === 'box' && (
+                            <>
+                                <line x1={cx} y1={topEdgeY} x2={cx} y2={topEdgeY - (25/zoom)} stroke={r.color} strokeWidth={1/zoom} pointerEvents="none" />
+                                <circle 
+                                    cx={cx} cy={topEdgeY - (25/zoom)} r={handleSize/2} fill={r.color} 
+                                    style={{ cursor: 'crosshair', pointerEvents: 'all' }}
+                                    onMouseDown={(e) => {
+                                        if (drawMode !== 'pan') return;
+                                        e.stopPropagation();
+                                        setDragAction({ id: r.id, type: 'rotate' });
+                                        dragStart.current = getCanvasCoords(e.clientX, e.clientY);
+                                    }}
+                                />
+                            </>
+                        )}
+
+                        {/* Resize Handle (Bottom Right Corner / Perimeter - For both shapes) */}
+                        <rect 
+                            x={r.endX - handleSize / 2} y={r.endY - handleSize / 2} 
+                            width={handleSize} height={handleSize} 
+                            fill="#fff" stroke={r.color} strokeWidth={1/zoom}
+                            style={{ cursor: 'nwse-resize', pointerEvents: 'all' }}
+                            onMouseDown={(e) => {
+                                if (drawMode !== 'pan') return;
+                                e.stopPropagation();
+                                setDragAction({ id: r.id, type: 'resize' });
+                                dragStart.current = getCanvasCoords(e.clientX, e.clientY);
+                            }}
+                        />
+                    </>
                 )}
             </g>
         );
