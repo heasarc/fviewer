@@ -65,6 +65,17 @@ self.onmessage = async (e: MessageEvent) => {
                 break;
             }
 
+            case 'WRITE_CELL': {
+                if (!activeFile) throw new Error("No file opened");
+                // payload: { colNum (1-indexed), rowNum (1-indexed), value }
+                const { colNum, rowNum, value } = payload;
+                const status = activeFile.writeCell(colNum, rowNum, value);
+                
+                if (status !== 0) throw new Error(`Write failed with status ${status}`);
+                self.postMessage({ id, success: true, data: { status } });
+                break;
+            }
+
             default:
                 throw new Error(`Unknown action: ${action}`);
         }
