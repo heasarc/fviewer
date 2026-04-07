@@ -573,47 +573,36 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                 </div>
 
                 {/* Transform Menu */}
+                {/* Transform Menu */}
                 <div className="dropdown">
-                    <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown" title="View Transformations">
-                        <i className="bi bi-arrows-collapse"></i> <span className="ms-1">Transform</span>
-                    </button>
+                    <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown"><i className="bi bi-arrows-collapse"></i> <span className="ms-1">Transform</span></button>
                     <ul className="dropdown-menu fv-dropdown-menu shadow">
+                        {/* Notice: No <span style={{ width: '16px' }}></span> here! */}
                         <li>
                             <button className="dropdown-item fv-dropdown-item" onClick={() => setFlipX(!flipX)}>
-                                <span style={{ width: '16px' }}>{flipX && <i className="bi bi-check2"></i>}</span>
                                 <i className="bi bi-symmetry-vertical"></i> Flip X
                             </button>
                         </li>
                         <li>
                             <button className="dropdown-item fv-dropdown-item" onClick={() => setFlipY(!flipY)}>
-                                <span style={{ width: '16px' }}>{flipY && <i className="bi bi-check2"></i>}</span>
                                 <i className="bi bi-symmetry-horizontal"></i> Flip Y
                             </button>
                         </li>
                         <li><hr className="dropdown-divider border-secondary my-1" /></li>
                         <li>
                             <button className="dropdown-item fv-dropdown-item" onClick={() => setRotation(r => r - 90)}>
-                                <span style={{ width: '16px' }}></span><i className="bi bi-arrow-counterclockwise"></i> Rotate CCW (90°)
+                                <i className="bi bi-arrow-counterclockwise"></i> Rotate CCW (90°)
                             </button>
                         </li>
                         <li>
                             <button className="dropdown-item fv-dropdown-item" onClick={() => setRotation(r => r + 90)}>
-                                <span style={{ width: '16px' }}></span><i className="bi bi-arrow-clockwise"></i> Rotate CW (90°)
+                                <i className="bi bi-arrow-clockwise"></i> Rotate CW (90°)
                             </button>
                         </li>
                         <li><hr className="dropdown-divider border-secondary my-1" /></li>
-                        
-                        {/* Custom Rotation Input nested right inside the dropdown! */}
                         <li className="px-3 py-1">
                             <label className="text-muted mb-1" style={{ fontSize: '0.75rem' }}>Custom Angle (°)</label>
-                            <input 
-                                type="number" 
-                                className="form-control form-control-sm border-secondary bg-dark text-white" 
-                                style={{ appearance: 'textfield' }} 
-                                value={rotation} 
-                                onChange={(e) => setRotation(Number(e.target.value) || 0)} 
-                                step="1"
-                            />
+                            <input type="number" className="form-control form-control-sm border-secondary bg-dark text-white" style={{ appearance: 'textfield' }} value={rotation} onChange={(e) => setRotation(Number(e.target.value) || 0)} step="1"/>
                         </li>
                     </ul>
                 </div>
