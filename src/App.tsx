@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useFits } from './hooks/useFits';
 import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
+import type { Region } from './components/FitsImage';
 import { FitsPlot } from './components/FitsPlot';
 import { FitsHeaderModal } from './components/FitsHeaderModal';
 
@@ -33,6 +34,9 @@ function App() {
 
     const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
     const [rawHeaderString, setRawHeaderString] = useState('');
+
+    const [regions, setRegions] = useState<Region[]>([]);
+    const regionInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -248,12 +252,121 @@ function App() {
         setActiveRegionPixels(pixels);
     }, [imageData]);
 
+    // --- REGION SERIALIZATION (.reg) ---
+    const handleSaveRegions = () => {
+        if (regions.length === 0) return alert("No regions to save.");
+        
+        let fileContent = "# Region file format: DS9-style (fviewer)\n";
+        fileContent += "global color=#00ff00\n";
+        
+        regions.forEach(r => {
+            let line = "";
+            let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
+
+            if (r.type === 'box') {
+                w = Math.abs(r.endX - r.startX);
+                h = Math.abs(r.endY - r.startY);
+                cx = (r.startX + r.endX) / 2;
+                cy = (r.startY + r.endY) / 2;
+                line = `box(${cx.toFixed(2)},${cy.toFixed(2)},${w.toFixed(2)},${h.toFixed(2)},${r.angle || 0})`;
+            } 
+            else if (r.type === 'ellipse') {
+                w = Math.abs(r.endX - r.startX); // rx
+                h = Math.abs(r.endY - r.startY); // ry
+                cx = r.startX;
+                cy = r.startY;
+                line = `ellipse(${cx.toFixed(2)},${cy.toFixed(2)},${w.toFixed(2)},${h.toFixed(2)},${r.angle || 0})`;
+            } 
+            else { 
+                // Circle and Annulus
+                radius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
+                cx = r.startX;
+                cy = r.startY;
+                if (r.type === 'annulus') {
+                    line = `annulus(${cx.toFixed(2)},${cy.toFixed(2)},${r.innerR?.toFixed(2) || (radius/2).toFixed(2)},${radius.toFixed(2)})`;
+                } else {
+                    line = `circle(${cx.toFixed(2)},${cy.toFixed(2)},${radius.toFixed(2)})`;
+                }
+            }
+            fileContent += `${line} # color=${r.color}\n`;
+        });
+
+        const blob = new Blob([fileContent], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${fileName.replace('.fits', '')}.reg`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    };
+
+    const handleLoadRegions = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            const lines = text.split('\n');
+            const loadedRegions: Region[] = [];
+            
+            lines.forEach((line, i) => {
+                line = line.trim();
+                if (!line || line.startsWith('#') || line.startsWith('global')) return;
+
+                let color = '#00ff00';
+                const colorMatch = line.match(/color=([a-zA-Z0-9#]+)/);
+                if (colorMatch) color = colorMatch[1];
+
+                const typeMatch = line.match(/^(circle|box|ellipse|annulus)\(([^)]+)\)/);
+                if (!typeMatch) return;
+
+                const type = typeMatch[1] as 'circle'|'box'|'ellipse'|'annulus';
+                const args = typeMatch[2].split(',').map(Number);
+                
+                try {
+                    let r: Region = { 
+                        id: `loaded_${Date.now()}_${i}`, type, 
+                        startX: 0, startY: 0, endX: 0, endY: 0, 
+                        color, angle: 0 
+                    };
+                    
+                    if (type === 'circle') {
+                        r.startX = args[0]; r.startY = args[1];
+                        r.endX = args[0] + args[2]; r.endY = args[1]; // Add radius to X to fake the end coordinate
+                    } else if (type === 'box') {
+                        const cx = args[0], cy = args[1], w = args[2], h = args[3];
+                        r.startX = cx - w/2; r.startY = cy - h/2;
+                        r.endX = cx + w/2; r.endY = cy + h/2;
+                        r.angle = args[4] || 0;
+                    } else if (type === 'ellipse') {
+                        const cx = args[0], cy = args[1], rx = args[2], ry = args[3];
+                        r.startX = cx; r.startY = cy;
+                        r.endX = cx + rx; r.endY = cy + ry;
+                        r.angle = args[4] || 0;
+                    } else if (type === 'annulus') {
+                        r.startX = args[0]; r.startY = args[1];
+                        r.innerR = args[2];
+                        r.endX = args[0] + args[3]; r.endY = args[1]; // outer radius
+                    }
+                    loadedRegions.push(r);
+                } catch (err) {
+                    console.warn("Skipped unparseable region line:", line);
+                }
+            });
+            
+            setRegions(prev => [...prev, ...loadedRegions]);
+        };
+        reader.readAsText(file);
+        if (regionInputRef.current) regionInputRef.current.value = ''; 
+    };
+
     return (
         // 1. App Layout: Full height, flex column, hide overflow
         <div className="vh-100 d-flex flex-column overflow-hidden" style={{ backgroundColor: 'var(--fv-bg)', color: 'var(--fv-text)' }}>
             
             {/* Hidden File Input */}
             <input type="file" ref={fileInputRef} accept=".fits,.fit,.fts" style={{ display: 'none' }} onChange={handleFileUpload} />
+            <input type="file" ref={regionInputRef} accept=".reg,.txt" style={{ display: 'none' }} onChange={handleLoadRegions} />
 
             {/* 2. Top Menubar */}
             <nav className="navbar navbar-expand-md navbar-dark flex-shrink-0 border-bottom px-3 py-0" style={{ minHeight: '36px', backgroundColor: '#13151f', borderColor: 'var(--fv-border)' }}>
@@ -423,6 +536,10 @@ function App() {
                                                 <FitsImage 
                                                     data={imageData.data} width={imageData.width} height={imageData.height} 
                                                     checkWcs={checkWcs} pixToWorld={pixToWorld}
+                                                    regions={regions}
+                                                    setRegions={setRegions}
+                                                    onSaveRegions={handleSaveRegions}
+                                                    onLoadRegions={() => regionInputRef.current?.click()} 
                                                     onRegionChange={handleRegionChange}
                                                 />
                                             </div>

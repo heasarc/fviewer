@@ -8,6 +8,12 @@ interface FitsImageProps {
     height: number;
     checkWcs: () => Promise<boolean>;
     pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>;
+    
+    // region-related
+    regions: Region[];
+    setRegions: React.Dispatch<React.SetStateAction<Region[]>>;
+    onSaveRegions: () => void;
+    onLoadRegions: () => void;
     onRegionChange?: (region: Region | null) => void;
 }
 
@@ -25,7 +31,10 @@ export interface Region {
     innerR?: number;
 }
 
-export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, checkWcs, pixToWorld, onRegionChange }) => {
+export const FitsImage: React.FC<FitsImageProps> = ({ 
+        data, width, height, checkWcs, pixToWorld, regions, setRegions, 
+        onSaveRegions, onLoadRegions, onRegionChange 
+    }) => {
     const viewportRef = useRef<HTMLDivElement>(null); 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     
@@ -42,7 +51,6 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
     
     // Region & Drawing State
     const [drawMode, setDrawMode] = useState<DrawMode>('pan');
-    const [regions, setRegions] = useState<Region[]>([]);
     const [draftRegion, setDraftRegion] = useState<Region | null>(null);
     
     // Selection and Drag State
@@ -522,6 +530,21 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                                 >
                                     <span style={{ width: '16px' }}></span>
                                     <i className="bi bi-trash"></i> Clear All Regions
+                                </button>
+                            </li>
+                            
+                            {/* File Actions */}
+                            <li><hr className="dropdown-divider border-secondary my-1" /></li>
+                            <li>
+                                <button className="dropdown-item fv-dropdown-item" onClick={onLoadRegions}>
+                                    <span style={{ width: '16px' }}></span>
+                                    <i className="bi bi-folder2-open"></i> Load Regions...
+                                </button>
+                            </li>
+                            <li>
+                                <button className="dropdown-item fv-dropdown-item" onClick={onSaveRegions} disabled={regions.length === 0}>
+                                    <span style={{ width: '16px' }}></span>
+                                    <i className="bi bi-download"></i> Save Regions
                                 </button>
                             </li>
                         </ul>
