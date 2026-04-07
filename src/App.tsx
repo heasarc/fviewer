@@ -20,6 +20,7 @@ function App() {
     const [imageData, setImageData] = useState<any>(null);
     const [plotX, setPlotX] = useState<string>('');
     const [plotY, setPlotY] = useState<string>('');
+    const [isPlotterOpen, setIsPlotterOpen] = useState(false);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -202,10 +203,20 @@ function App() {
                             )}
                         </ul>
 
-                        {/* Right-aligned Status / Filename */}
+                        {/* Right-aligned Status / Filename & Toggles */}
                         <div className="d-flex align-items-center gap-3 ms-3 ms-md-0 pb-2 pb-md-0">
-                            <span className="text-muted text-truncate" style={{ fontSize: '0.8rem', maxWidth: '200px' }}>{fileName}</span>
-                            {isLoading && <div className="spinner-border spinner-border-sm text-primary" role="status"></div>}
+                            <span className="text-truncate d-none d-sm-block fv-text-muted" style={{ fontSize: '0.8rem', maxWidth: '200px' }}>{fileName}</span>
+                            {isLoading && <div className="spinner-border spinner-border-sm fv-text-primary" role="status"></div>}
+                            
+                            {/* Plotter Toggle Button */}
+                            <button 
+                                // Changed to fv-text-primary and fv-text-muted!
+                                className={`btn menubar-btn border-0 px-2 ${isPlotterOpen ? 'fv-text-primary' : 'fv-text-muted'}`} 
+                                onClick={() => setIsPlotterOpen(!isPlotterOpen)}
+                                title="Toggle Plotter Sidebar"
+                            >
+                                <i className="bi bi-layout-sidebar-reverse fs-5"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -225,7 +236,7 @@ function App() {
                     </div>
                     
                     {hduList.length === 0 ? (
-                        <div className="p-3 text-muted fst-italic" style={{ fontSize: '0.8rem' }}>No file loaded</div>
+                        <div className="p-3 fv-text-muted fst-italic" style={{ fontSize: '0.8rem' }}>No file loaded</div>
                     ) : (
                         hduList.map((hdu) => (
                             <button 
@@ -245,90 +256,126 @@ function App() {
                     )}
                 </div>
 
-                {/* Main Workspace Area (Right Side) */}
-                <div className="flex-grow-1 overflow-auto p-3 d-flex flex-column" style={{ backgroundColor: 'var(--fv-bg)' }}>
-                    {activeHdu && (
-                        <div className="fade-in d-flex flex-column flex-grow-1 gap-3">
-                            
-                            {hduList.find(h => h.index === activeHdu)?.type === 'empty' && (
-                                <div className="alert border bg-dark text-white d-flex align-items-center" style={{ borderColor: 'var(--fv-border)' }}>
-                                    <i className="bi bi-info-circle me-2"></i> This HDU contains no data (NAXIS=0).
-                                </div>
-                            )}
+                {/* Main Content + Right Plotter Sidebar */}
+                <div className="d-flex flex-row flex-grow-1 overflow-hidden" style={{ backgroundColor: 'var(--fv-bg)' }}>
+                    
+                    {/* Center: Image or Table Viewer */}
+                    <div className="flex-grow-1 overflow-auto p-3 d-flex flex-column">
+                        {activeHdu && (
+                            <div className="fade-in d-flex flex-column flex-grow-1 gap-3">
+                                
+                                {hduList.find(h => h.index === activeHdu)?.type === 'empty' && (
+                                    <div className="alert border bg-dark text-white d-flex align-items-center" style={{ borderColor: 'var(--fv-border)' }}>
+                                        <i className="bi bi-info-circle me-2"></i> This HDU contains no data (NAXIS=0).
+                                    </div>
+                                )}
 
-                            {/* Image Viewer */}
-                            {imageData && imageData.width > 0 && (
-                                <div className="d-flex justify-content-center w-100 mb-3">
-                                    <div 
-                                        className="d-flex flex-column border rounded overflow-hidden w-100 shadow-sm" 
-                                        style={{ 
-                                            maxWidth: '950px',   // Caps width on ultra-wide monitors
-                                            height: '65vh',      // Takes 65% of screen height dynamically
-                                            minHeight: '450px',  // Prevents crushing on small laptops
-                                            backgroundColor: 'var(--fv-bg)', 
-                                            borderColor: 'var(--fv-border)' 
-                                        }}
-                                    >
-                                        <div className="d-flex align-items-center justify-content-between px-3 py-2 fw-bold border-bottom" style={{ backgroundColor: 'var(--fv-panel)', borderColor: 'var(--fv-border)', color: 'var(--fv-text-bright)' }}>
-                                            <span><i className="bi bi-image me-2"></i> Image Display</span>
+                                {/* Image Viewer (Restored to 800x650!) */}
+                                {imageData && imageData.width > 0 && (
+                                    <div className="d-flex justify-content-center w-100 mb-3">
+                                        <div 
+                                            className="fv-panel-box d-flex flex-column w-100 shadow-sm" 
+                                            // THIS IS THE MISSING STYLE CONSTRAINT:
+                                            style={{ maxWidth: '800px', height: '650px' }} 
+                                        >
+                                            <div className="fv-panel-header">
+                                                <span><i className="bi bi-image me-2"></i> Image Display</span>
+                                            </div>
+                                            <div className="flex-grow-1 position-relative d-flex flex-column" style={{ minHeight: 0 }}>
+                                                <FitsImage 
+                                                    data={imageData.data} 
+                                                    width={imageData.width} 
+                                                    height={imageData.height} 
+                                                    checkWcs={checkWcs} 
+                                                    pixToWorld={pixToWorld}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="flex-grow-1 position-relative d-flex flex-column" style={{ minHeight: 0 }}>
-                                            <FitsImage 
-                                                data={imageData.data} width={imageData.width} height={imageData.height} 
-                                                checkWcs={checkWcs} pixToWorld={pixToWorld}
+                                    </div>
+                                )}
+
+                                {/* Table Viewer */}
+                                {tableInfo && (
+                                    <div className="fv-panel-box d-flex flex-column flex-grow-1 shadow-sm">
+                                        <div className="fv-panel-header">
+                                            <span><i className="bi bi-table me-2"></i> Binary Table</span>
+                                            <span className="badge bg-secondary">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
+                                        </div>
+                                        <div className="flex-grow-1 overflow-hidden" style={{ minHeight: '400px' }}>
+                                            <VirtualTable 
+                                                numRows={tableInfo.numRows} 
+                                                columns={tableInfo.columns} 
+                                                dataMap={tableData} 
+                                                onCellEdit={handleCellEdit} 
                                             />
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
+                        )}
+                    </div>
 
-                            {/* Table Workspace */}
-                            {tableInfo && (
-                                <div className="row g-3 flex-grow-1">
-                                    {/* Table Left Side */}
-                                    <div className="col-lg-7 d-flex flex-column">
-                                        <div className="d-flex flex-column border rounded overflow-hidden flex-grow-1" style={{ backgroundColor: 'var(--fv-bg)', borderColor: 'var(--fv-border)' }}>
-                                            <div className="d-flex align-items-center justify-content-between px-3 py-2 fw-bold border-bottom" style={{ backgroundColor: 'var(--fv-panel)', borderColor: 'var(--fv-border)', color: 'var(--fv-text-bright)' }}>
-                                                <span><i className="bi bi-table me-2"></i> Binary Table</span>
-                                                <span className="badge bg-secondary">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
+                    {/* Right Sidebar: Global Plotter */}
+                    <div 
+                        className="d-flex flex-column border-start flex-shrink-0" 
+                        style={{ 
+                            width: isPlotterOpen ? '450px' : '0px', 
+                            backgroundColor: 'var(--fv-panel)', 
+                            borderColor: 'var(--fv-border)',
+                            transition: 'width 0.3s ease-in-out',
+                            overflow: 'hidden'
+                        }}
+                    >
+                        {/* Inner container fixed at 450px so content doesn't crush during the slide animation */}
+                        <div style={{ width: '450px', minWidth: '450px' }} className="d-flex flex-column h-100 p-3">
+                            <div className="d-flex align-items-center justify-content-between mb-3 text-white fw-bold border-bottom pb-2" style={{ borderColor: 'var(--fv-border)' }}>
+                                <span><i className="bi bi-graph-up me-2 text-primary"></i> Analysis Plotter</span>
+                                <button className="btn-close btn-close-white" style={{ fontSize: '0.7rem' }} onClick={() => setIsPlotterOpen(false)}></button>
+                            </div>
+
+                            {/* Plot Controls based on active HDU type */}
+                            <div className="flex-grow-1 d-flex flex-column">
+                                {tableInfo ? (
+                                    // TABLE PLOTTING UI
+                                    <>
+                                        <div className="d-flex gap-2 mb-3">
+                                            <div className="input-group input-group-sm">
+                                                <span className="input-group-text border-0 bg-dark text-white">X</span>
+                                                <select className="form-select border-0 bg-secondary text-white" value={plotX} onChange={(e) => setPlotX(e.target.value)}>
+                                                    {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                                </select>
                                             </div>
-                                            <div className="flex-grow-1 overflow-hidden" style={{ minHeight: '450px' }}>
-                                                <VirtualTable numRows={tableInfo.numRows} columns={tableInfo.columns} dataMap={tableData} onCellEdit={handleCellEdit} />
+                                            <div className="input-group input-group-sm">
+                                                <span className="input-group-text border-0 bg-dark text-white">Y</span>
+                                                <select className="form-select border-0 bg-secondary text-white" value={plotY} onChange={(e) => setPlotY(e.target.value)}>
+                                                    {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                                </select>
                                             </div>
                                         </div>
-                                    </div>
-
-                                    {/* Plotter Right Side */}
-                                    <div className="col-lg-5 d-flex flex-column">
-                                        <div className="d-flex flex-column border rounded overflow-hidden flex-grow-1" style={{ backgroundColor: 'var(--fv-bg)', borderColor: 'var(--fv-border)' }}>
-                                            <div className="d-flex align-items-center justify-content-between px-3 py-2 fw-bold border-bottom" style={{ backgroundColor: 'var(--fv-panel)', borderColor: 'var(--fv-border)', color: 'var(--fv-text-bright)' }}>
-                                                <span><i className="bi bi-graph-up me-2"></i> Plotter</span>
-                                                <div className="d-flex gap-2">
-                                                    <div className="input-group input-group-sm" style={{ width: '120px' }}>
-                                                        <span className="input-group-text border-0" style={{ backgroundColor: 'var(--fv-panel-hover)', color: 'var(--fv-text)' }}>X</span>
-                                                        <select className="form-select border-0 bg-transparent text-white" value={plotX} onChange={(e) => setPlotX(e.target.value)}>
-                                                            {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name} className="text-dark">{c.name}</option>)}
-                                                        </select>
-                                                    </div>
-                                                    <div className="input-group input-group-sm" style={{ width: '120px' }}>
-                                                        <span className="input-group-text border-0" style={{ backgroundColor: 'var(--fv-panel-hover)', color: 'var(--fv-text)' }}>Y</span>
-                                                        <select className="form-select border-0 bg-transparent text-white" value={plotY} onChange={(e) => setPlotY(e.target.value)}>
-                                                            {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name} className="text-dark">{c.name}</option>)}
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="p-2 flex-grow-1">
-                                                {plotX && plotY && tableData[plotX] && tableData[plotY] ? (
+                                        
+                                        <div className="flex-grow-1 bg-dark rounded border d-flex flex-column" style={{ borderColor: 'var(--fv-border)', minHeight: '300px' }}>
+                                            {plotX && plotY && tableData[plotX] && tableData[plotY] ? (
+                                                <div className="p-2 w-100 h-100">
                                                     <FitsPlot xData={tableData[plotX]} yData={tableData[plotY]} xLabel={plotX} yLabel={plotY} />
-                                                ) : <div className="text-muted text-center py-5">Select columns to plot</div>}
-                                            </div>
+                                                </div>
+                                            ) : (
+                                                <div className="m-auto fv-text-muted fst-italic">Select columns to plot</div>
+                                            )}
                                         </div>
+                                    </>
+                                ) : imageData ? (
+                                    // IMAGE PLOTTING UI (Placeholder for next step)
+                                    <div className="m-auto text-center fv-text-muted">
+                                        <i className="bi bi-bar-chart display-4 d-block mb-3 opacity-50"></i>
+                                        <p>Image Histogram coming soon.</p>
+                                        <p className="small">Draw a region on the image to analyze pixel distributions.</p>
                                     </div>
-                                </div>
-                            )}
+                                ) : (
+                                    <div className="m-auto fv-text-muted fst-italic">No data to plot</div>
+                                )}
+                            </div>
                         </div>
-                    )}
+                    </div>
                 </div>
             </div>
         </div>
