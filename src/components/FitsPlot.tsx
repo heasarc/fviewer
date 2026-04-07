@@ -18,8 +18,7 @@ export const FitsPlot: React.FC<FitsPlotProps> = ({ xData, yData, xLabel, yLabel
         if (!containerRef.current) return;
         if (!xData || !yData || xData.length === 0) return;
 
-        // 1. uPlot REQUIRES the X-axis data to be sorted ascending.
-        // We zip the arrays together, sort by X, and unzip them.
+        // 1. uPlot REQUIRES the X-axis data to be sorted ascending for performance.
         const paired = [];
         for (let i = 0; i < xData.length; i++) {
             // Ignore NaN or undefined values
@@ -32,42 +31,67 @@ export const FitsPlot: React.FC<FitsPlotProps> = ({ xData, yData, xLabel, yLabel
         const sortedX = paired.map(p => p[0]);
         const sortedY = paired.map(p => p[1]);
 
-        // 2. Configure uPlot
+        // 2. Dark Theme Colors
+        const textColor = '#c8cfe8'; // --fv-text
+        const gridColor = '#3a3f60'; // --fv-border
+        const accentColor = '#7ec8e3'; // --fv-accent
+
+        // Reusable dark-theme configuration for X and Y axes
+        const axisConfig: uPlot.Axis = {
+            stroke: textColor, // Label and tick text color
+            grid: {
+                show: true,
+                stroke: gridColor, // Faint grid lines
+                width: 1,
+            },
+            ticks: {
+                show: true,
+                stroke: gridColor, // Tick marks on the axis line
+                width: 1,
+            }
+        };
+
+        // 3. Configure uPlot
         const opts: uPlot.Options = {
             title: title || `${yLabel} vs ${xLabel}`,
-            width: containerRef.current.clientWidth || 800,
-            height: 400,
+            width: containerRef.current.clientWidth || 400,
+            height: 350,
             cursor: { drag: { x: true, y: true } }, // Allow zooming in both directions
+            axes: [
+                { ...axisConfig, label: xLabel }, // X-Axis
+                { ...axisConfig, label: yLabel }  // Y-Axis
+            ],
             scales: {
-                x: { time: false }, // FITS data is usually raw numbers, not UNIX timestamps
+                x: { time: false }, // FITS data is raw numbers, not UNIX timestamps
                 y: { }
             },
-            axes: [
-                { label: xLabel },
-                { label: yLabel }
-            ],
             series: [
                 {}, // X-axis (no config needed)
                 {
                     label: yLabel,
-                    stroke: "blue",
-                    fill: "rgba(0, 0, 255, 0.1)",
+                    stroke: accentColor, 
+                    fill: 'rgba(126, 200, 227, 0.1)', // Faint cyan fill
                     paths: () => null, // Disable connecting lines for a true scatter plot
-                    points: { show: true, size: 4, fill: "blue", stroke: "blue" }
+                    points: { 
+                        show: true, 
+                        size: 4, 
+                        fill: accentColor, 
+                        stroke: accentColor 
+                    }
                 }
             ]
         };
 
-        // 3. Mount the plot
+        // 4. Mount the plot
         const data: uPlot.AlignedData = [sortedX, sortedY];
         plotRef.current = new uPlot(opts, data, containerRef.current);
 
-        // 4. Handle Window Resize
+        // 5. Handle Window Resize dynamically
         const handleResize = () => {
             if (plotRef.current && containerRef.current) {
                 plotRef.current.setSize({
                     width: containerRef.current.clientWidth,
-                    height: 400
+                    height: 350
                 });
             }
         };
@@ -82,6 +106,7 @@ export const FitsPlot: React.FC<FitsPlotProps> = ({ xData, yData, xLabel, yLabel
     }, [xData, yData, xLabel, yLabel, title]);
 
     return (
-        <div className="w-100" ref={containerRef} />
+        // The container needs to take full width so uPlot can measure it properly
+        <div className="w-100 h-100 d-flex justify-content-center align-items-center" ref={containerRef} />
     );
 };
