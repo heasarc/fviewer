@@ -22,6 +22,8 @@ function App() {
     const [plotX, setPlotX] = useState<string>('');
     const [plotY, setPlotY] = useState<string>('');
     const [isPlotterOpen, setIsPlotterOpen] = useState(false);
+    const [plotterWidth, setPlotterWidth] = useState(450); // Default width
+    const [isResizingPlotter, setIsResizingPlotter] = useState(false);
     const [plotXErr, setPlotXErr] = useState<string>('');
     const [plotYErr, setPlotYErr] = useState<string>('');
     const [plotType, setPlotType] = useState<'scatter' | 'histogram'>('scatter');
@@ -132,6 +134,32 @@ function App() {
             setIsLoading(false);
         }
     };
+
+    // --- PLOTTER RESIZE LOGIC ---
+    useEffect(() => {
+        if (!isResizingPlotter) return;
+
+        const handlePointerMove = (e: PointerEvent) => {
+            // Sidebar is on the right, so its width is (Total Window Width - Mouse X)
+            const newWidth = document.body.clientWidth - e.clientX;
+            
+            // Constrain it so it doesn't crush the main view or disappear entirely
+            if (newWidth > 300 && newWidth < document.body.clientWidth - 300) {
+                setPlotterWidth(newWidth);
+            }
+        };
+
+        const handlePointerUp = () => setIsResizingPlotter(false);
+
+        // Attach to window so fast drags don't drop the lock
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', handlePointerUp);
+
+        return () => {
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+        };
+    }, [isResizingPlotter]);
 
     // --- EXTRACT REGION PIXELS FOR HISTOGRAM ---
     const handleRegionChange = useCallback((region: any | null) => {
@@ -415,20 +443,42 @@ function App() {
                         )}
                     </div>
 
+                    {/* --- DRAGGABLE RESIZER HANDLE --- */}
+                    {isPlotterOpen && (
+                        <div 
+                            className="flex-shrink-0"
+                            style={{
+                                width: '5px',
+                                cursor: 'col-resize',
+                                backgroundColor: isResizingPlotter ? 'var(--fv-accent)' : 'transparent', // Highlights cyan when grabbed!
+                                borderLeft: '1px solid var(--fv-border)',
+                                zIndex: 10,
+                                transition: 'background-color 0.2s'
+                            }}
+                            onPointerDown={(e) => {
+                                e.preventDefault(); // Prevent text highlighting while dragging
+                                setIsResizingPlotter(true);
+                            }}
+                            // Hover effect
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--fv-panel-hover)'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isResizingPlotter ? 'var(--fv-accent)' : 'transparent'}
+                        />
+                    )}
+
                     {/* Right Sidebar: Global Plotter */}
                     <div 
-                        className="d-flex flex-column border-start flex-shrink-0" 
+                        className="d-flex flex-column flex-shrink-0" 
                         style={{ 
-                            width: isPlotterOpen ? '450px' : '0px', 
-                            maxWidth: '100%', // <-- CRITICAL: Prevents blowing out small screens!
+                            width: isPlotterOpen ? `${plotterWidth}px` : '0px', 
+                            maxWidth: '100%', 
                             backgroundColor: 'var(--fv-panel)', 
-                            borderColor: 'var(--fv-border)',
-                            transition: 'width 0.3s ease-in-out',
+                            // Disable animation WHILE resizing for instant 60fps response
+                            transition: isResizingPlotter ? 'none' : 'width 0.3s ease-in-out',
                             overflow: 'hidden'
                         }}
                     >
-                        {/* Inner container uses vw and maxWidth to stay rigid during animation, but shrink on mobile */}
-                        <div style={{ width: '100vw', maxWidth: '450px' }} className="d-flex flex-column h-100 p-3">
+                        {/* Inner container uses dynamic plotterWidth to stay rigid during animation */}
+                        <div style={{ width: `${plotterWidth}px`, minWidth: `${plotterWidth}px` }} className="d-flex flex-column h-100 p-3">
                             <div className="d-flex align-items-center justify-content-between mb-3 text-white fw-bold border-bottom pb-2" style={{ borderColor: 'var(--fv-border)' }}>
                                 <span><i className="bi bi-graph-up me-2 text-primary"></i> Analysis Plotter</span>
                                 <button className="btn-close btn-close-white" style={{ fontSize: '0.7rem' }} onClick={() => setIsPlotterOpen(false)}></button>
