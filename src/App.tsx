@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useFits } from './hooks/useFits';
 import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
@@ -25,6 +25,7 @@ function App() {
     const [plotXErr, setPlotXErr] = useState<string>('');
     const [plotYErr, setPlotYErr] = useState<string>('');
     const [plotType, setPlotType] = useState<'scatter' | 'histogram'>('scatter');
+    const [activeRegionPixels, setActiveRegionPixels] = useState<number[] | null>(null);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -131,6 +132,85 @@ function App() {
             setIsLoading(false);
         }
     };
+
+    // --- EXTRACT REGION PIXELS FOR HISTOGRAM ---
+    const handleRegionChange = useCallback((region: any | null) => {
+        if (!region || !imageData) {
+            setActiveRegionPixels(null);
+            return;
+        }
+
+        const { data, width, height } = imageData;
+        const pixels: number[] = [];
+        
+        // 1. Calculate Center and Dimensions from Start/End coords
+        let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
+        
+        if (region.type === 'box') {
+            w = Math.abs(region.endX - region.startX);
+            h = Math.abs(region.endY - region.startY);
+            cx = (region.startX + region.endX) / 2;
+            cy = (region.startY + region.endY) / 2;
+        } else if (region.type === 'ellipse') {
+            w = Math.abs(region.endX - region.startX) * 2;
+            h = Math.abs(region.endY - region.startY) * 2;
+            cx = region.startX;
+            cy = region.startY;
+        } else {
+            // Circle or Annulus
+            radius = Math.hypot(region.endX - region.startX, region.endY - region.startY);
+            w = radius * 2;
+            h = radius * 2;
+            cx = region.startX;
+            cy = region.startY;
+        }
+
+        // Convert rotation angle to radians
+        const rad = -(region.angle || 0) * Math.PI / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+
+        // 2. Bounding box optimization to limit the loop
+        const maxR = Math.max(w/2, h/2); 
+        const minX = Math.max(1, Math.floor(cx - maxR));     // Ensure FITS bounds (1 to width)
+        const maxX = Math.min(width, Math.ceil(cx + maxR));
+        const minY = Math.max(1, Math.floor(cy - maxR));
+        const maxY = Math.min(height, Math.ceil(cy + maxR));
+
+        // 3. Loop through bounding box and check exactly which pixels are inside the shape
+        for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+                
+                const tx = x - cx;
+                const ty = y - cy;
+                const rx = tx * cos - ty * sin;
+                const ry = tx * sin + ty * cos;
+
+                let inside = false;
+                if (region.type === 'box') {
+                    if (Math.abs(rx) <= w/2 && Math.abs(ry) <= h/2) inside = true;
+                } else if (region.type === 'ellipse') {
+                    if ((rx*rx)/Math.pow(w/2, 2) + (ry*ry)/Math.pow(h/2, 2) <= 1) inside = true;
+                } else if (region.type === 'annulus') {
+                    const r2 = rx*rx + ry*ry;
+                    const out2 = Math.pow(radius, 2);
+                    const in2 = Math.pow(region.innerR || radius/2, 2);
+                    if (r2 <= out2 && r2 >= in2) inside = true;
+                } else { // circle
+                    if (rx*rx + ry*ry <= Math.pow(radius, 2)) inside = true;
+                }
+
+                if (inside) {
+                    // FITS pixels map 1-to-1 with bottom-left origin.
+                    // X and Y here are 1-indexed (1 to width/height).
+                    const dataIdx = (height - y) * width + (x - 1);
+                    pixels.push(data[dataIdx]);
+                }
+            }
+        }
+        
+        setActiveRegionPixels(pixels);
+    }, [imageData]);
 
     return (
         // 1. App Layout: Full height, flex column, hide overflow
@@ -307,6 +387,7 @@ function App() {
                                                 <FitsImage 
                                                     data={imageData.data} width={imageData.width} height={imageData.height} 
                                                     checkWcs={checkWcs} pixToWorld={pixToWorld}
+                                                    onRegionChange={handleRegionChange}
                                                 />
                                             </div>
                                         </div>
@@ -428,11 +509,31 @@ function App() {
                                         </div>
                                     </>
                                 ) : imageData ? (
-                                    // IMAGE PLOTTING UI (Placeholder for next step)
-                                    <div className="m-auto text-center fv-text-muted">
-                                        <i className="bi bi-bar-chart display-4 d-block mb-3 opacity-50"></i>
-                                        <p>Image Histogram coming soon.</p>
-                                        <p className="small">Draw a region on the image to analyze pixel distributions.</p>
+                                    // IMAGE PLOTTING UI
+                                    <div className="d-flex flex-column h-100 w-100">
+                                        <div className="alert bg-dark text-white border-secondary shadow-sm mb-3" style={{ fontSize: '0.85rem' }}>
+                                            <i className="bi bi-info-circle text-primary me-2"></i>
+                                            Select a region on the image to view its pixel distribution.
+                                        </div>
+
+                                        <div className="flex-grow-1 bg-dark rounded border d-flex flex-column shadow-sm" style={{ borderColor: 'var(--fv-border)', minHeight: '300px' }}>
+                                            {activeRegionPixels && activeRegionPixels.length > 0 ? (
+                                                <div className="p-2 w-100 h-100">
+                                                    <FitsPlot 
+                                                        xData={activeRegionPixels} 
+                                                        xLabel="Pixel Intensity" 
+                                                        plotType="histogram" 
+                                                        numBins={50}
+                                                        title="Region Histogram"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="m-auto text-center fv-text-muted p-4">
+                                                    <i className="bi bi-bounding-box display-4 d-block mb-3 opacity-50"></i>
+                                                    <p>No region selected.</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="m-auto fv-text-muted fst-italic">No data to plot</div>
