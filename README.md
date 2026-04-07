@@ -1,73 +1,73 @@
-# React + TypeScript + Vite
+# FViewer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**FViewer** is a modern, high-performance, browser-based astronomical FITS file viewer. Designed to replace traditional desktop tools like HEASARC's `fv` and `ds9`/`js9`, it allows you to analyze FITS images and tables entirely client-side without needing a backend server.
 
-Currently, two official plugins are available:
+Powered by WebAssembly (C++ `cfitsio` and `wcslib`) and React, FViewer processes data in a background Web Worker, ensuring a smooth UI experience.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## ✨ Features
 
-## React Compiler
+### Image Analysis (DS9 / JS9 Parity)
+*   **Image Rendering:** Smooth panning, zooming, flipping (X/Y), and custom-angle rotation.
+*   **Dynamic Scaling:** Instant Linear, Log, Square Root, and ASINH stretches.
+*   **Colormaps:** Standard astronomical colormaps (Grayscale, Heat, Cool, Plasma).
+*   **WCS Coordinates:** Real-time RA/Dec sky coordinate tracking on mouse hover.
+*   **Interactive Regions:** Draw, drag, resize, and rotate SVG-based regions (Circles, Boxes, Ellipses, Annuli).
+*   **Region I/O:** Save and load regions to standard DS9-style `.reg` text files.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Table & Data Analysis (FV Parity)
+*   **Virtualized Data Grid:** Scroll through 100,000+ row binary tables instantly.
+*   **Cell Editing:** Double-click to edit table cells, and save the modified FITS file back to your local disk.
+*   **Header Editor:** A searchable modal to view and modify FITS header keywords.
+*   **Advanced Plotting:** Built-in `uPlot` engine for lightning-fast graphing:
+    *   2D Scatter Plots with independent X and Y error bars.
+    *   1D Histograms.
+    *   **Region Integration:** Draw a region on an image to instantly generate a histogram of the enclosed pixel intensities in the plotter sidebar.
 
-## Expanding the ESLint configuration
+## 🛠️ Technology Stack
+*   **Frontend:** React 18, TypeScript, Vite
+*   **Styling:** Bootstrap 5 (CSS & Icons), custom IDE-style dark theme
+*   **Plotting:** `uPlot` (Ultra-fast, lightweight canvas charting)
+*   **Backend / Processing:** Web Worker running a custom WebAssembly (`.wasm`) compilation of `cfitsio` and `wcslib`.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 🚀 Getting Started
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Deployment
+See it in action in: https://heasarcdev.gsfc.nasa.gov/azoghbi/fviewer/
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Prerequisites
+Make sure you have [Node.js](https://nodejs.org/) installed.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Installation
+Clone the repository and install the dependencies:
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Local Development
+Spin up the Vite development server:
+```bash
+npm run dev
 ```
+Open your browser to the provided `localhost` URL. You can drag and drop FITS files or click "File -> Open Local File" to begin.
+
+## 📦 Building for Production
+
+FViewer is a **100% static application**. It does not require a database or a Node.js/Python server to run in production.
+
+1. Build the optimized static files:
+   ```bash
+   npm run build
+   ```
+2. The output will be generated in the `dist/` directory.
+3. Deploy the contents of the `dist/` folder to any static web host (GitHub Pages, GitLab Pages, AWS S3, Netlify, Apache, Nginx, etc.).
+
+
+## 📁 Project Structure
+*   `src/components/` - React UI components (`FitsImage`, `VirtualTable`, `FitsPlot`, `FitsHeaderModal`).
+*   `src/hooks/` - Contains `useFits.ts` which manages the asynchronous bridge to the Web Worker.
+*   `src/utils/` - Mathematical helpers for image stretching and procedural colormaps.
+*   `src/fits.worker.ts` - The Web Worker script that loads the WASM module and safely performs heavy FITS file manipulation off the main UI thread.
+*   `src/theme.css` - Custom CSS overrides to create the compact, dark "IDE" aesthetic.
+
+## 📄 License
+Pending
