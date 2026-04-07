@@ -25,6 +25,7 @@ function App() {
     const [plotX, setPlotX] = useState<string>('');
     const [plotY, setPlotY] = useState<string>('');
     const [isPlotterOpen, setIsPlotterOpen] = useState(false);
+    const isPlotterOpenRef = useRef(isPlotterOpen);
     const [plotterWidth, setPlotterWidth] = useState(450); // Default width
     const [isResizingPlotter, setIsResizingPlotter] = useState(false);
     const [plotXErr, setPlotXErr] = useState<string>('');
@@ -61,6 +62,11 @@ function App() {
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
+
+    // keep the plot panel refs in sync
+    useEffect(() => {
+        isPlotterOpenRef.current = isPlotterOpen;
+    }, [isPlotterOpen]);
 
     useEffect(() => {
         if (!activeHdu) return;
@@ -175,7 +181,8 @@ function App() {
 
     // --- EXTRACT REGION PIXELS FOR HISTOGRAM ---
     const handleRegionChange = useCallback((region: any | null) => {
-        if (!region || !imageData) {
+        // 1. SHORT CIRCUIT: If no region, no image data, or the plotter is CLOSED, do absolutely nothing!
+        if (!region || !imageData || !isPlotterOpenRef.current) {
             setActiveRegionPixels(null);
             return;
         }
@@ -183,7 +190,6 @@ function App() {
         const { data, width, height } = imageData;
         const pixels: number[] = [];
         
-        // 1. Calculate Center and Dimensions from Start/End coords
         let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
         
         if (region.type === 'box') {
@@ -197,32 +203,25 @@ function App() {
             cx = region.startX;
             cy = region.startY;
         } else {
-            // Circle or Annulus
             radius = Math.hypot(region.endX - region.startX, region.endY - region.startY);
-            w = radius * 2;
-            h = radius * 2;
-            cx = region.startX;
-            cy = region.startY;
+            w = radius * 2; h = radius * 2;
+            cx = region.startX; cy = region.startY;
         }
 
-        // Convert rotation angle to radians
         const rad = -(region.angle || 0) * Math.PI / 180;
         const cos = Math.cos(rad);
         const sin = Math.sin(rad);
 
-        // 2. Bounding box optimization to limit the loop
         const maxR = Math.max(w/2, h/2); 
-        const minX = Math.max(1, Math.floor(cx - maxR));     // Ensure FITS bounds (1 to width)
+        const minX = Math.max(1, Math.floor(cx - maxR));
         const maxX = Math.min(width, Math.ceil(cx + maxR));
         const minY = Math.max(1, Math.floor(cy - maxR));
         const maxY = Math.min(height, Math.ceil(cy + maxR));
 
-        // 3. Loop through bounding box and check exactly which pixels are inside the shape
         for (let y = minY; y <= maxY; y++) {
             for (let x = minX; x <= maxX; x++) {
                 
-                const tx = x - cx;
-                const ty = y - cy;
+                const tx = x - cx; const ty = y - cy;
                 const rx = tx * cos - ty * sin;
                 const ry = tx * sin + ty * cos;
 
@@ -236,13 +235,11 @@ function App() {
                     const out2 = Math.pow(radius, 2);
                     const in2 = Math.pow(region.innerR || radius/2, 2);
                     if (r2 <= out2 && r2 >= in2) inside = true;
-                } else { // circle
+                } else { 
                     if (rx*rx + ry*ry <= Math.pow(radius, 2)) inside = true;
                 }
 
                 if (inside) {
-                    // FITS pixels map 1-to-1 with bottom-left origin.
-                    // X and Y here are 1-indexed (1 to width/height).
                     const dataIdx = (height - y) * width + (x - 1);
                     pixels.push(data[dataIdx]);
                 }
@@ -454,9 +451,16 @@ function App() {
                             
                             {/* Plotter Toggle Button */}
                             <button 
-                                // Changed to fv-text-primary and fv-text-muted!
                                 className={`btn menubar-btn border-0 px-2 ${isPlotterOpen ? 'fv-text-primary' : 'fv-text-muted'}`} 
-                                onClick={() => setIsPlotterOpen(!isPlotterOpen)}
+                                onClick={() => {
+                                    const willOpen = !isPlotterOpen;
+                                    setIsPlotterOpen(willOpen);
+                                    // JIT trigger! If we just opened the plotter and an Image region is selected, run the math now!
+                                    if (willOpen && imageData && regions.length > 0) {
+                                        // Hacky but safe trigger to force the math calculation
+                                        setTimeout(() => handleRegionChange(regions[regions.length - 1]), 0);
+                                    }
+                                }}
                                 title="Toggle Plotter Sidebar"
                             >
                                 <i className="bi bi-layout-sidebar-reverse fs-5"></i>
