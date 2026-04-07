@@ -257,3 +257,40 @@ body {
   padding-left: 13px; /* Compensate for the 3px border */
   font-weight: bold;
 }
+
+/* --- Custom Dark Scrollbars --- */
+
+/* Global Firefox Support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--fv-panel-hover) var(--fv-bg);
+}
+
+/* Chrome, Edge, and Safari Support */
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+/* The background track of the scrollbar */
+::-webkit-scrollbar-track {
+  background: var(--fv-bg);
+}
+
+/* The draggable thumb */
+::-webkit-scrollbar-thumb {
+  background-color: var(--fv-panel-hover);
+  border-radius: 8px;
+  /* This creates a "padded" pill-shaped look by using the background color as a border */
+  border: 3px solid var(--fv-bg); 
+}
+
+/* Hover state for the draggable thumb */
+::-webkit-scrollbar-thumb:hover {
+  background-color: #484e70; /* Slightly brighter than panel-hover */
+}
+
+/* The corner where vertical and horizontal scrollbars meet */
+::-webkit-scrollbar-corner {
+  background: var(--fv-bg);
+}

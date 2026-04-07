@@ -293,7 +293,7 @@ function App() {
                                                 <span className="badge bg-secondary">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
                                             </div>
                                             <div className="flex-grow-1 overflow-hidden" style={{ minHeight: '450px' }}>
-                                                <VirtualTable numRows={tableInfo.numRows} columns={tableInfo.columns} dataMap={tableData} onCellEdit={handleCellEdit} containerHeight={undefined} />
+                                                <VirtualTable numRows={tableInfo.numRows} columns={tableInfo.columns} dataMap={tableData} onCellEdit={handleCellEdit} />
                                             </div>
                                         </div>
                                     </div>
