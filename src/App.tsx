@@ -292,24 +292,21 @@ function App() {
                                     </div>
                                 )}
 
-                                {/* Image Viewer (Restored to 800x650!) */}
+                                {/* Image Viewer */}
                                 {imageData && imageData.width > 0 && (
                                     <div className="d-flex justify-content-center w-100 mb-3">
                                         <div 
                                             className="fv-panel-box d-flex flex-column w-100 shadow-sm" 
-                                            // THIS IS THE MISSING STYLE CONSTRAINT:
-                                            style={{ maxWidth: '800px', height: '650px' }} 
+                                            // Added maxHeight: '70vh' so it shrinks vertically on small screens!
+                                            style={{ maxWidth: '800px', height: '650px', maxHeight: '90vh' }} 
                                         >
                                             <div className="fv-panel-header">
                                                 <span><i className="bi bi-image me-2"></i> Image Display</span>
                                             </div>
                                             <div className="flex-grow-1 position-relative d-flex flex-column" style={{ minHeight: 0 }}>
                                                 <FitsImage 
-                                                    data={imageData.data} 
-                                                    width={imageData.width} 
-                                                    height={imageData.height} 
-                                                    checkWcs={checkWcs} 
-                                                    pixToWorld={pixToWorld}
+                                                    data={imageData.data} width={imageData.width} height={imageData.height} 
+                                                    checkWcs={checkWcs} pixToWorld={pixToWorld}
                                                 />
                                             </div>
                                         </div>
@@ -342,14 +339,15 @@ function App() {
                         className="d-flex flex-column border-start flex-shrink-0" 
                         style={{ 
                             width: isPlotterOpen ? '450px' : '0px', 
+                            maxWidth: '100%', // <-- CRITICAL: Prevents blowing out small screens!
                             backgroundColor: 'var(--fv-panel)', 
                             borderColor: 'var(--fv-border)',
                             transition: 'width 0.3s ease-in-out',
                             overflow: 'hidden'
                         }}
                     >
-                        {/* Inner container fixed at 450px so content doesn't crush during the slide animation */}
-                        <div style={{ width: '450px', minWidth: '450px' }} className="d-flex flex-column h-100 p-3">
+                        {/* Inner container uses vw and maxWidth to stay rigid during animation, but shrink on mobile */}
+                        <div style={{ width: '100vw', maxWidth: '450px' }} className="d-flex flex-column h-100 p-3">
                             <div className="d-flex align-items-center justify-content-between mb-3 text-white fw-bold border-bottom pb-2" style={{ borderColor: 'var(--fv-border)' }}>
                                 <span><i className="bi bi-graph-up me-2 text-primary"></i> Analysis Plotter</span>
                                 <button className="btn-close btn-close-white" style={{ fontSize: '0.7rem' }} onClick={() => setIsPlotterOpen(false)}></button>
