@@ -3,9 +3,11 @@ import { useFits } from './hooks/useFits';
 import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
 import { FitsPlot } from './components/FitsPlot';
+import { FitsHeaderModal } from './components/FitsHeaderModal';
 
 function App() {
-    const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile, readImage, getHduList, checkWcs, pixToWorld } = useFits();
+    const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile, readImage, getHduList, 
+          checkWcs, pixToWorld, readHeader, updateKeyword } = useFits();
     
     // File & HDU State
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,6 +30,9 @@ function App() {
     const [plotYErr, setPlotYErr] = useState<string>('');
     const [plotType, setPlotType] = useState<'scatter' | 'histogram'>('scatter');
     const [activeRegionPixels, setActiveRegionPixels] = useState<number[] | null>(null);
+
+    const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
+    const [rawHeaderString, setRawHeaderString] = useState('');
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -65,6 +70,9 @@ function App() {
                 setImageData(null);
                 setTableInfo(null);
                 setTableData({});
+
+                const headerStr = await readHeader();
+                setRawHeaderString(headerStr);
 
                 if (targetHdu?.type === 'image') {
                     const img = await readImage();
@@ -290,7 +298,7 @@ function App() {
                             <li className="nav-item dropdown">
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">Edit</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
-                                    <li><button className="dropdown-item fv-dropdown-item"><i className="bi bi-card-heading"></i> Edit Header</button></li>
+                                    <li><button className="dropdown-item fv-dropdown-item" onClick={() => setIsHeaderModalOpen(true)} disabled={!activeHdu}><i className="bi bi-card-heading"></i> Edit Header</button></li>
                                     <li><button className="dropdown-item fv-dropdown-item"><i className="bi bi-layout-three-columns"></i> Manage Columns</button></li>
                                 </ul>
                             </li>
@@ -593,6 +601,17 @@ function App() {
                     </div>
                 </div>
             </div>
+            <FitsHeaderModal 
+                isOpen={isHeaderModalOpen} 
+                onClose={() => setIsHeaderModalOpen(false)} 
+                rawHeader={rawHeaderString} 
+                onUpdateKeyword={async (key, value, isNum) => {
+                    await updateKeyword(key, value, isNum);
+                    // Refresh the header display instantly!
+                    const newHeader = await readHeader();
+                    setRawHeaderString(newHeader);
+                }}
+            />
         </div>
     );
 }
