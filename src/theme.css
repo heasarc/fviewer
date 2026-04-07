@@ -294,3 +294,12 @@ body {
 ::-webkit-scrollbar-corner {
   background: var(--fv-bg);
 }
+
+.fv-text-primary {
+  color: var(--fv-accent) !important;
+}
+
+.fv-text-muted {
+  color: var(--fv-text) !important;
+  opacity: 0.6; /* Slightly fade the normal text color for the "muted" look */
+}

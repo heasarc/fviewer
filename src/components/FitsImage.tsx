@@ -601,7 +601,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
                         </li>
                         <li><hr className="dropdown-divider border-secondary my-1" /></li>
                         <li className="px-3 py-1">
-                            <label className="text-muted mb-1" style={{ fontSize: '0.75rem' }}>Custom Angle (°)</label>
+                            <label className="fv-text-muted mb-1" style={{ fontSize: '0.75rem' }}>Custom Angle (°)</label>
                             <input type="number" className="form-control form-control-sm border-secondary bg-dark text-white" style={{ appearance: 'textfield' }} value={rotation} onChange={(e) => setRotation(Number(e.target.value) || 0)} step="1"/>
                         </li>
                     </ul>
@@ -662,17 +662,17 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
             {/* Compact Status Bar */}
             <div className="fv-statusbar d-flex justify-content-between align-items-center">
                 <div className="d-flex gap-4" style={{ fontFamily: 'monospace' }}>
-                    <span><span className="text-muted">X:</span> <strong style={{ color: 'var(--fv-accent)' }}>{hoverInfo.x}</strong></span>
-                    <span><span className="text-muted">Y:</span> <strong style={{ color: 'var(--fv-accent)' }}>{hoverInfo.y}</strong></span>
-                    <span><span className="text-muted">Val:</span> <strong style={{ color: 'var(--fv-accent)' }}>{hoverInfo.val !== undefined ? Number(hoverInfo.val).toPrecision(4) : '...'}</strong></span>
+                    <span><span className="fv-text-muted">X:</span> <strong style={{ color: 'var(--fv-accent)' }}>{hoverInfo.x}</strong></span>
+                    <span><span className="fv-text-muted">Y:</span> <strong style={{ color: 'var(--fv-accent)' }}>{hoverInfo.y}</strong></span>
+                    <span><span className="fv-text-muted">Val:</span> <strong style={{ color: 'var(--fv-accent)' }}>{hoverInfo.val !== undefined ? Number(hoverInfo.val).toPrecision(4) : '...'}</strong></span>
                 </div>
                 <div className="d-flex gap-4" style={{ fontFamily: 'monospace' }}>
                     {hasWCS ? (
                         <>
-                            <span><span className="text-muted">RA:</span> <strong className="text-warning">{hoverInfo.ra}</strong>°</span>
-                            <span><span className="text-muted">Dec:</span> <strong className="text-warning">{hoverInfo.dec}</strong>°</span>
+                            <span><span className="fv-text-muted">RA:</span> <strong className="text-warning">{hoverInfo.ra}</strong>°</span>
+                            <span><span className="fv-text-muted">Dec:</span> <strong className="text-warning">{hoverInfo.dec}</strong>°</span>
                         </>
-                    ) : <span className="text-muted fst-italic">No WCS</span>}
+                    ) : <span className="fv-text-muted fst-italic">No WCS</span>}
                 </div>
             </div>
         </div>
