@@ -13,6 +13,7 @@ function App() {
     const [hduList, setHduList] = useState<any[]>([]);
     const [activeHdu, setActiveHdu] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     // Data State
     const [tableInfo, setTableInfo] = useState<any>(null);
@@ -149,10 +150,21 @@ function App() {
                         <span className="navbar-toggler-icon" style={{ width: '1.2em', height: '1.2em' }}></span>
                     </button>
 
-                    {/* Collapsible Menu Items */}
+                    {/* Left-aligned Toggles & Menus */}
                     <div className="collapse navbar-collapse" id="topMenubar">
                         <ul className="navbar-nav me-auto mb-2 mb-md-0 d-flex align-items-md-center">
                             
+                            {/* Left Sidebar Toggle Button */}
+                            <li className="nav-item">
+                                <button 
+                                    className={`btn menubar-btn px-3 h-100 ${isSidebarOpen ? 'fv-text-primary' : 'fv-text-muted'}`}
+                                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                                    title="Toggle HDU Sidebar"
+                                >
+                                    <i className="bi bi-layout-sidebar"></i>
+                                </button>
+                            </li>
+
                             {/* File Menu */}
                             <li className="nav-item dropdown">
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">File</button>
@@ -225,35 +237,42 @@ function App() {
             {/* 3. Application Body (Sidebar + Workspace) */}
             <div className="d-flex flex-row flex-grow-1 overflow-hidden">
                 
-                {/* Left Sidebar: HDU List */}
+                {/* Collapsible Left Sidebar: HDU List */}
                 <div 
-                    className="d-none d-md-flex flex-column flex-shrink-0 border-end overflow-auto shadow-sm z-1" 
-                    style={{ width: '240px', backgroundColor: 'var(--fv-panel)', borderColor: 'var(--fv-border)' }}
+                    className="d-none d-md-flex flex-column flex-shrink-0 border-end z-1 shadow-sm" 
+                    style={{ 
+                        width: isSidebarOpen ? '240px' : '0px', 
+                        backgroundColor: 'var(--fv-panel)', 
+                        borderColor: 'var(--fv-border)',
+                        transition: 'width 0.3s ease-in-out',
+                        overflow: 'hidden' // Hides contents when width is 0
+                    }}
                 >
-                    
-                    <div className="p-2 fw-bold text-uppercase border-bottom d-flex align-items-center" style={{ fontSize: '0.75rem', color: 'var(--fv-text-bright)', backgroundColor: 'var(--fv-bg)', borderColor: 'var(--fv-border)', letterSpacing: '0.5px' }}>
-                        <i className="bi bi-layers me-2"></i> HDU Explorer
+                    {/* Inner container fixed at 240px to prevent text crushing during slide animation */}
+                    <div style={{ width: '240px', minWidth: '240px' }} className="d-flex flex-column h-100 overflow-auto">
+                        <div className="p-2 fw-bold text-uppercase border-bottom d-flex align-items-center" style={{ fontSize: '0.75rem', color: 'var(--fv-text-bright)', backgroundColor: 'var(--fv-bg)', borderColor: 'var(--fv-border)', letterSpacing: '0.5px' }}>
+                            <i className="bi bi-layers me-2"></i> HDU Explorer
+                        </div>
+                        
+                        {hduList.length === 0 ? (
+                            <div className="p-3 fv-text-muted fst-italic" style={{ fontSize: '0.8rem' }}>No file loaded</div>
+                        ) : (
+                            hduList.map((hdu) => (
+                                <button 
+                                    key={hdu.index}
+                                    className={`w-100 text-start px-3 py-2 d-flex justify-content-between align-items-center border-0 fv-sidebar-item ${activeHdu === hdu.index ? 'active' : ''}`}
+                                    onClick={() => setActiveHdu(hdu.index)}
+                                >
+                                    <span className="text-truncate" style={{ maxWidth: '140px', fontSize: '0.85rem' }} title={hdu.extname}>
+                                        {hdu.extname}
+                                    </span>
+                                    <span className="badge border border-secondary text-secondary bg-dark" style={{ fontSize: '0.65rem', fontWeight: 'normal' }}>
+                                        {hdu.type.toUpperCase()}
+                                    </span>
+                                </button>
+                            ))
+                        )}
                     </div>
-                    
-                    {hduList.length === 0 ? (
-                        <div className="p-3 fv-text-muted fst-italic" style={{ fontSize: '0.8rem' }}>No file loaded</div>
-                    ) : (
-                        hduList.map((hdu) => (
-                            <button 
-                                key={hdu.index}
-                                // fv-sidebar-item is kept ONLY for the hover/active colors
-                                className={`w-100 text-start px-3 py-2 d-flex justify-content-between align-items-center border-0 fv-sidebar-item ${activeHdu === hdu.index ? 'active' : ''}`}
-                                onClick={() => setActiveHdu(hdu.index)}
-                            >
-                                <span className="text-truncate" style={{ maxWidth: '140px', fontSize: '0.85rem' }} title={hdu.extname}>
-                                    {hdu.extname}
-                                </span>
-                                <span className="badge border border-secondary text-secondary bg-dark" style={{ fontSize: '0.65rem', fontWeight: 'normal' }}>
-                                    {hdu.type.toUpperCase()}
-                                </span>
-                            </button>
-                        ))
-                    )}
                 </div>
 
                 {/* Main Content + Right Plotter Sidebar */}
