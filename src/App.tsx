@@ -22,6 +22,7 @@ function App() {
     const [plotX, setPlotX] = useState<string>('');
     const [plotY, setPlotY] = useState<string>('');
     const [isPlotterOpen, setIsPlotterOpen] = useState(false);
+    const [plotType, setPlotType] = useState<'scatter' | 'histogram'>('scatter');
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -357,28 +358,52 @@ function App() {
                                 {tableInfo ? (
                                     // TABLE PLOTTING UI
                                     <>
+                                        {/* Plot Type Selector */}
+                                        <div className="input-group input-group-sm mb-2 shadow-sm">
+                                            <span className="input-group-text border-0 bg-dark text-white"><i className="bi bi-bar-chart"></i></span>
+                                            <select className="form-select border-0 bg-secondary text-white fw-bold" value={plotType} onChange={(e) => setPlotType(e.target.value as any)}>
+                                                <option value="scatter">Scatter Plot</option>
+                                                <option value="histogram">1D Histogram</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Axes Selectors */}
                                         <div className="d-flex gap-2 mb-3">
-                                            <div className="input-group input-group-sm">
+                                            <div className="input-group input-group-sm shadow-sm">
                                                 <span className="input-group-text border-0 bg-dark text-white">X</span>
                                                 <select className="form-select border-0 bg-secondary text-white" value={plotX} onChange={(e) => setPlotX(e.target.value)}>
                                                     {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
                                                 </select>
                                             </div>
-                                            <div className="input-group input-group-sm">
+                                            <div className="input-group input-group-sm shadow-sm">
                                                 <span className="input-group-text border-0 bg-dark text-white">Y</span>
-                                                <select className="form-select border-0 bg-secondary text-white" value={plotY} onChange={(e) => setPlotY(e.target.value)}>
-                                                    {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                                <select 
+                                                    className="form-select border-0 bg-secondary text-white" 
+                                                    value={plotY} 
+                                                    onChange={(e) => setPlotY(e.target.value)}
+                                                    disabled={plotType === 'histogram'} // Disable Y if histogram!
+                                                >
+                                                    {plotType === 'histogram' 
+                                                        ? <option>Counts (Auto)</option> 
+                                                        : tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)
+                                                    }
                                                 </select>
                                             </div>
                                         </div>
                                         
-                                        <div className="flex-grow-1 bg-dark rounded border d-flex flex-column" style={{ borderColor: 'var(--fv-border)', minHeight: '300px' }}>
-                                            {plotX && plotY && tableData[plotX] && tableData[plotY] ? (
+                                        <div className="flex-grow-1 bg-dark rounded border d-flex flex-column shadow-sm" style={{ borderColor: 'var(--fv-border)', minHeight: '300px' }}>
+                                            {plotX && (plotType === 'histogram' || (plotY && tableData[plotY])) && tableData[plotX] ? (
                                                 <div className="p-2 w-100 h-100">
-                                                    <FitsPlot xData={tableData[plotX]} yData={tableData[plotY]} xLabel={plotX} yLabel={plotY} />
+                                                    <FitsPlot 
+                                                        xData={tableData[plotX]} 
+                                                        yData={plotType === 'scatter' ? tableData[plotY] : undefined} 
+                                                        xLabel={plotX} 
+                                                        yLabel={plotType === 'scatter' ? plotY : 'Counts'} 
+                                                        plotType={plotType}
+                                                    />
                                                 </div>
                                             ) : (
-                                                <div className="m-auto fv-text-muted fst-italic">Select columns to plot</div>
+                                                <div className="m-auto text-muted fst-italic">Select columns to plot</div>
                                             )}
                                         </div>
                                     </>
