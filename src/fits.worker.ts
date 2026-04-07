@@ -27,6 +27,23 @@ self.onmessage = async (e: MessageEvent) => {
                 break;
             }
 
+            case 'UPDATE_KEYWORD': {
+                if (!activeFile) throw new Error("No file opened");
+                const { key, value, isNumeric, comment } = payload;
+                
+                // Use the appropriate cfitsio binding based on the data type
+                let status;
+                if (isNumeric) {
+                    status = activeFile.updateKeyDouble(key, Number(value), comment || "");
+                } else {
+                    status = activeFile.updateKeyString(key, String(value), comment || "");
+                }
+
+                if (status !== 0) throw new Error(`Failed to update keyword ${key}. Status: ${status}`);
+                self.postMessage({ id, success: true });
+                break;
+            }
+
             case 'GET_HDU_LIST': {
                 if (!activeFile) throw new Error("No file opened");
                 const numHDUs = activeFile.getNumHDUs();
