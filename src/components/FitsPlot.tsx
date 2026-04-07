@@ -48,24 +48,35 @@ export const FitsPlot: React.FC<FitsPlotProps> = ({
                 const xErr = xErrIdx > -1 ? u.data[xErrIdx] : null;
 
                 for (let i = idx0; i <= idx1; i++) {
-                    if (dataY[i] == null) continue;
-                    const cx = Math.round(valToPosX(dataX[i], scaleX, xDim, xOff));
-                    const cy = Math.round(valToPosY(dataY[i], scaleY, yDim, yOff));
+                    // TypeScript Fix: Extract to constants so the type checker can safely narrow them!
+                    const xVal = dataX[i];
+                    const yVal = dataY[i];
+                    
+                    if (xVal == null || yVal == null) continue;
+                    
+                    const cx = Math.round(valToPosX(xVal, scaleX, xDim, xOff));
+                    const cy = Math.round(valToPosY(yVal, scaleY, yDim, yOff));
 
-                    if (yErr && yErr[i] != null) {
-                        const yMin = Math.round(valToPosY(dataY[i] - yErr[i], scaleY, yDim, yOff));
-                        const yMax = Math.round(valToPosY(dataY[i] + yErr[i], scaleY, yDim, yOff));
-                        ctx.moveTo(cx, yMin); ctx.lineTo(cx, yMax);
-                        ctx.moveTo(cx - 3, yMin); ctx.lineTo(cx + 3, yMin); 
-                        ctx.moveTo(cx - 3, yMax); ctx.lineTo(cx + 3, yMax); 
+                    if (yErr) {
+                        const yE = yErr[i];
+                        if (yE != null) {
+                            const yMin = Math.round(valToPosY(yVal - yE, scaleY, yDim, yOff));
+                            const yMax = Math.round(valToPosY(yVal + yE, scaleY, yDim, yOff));
+                            ctx.moveTo(cx, yMin); ctx.lineTo(cx, yMax);
+                            ctx.moveTo(cx - 3, yMin); ctx.lineTo(cx + 3, yMin); 
+                            ctx.moveTo(cx - 3, yMax); ctx.lineTo(cx + 3, yMax); 
+                        }
                     }
 
-                    if (xErr && xErr[i] != null) {
-                        const xMin = Math.round(valToPosX(dataX[i] - xErr[i], scaleX, xDim, xOff));
-                        const xMax = Math.round(valToPosX(dataX[i] + xErr[i], scaleX, xDim, xOff));
-                        ctx.moveTo(xMin, cy); ctx.lineTo(xMax, cy);
-                        ctx.moveTo(xMin, cy - 3); ctx.lineTo(xMin, cy + 3); 
-                        ctx.moveTo(xMax, cy - 3); ctx.lineTo(xMax, cy + 3); 
+                    if (xErr) {
+                        const xE = xErr[i];
+                        if (xE != null) {
+                            const xMin = Math.round(valToPosX(xVal - xE, scaleX, xDim, xOff));
+                            const xMax = Math.round(valToPosX(xVal + xE, scaleX, xDim, xOff));
+                            ctx.moveTo(xMin, cy); ctx.lineTo(xMax, cy);
+                            ctx.moveTo(xMin, cy - 3); ctx.lineTo(xMin, cy + 3); 
+                            ctx.moveTo(xMax, cy - 3); ctx.lineTo(xMax, cy + 3); 
+                        }
                     }
                 }
                 ctx.stroke();

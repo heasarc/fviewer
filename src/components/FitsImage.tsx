@@ -106,18 +106,16 @@ export const FitsImage: React.FC<FitsImageProps> = ({
     useEffect(() => {
         const viewport = viewportRef.current;
         if (!viewport) return;
-
         const handleNativeWheel = (e: WheelEvent) => {
-            e.preventDefault(); // Blocks the browser from scrolling the webpage!
-            setZoom(prev => Math.max(0.1, Math.min(prev * (e.deltaY < 0 ? 1.1 : 0.9), 50)));
+            e.preventDefault(); 
+            setZoom(prev => {
+                // TypeScript Fix: If zoom is null (hasn't auto-fitted yet), default to 1
+                if (prev === null) return 1; 
+                return Math.max(0.1, Math.min(prev * (e.deltaY < 0 ? 1.1 : 0.9), 50));
+            });
         };
-
-        // { passive: false } is absolutely required here
         viewport.addEventListener('wheel', handleNativeWheel, { passive: false });
-
-        return () => {
-            viewport.removeEventListener('wheel', handleNativeWheel);
-        };
+        return () => viewport.removeEventListener('wheel', handleNativeWheel);
     }, []);
 
     // --- REGION DELETION ---
@@ -187,12 +185,18 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         const viewport = viewportRef.current;
         if (!viewport) return { x: 0, y: 0 };
         
+        // TypeScript Fix: Safely fallback to 1 if zoom hasn't calculated yet
+        const currentZoom = zoom ?? 1;
+        
         const rect = viewport.getBoundingClientRect();
         let cx = (clientX - rect.left) - rect.width / 2;
         let cy = (clientY - rect.top) - rect.height / 2;
 
         cx -= pan.x; cy -= pan.y;
-        cx /= zoom; cy /= zoom;
+        
+        // Use the safe currentZoom variable here!
+        cx /= currentZoom; 
+        cy /= currentZoom;
         
         const rad = -rotation * (Math.PI / 180);
         const cos = Math.cos(rad); const sin = Math.sin(rad);
@@ -330,7 +334,8 @@ export const FitsImage: React.FC<FitsImageProps> = ({
     const renderRegionSVG = (r: Region, isDraft = false) => {
         const isSelected = r.id === selectedRegionId;
         const isHovered = r.id === hoveredRegionId;
-        const handleSize = 10 / zoom;
+        const currZoom = zoom ?? 1;
+        const handleSize = 10 / (currZoom ?? 1);
         
         let shapeElement;
         let cx: number, cy: number, topEdgeY: number = 0;
@@ -389,7 +394,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                 {React.cloneElement(shapeElement, {
                     style: {
                         stroke: 'rgba(255,255,255,0.01)', 
-                        strokeWidth: Math.max(10, 20 / zoom), fill: 'none',
+                        strokeWidth: Math.max(10, 20 / currZoom), fill: 'none',
                         pointerEvents: isDraft || drawMode !== 'pan' ? 'none' : 'stroke',
                         cursor: drawMode === 'pan' ? 'move' : 'crosshair'
                     },
@@ -402,7 +407,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                 {React.cloneElement(shapeElement, {
                     style: {
                         stroke: isHovered && drawMode === 'pan' && !isDraft ? '#fff' : r.color, 
-                        strokeWidth: (isHovered && drawMode === 'pan' && !isDraft ? 4 : 2) / zoom, 
+                        strokeWidth: (isHovered && drawMode === 'pan' && !isDraft ? 4 : 2) / currZoom, 
                         fill: 'none', pointerEvents: 'none',
                         transition: 'stroke 0.1s, stroke-width 0.1s'
                     }
@@ -414,9 +419,9 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                         {/* Rotation Handle (Only for Box and Ellipse) */}
                         {(r.type === 'box' || r.type === 'ellipse') && (
                             <>
-                                <line x1={cx} y1={topEdgeY} x2={cx} y2={topEdgeY - (25/zoom)} stroke={r.color} strokeWidth={1/zoom} pointerEvents="none" />
+                                <line x1={cx} y1={topEdgeY} x2={cx} y2={topEdgeY - (25/currZoom)} stroke={r.color} strokeWidth={1/currZoom} pointerEvents="none" />
                                 <circle 
-                                    cx={cx} cy={topEdgeY - (25/zoom)} r={handleSize/2} fill={r.color} 
+                                    cx={cx} cy={topEdgeY - (25/currZoom)} r={handleSize/2} fill={r.color} 
                                     style={{ cursor: 'crosshair', pointerEvents: 'all' }}
                                     onMouseDown={(e) => {
                                         if (drawMode !== 'pan') return;
@@ -432,7 +437,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                         <rect 
                             x={r.endX - handleSize / 2} y={r.endY - handleSize / 2} 
                             width={handleSize} height={handleSize} 
-                            fill="#fff" stroke={r.color} strokeWidth={1/zoom}
+                            fill="#fff" stroke={r.color} strokeWidth={1/currZoom}
                             style={{ cursor: 'nwse-resize', pointerEvents: 'all' }}
                             onMouseDown={(e) => {
                                 if (drawMode !== 'pan') return;
@@ -447,7 +452,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                                 x={cx + (r.innerR ?? (Math.hypot(r.endX - r.startX, r.endY - r.startY) * 0.5)) - handleSize / 2} 
                                 y={cy - handleSize / 2} 
                                 width={handleSize} height={handleSize} 
-                                fill="#fff" stroke={r.color} strokeWidth={1/zoom}
+                                fill="#fff" stroke={r.color} strokeWidth={1/currZoom}
                                 style={{ cursor: 'e-resize', pointerEvents: 'all' }}
                                 onMouseDown={(e) => {
                                     if (drawMode !== 'pan') return;
@@ -660,12 +665,12 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                         </button>
                         <ul className="dropdown-menu dropdown-menu-end fv-dropdown-menu shadow">
                             <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={() => setZoom(z => Math.min(50, z * 1.2))}>
+                                <button className="dropdown-item fv-dropdown-item" onClick={() => setZoom(z => Math.min(50, (z ?? 1) * 1.2))}>
                                     <span style={{ width: '16px' }}></span><i className="bi bi-zoom-in"></i> Zoom In
                                 </button>
                             </li>
                             <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={() => setZoom(z => Math.max(0.1, z * 0.8))}>
+                                <button className="dropdown-item fv-dropdown-item" onClick={() => setZoom(z => Math.max(0.1, (z ?? 1) * 0.8))}>
                                     <span style={{ width: '16px' }}></span><i className="bi bi-zoom-out"></i> Zoom Out
                                 </button>
                             </li>
