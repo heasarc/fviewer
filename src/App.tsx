@@ -5,6 +5,7 @@ import { FitsImage } from './components/FitsImage';
 import type { Region } from './components/FitsImage';
 import { FitsPlot } from './components/FitsPlot';
 import { FitsHeaderModal } from './components/FitsHeaderModal';
+import fviewerLogo from '/fviewer-logo.svg';
 
 function App() {
     const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile, readImage, getHduList, 
@@ -371,7 +372,17 @@ function App() {
                     
                     {/* Logo */}
                     <span className="navbar-brand fw-bold d-flex align-items-center gap-2 m-0 p-0" style={{ color: 'var(--fv-accent)', letterSpacing: '1px', fontSize: '1rem' }}>
-                        <i className="bi bi-stars"></i> FViewer
+                        <img 
+                            src={fviewerLogo}
+                            alt="FViewer Logo" 
+                            width="24" 
+                            height="24" 
+                            style={{ 
+                                borderRadius: '8px', 
+                                border: '1px solid var(--fv-accent)',
+                            }} 
+                        /> 
+                        FViewer
                     </span>
 
                     {/* Hamburger Button (Visible only on mobile) */}
