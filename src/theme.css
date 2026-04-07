@@ -8,6 +8,11 @@
   --fv-accent: #7ec8e3;
   --fv-text: #c8cfe8;
   --fv-text-bright: #ffffff;
+
+  /* Force Bootstrap to use our dark theme colors! */
+  --bs-body-bg: var(--fv-bg);
+  --bs-body-color: var(--fv-text);
+  --bs-border-color: var(--fv-border);
 }
 
 body {
@@ -97,36 +102,6 @@ body {
   padding: 4px 12px;
 }
 
-/* App Layout & Menubar */
-.fv-layout {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background-color: var(--fv-bg);
-  overflow: hidden;
-}
-
-.fv-menubar {
-  background-color: #13151f;
-  border-bottom: 1px solid var(--fv-border);
-  padding: 0 16px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  font-size: 0.9rem;
-  flex-shrink: 0; 
-}
-
-.fv-logo {
-  font-weight: 700;
-  color: var(--fv-accent);
-  margin-right: 24px;
-  letter-spacing: 1px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 /* Menubar Buttons & Dropdowns */
 .fv-menu-btn {
   color: var(--fv-text);
@@ -165,6 +140,16 @@ body {
 .fv-dropdown-item:hover {
   background-color: var(--fv-panel-hover);
   color: var(--fv-text-bright);
+}
+
+.menubar-btn {
+  color: var(--fv-text);
+  border-radius: 0; /* Keep it flat to the menubar */
+  transition: background-color 0.1s, color 0.1s;
+}
+.menubar-btn:hover, .menubar-btn:focus {
+  background-color: var(--fv-panel) !important;
+  color: var(--fv-text-bright) !important;
 }
 
 /* IDE-Style Tabs */
