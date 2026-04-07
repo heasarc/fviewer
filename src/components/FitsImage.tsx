@@ -8,6 +8,7 @@ interface FitsImageProps {
     height: number;
     checkWcs: () => Promise<boolean>;
     pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>;
+    onRegionChange?: (region: Region | null) => void;
 }
 
 export type DrawMode = 'pan' | 'circle' | 'box' | 'ellipse' | 'annulus';
@@ -24,7 +25,7 @@ export interface Region {
     innerR?: number;
 }
 
-export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, checkWcs, pixToWorld }) => {
+export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, checkWcs, pixToWorld, onRegionChange }) => {
     const viewportRef = useRef<HTMLDivElement>(null); 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     
@@ -119,6 +120,27 @@ export const FitsImage: React.FC<FitsImageProps> = ({ data, width, height, check
             setDragAction(null);
         }
     };
+
+    // --- REGION CALLBACK ---
+    // Ref tracks the last region sent so we don't spam the parent and cause infinite loops
+    const lastSentRegionRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (onRegionChange && !isDragging) {
+            const selected = regions.find(r => r.id === selectedRegionId) || null;
+            
+            // To prevent infinite loops, serialize the region's position to a quick string
+            // Only send it to the parent if its physical coordinates actually changed!
+            const regionHash = selected 
+                ? `${selected.id}-${selected.startX}-${selected.startY}-${selected.endX}-${selected.endY}-${selected.angle}-${selected.innerR}` 
+                : null;
+            
+            if (regionHash !== lastSentRegionRef.current) {
+                lastSentRegionRef.current = regionHash;
+                onRegionChange(selected);
+            }
+        }
+    }, [regions, selectedRegionId, isDragging, onRegionChange]);
 
     // Keyboard listener for Backspace / Delete
     useEffect(() => {
