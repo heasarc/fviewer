@@ -4,7 +4,7 @@ interface FitsHeaderModalProps {
     isOpen: boolean;
     onClose: () => void;
     rawHeader: string;
-    onUpdateKeyword: (key: string, value: string, isNumeric: boolean) => Promise<void>;
+    onUpdateKeyword: (key: string, value: string, isNumeric: boolean, comment?: string) => Promise<void>;
 }
 
 interface HeaderCard {
@@ -19,6 +19,13 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
     const [search, setSearch] = useState('');
     const [editingKey, setEditingKey] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
+
+    // State for the new keyword form
+    const [newKey, setNewKey] = useState('');
+    const [newValue, setNewValue] = useState('');
+    const [newComment, setNewComment] = useState('');
+    const [isNumeric, setIsNumeric] = useState(false);
+    const [showAddForm, setShowAddForm] = useState(false);
 
     const cards = useMemo(() => {
         if (!rawHeader) return [];
@@ -90,6 +97,28 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
         setEditingKey(null);
     };
 
+    const handleAddKeyword = async () => {
+        if (!newKey.trim()) {
+            alert("Keyword name is required.");
+            return;
+        }
+        
+        // FITS keywords are typically max 8 chars and uppercase
+        const formattedKey = newKey.trim().toUpperCase().substring(0, 8);
+        
+        try {
+            await onUpdateKeyword(formattedKey, newValue, isNumeric, newComment);
+            // Clear form on success
+            setNewKey('');
+            setNewValue('');
+            setNewComment('');
+            setIsNumeric(false);
+        } catch (error) {
+            console.error("Failed to add keyword:", error);
+            alert("Failed to add keyword.");
+        }
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -118,10 +147,81 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
                                 autoFocus
                             />
                         </div>
+
+                        {/* Add keywords button*/}
+                        <button 
+                            className="btn btn-sm ms-2 d-flex align-items-center gap-1"
+                            style={{ 
+                                backgroundColor: showAddForm ? 'var(--fv-panel-hover)' : 'transparent', 
+                                color: showAddForm ? 'var(--fv-text-bright)' : 'var(--fv-text)',
+                                border: '1px solid var(--fv-border)'
+                            }}
+                            onClick={() => setShowAddForm(!showAddForm)}
+                        >
+                            <i className={`bi bi-${showAddForm ? 'dash' : 'plus'}-circle`}></i>
+                            {showAddForm ? 'Cancel' : 'New Keyword'}
+                        </button>
                     </div>
                     
                     <button type="button" className="btn-close btn-close-white" onClick={onClose} title="Close (Esc)"></button>
                 </div>
+
+                {/* 2. Conditionally Rendered Add Keyword Toolbar */}
+                {showAddForm && (
+                    <div className="d-flex align-items-center gap-2 p-2 border-bottom" style={{ backgroundColor: 'var(--fv-panel)', borderColor: 'var(--fv-border)' }}>
+                        <input 
+                            type="text" 
+                            className="form-control form-control-sm border-0 ms-2" 
+                            placeholder="KEYWORD" 
+                            maxLength={8}
+                            value={newKey} 
+                            onChange={(e) => setNewKey(e.target.value.toUpperCase())} 
+                            style={{ width: '120px', backgroundColor: 'var(--fv-bg)', color: 'var(--fv-text-bright)' }}
+                            autoFocus
+                        />
+                        
+                        <input 
+                            type="text" 
+                            className="form-control form-control-sm border-0" 
+                            placeholder="Value" 
+                            value={newValue} 
+                            onChange={(e) => setNewValue(e.target.value)} 
+                            style={{ width: '150px', backgroundColor: 'var(--fv-bg)', color: 'var(--fv-text-bright)' }}
+                        />
+                        
+                        <input 
+                            type="text" 
+                            className="form-control form-control-sm border-0" 
+                            placeholder="Comment (optional)" 
+                            value={newComment} 
+                            onChange={(e) => setNewComment(e.target.value)} 
+                            style={{ flex: 1, backgroundColor: 'var(--fv-bg)', color: 'var(--fv-text-bright)' }}
+                        />
+                        
+                        <div className="form-check form-switch mb-0 ms-2" style={{ color: 'var(--fv-text)' }}>
+                            <input 
+                                className="form-check-input" 
+                                type="checkbox" 
+                                role="switch" 
+                                id="numericSwitch" 
+                                checked={isNumeric} 
+                                onChange={(e) => setIsNumeric(e.target.checked)} 
+                                style={{ cursor: 'pointer' }}
+                            />
+                            <label className="form-check-label" htmlFor="numericSwitch" style={{ fontSize: '0.85rem', cursor: 'pointer' }}>Numeric</label>
+                        </div>
+                        
+                        <button 
+                            className="btn btn-sm ms-3" 
+                            onClick={handleAddKeyword}
+                            style={{ backgroundColor: 'var(--fv-bg)', color: '#fff', fontWeight: 'bold' }}
+                            disabled={!newKey.trim()}
+                        >
+                            Add
+                        </button>
+                    </div>
+                )}
+                {/* --- END NEW KEYWORD FORM --- */}
                 
                 {/* Scrollable Table Area */}
                 <div className="flex-grow-1 overflow-auto position-relative" style={{ backgroundColor: 'var(--fv-bg)' }}>
