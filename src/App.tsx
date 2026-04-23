@@ -757,8 +757,8 @@ function App() {
                 isOpen={isHeaderModalOpen} 
                 onClose={() => setIsHeaderModalOpen(false)} 
                 rawHeader={rawHeaderString} 
-                onUpdateKeyword={async (key, value, isNum) => {
-                    await updateKeyword(key, value, isNum);
+                onUpdateKeyword={async (key, value, isNum, comment) => {
+                    await updateKeyword(key, value, isNum, comment);
                     // Refresh the header display instantly!
                     const newHeader = await readHeader();
                     setRawHeaderString(newHeader);
