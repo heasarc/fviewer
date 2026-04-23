@@ -6,6 +6,7 @@ import type { Region } from './components/FitsImage';
 import { FitsPlot } from './components/FitsPlot';
 import { FitsHeaderModal } from './components/FitsHeaderModal';
 import fviewerLogo from '/fviewer-logo.svg';
+import { FITS_FORMATS, ALLOWED_EXTS } from './utils/constants';
 
 function App() {
     const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile, readImage, getHduList, 
@@ -43,12 +44,31 @@ function App() {
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+    
+        // Check if the file ends with any of the allowed extensions
+        const fileName = file.name.toLowerCase();
+        const isValid = ALLOWED_EXTS.some(ext => fileName.endsWith(ext));
+        if (!isValid) {
+            alert(`Please select a valid FITS file. Allowed extensions: ${FITS_FORMATS}`);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
 
         setFileName(file.name);
         setIsLoading(true);
-        const buffer = await file.arrayBuffer();
         
         try {
+            let buffer: ArrayBuffer;
+            
+            // Intercept and decompress gzip files natively
+            if (file.name.toLowerCase().endsWith('.gz')) {
+                const ds = new DecompressionStream('gzip');
+                const decompressedStream = file.stream().pipeThrough(ds);
+                buffer = await new Response(decompressedStream).arrayBuffer();
+            } else {
+                buffer = await file.arrayBuffer();
+            }
+            
             await openFile(new Uint8Array(buffer));
             const list = await getHduList();
             setHduList(list);
@@ -363,7 +383,7 @@ function App() {
         <div className="vh-100 d-flex flex-column overflow-hidden" style={{ backgroundColor: 'var(--fv-bg)', color: 'var(--fv-text)' }}>
             
             {/* Hidden File Input */}
-            <input type="file" ref={fileInputRef} accept=".fits,.fit,.fts" style={{ display: 'none' }} onChange={handleFileUpload} />
+            <input type="file" ref={fileInputRef} accept={FITS_FORMATS} style={{ display: 'none' }} onChange={handleFileUpload} />
             <input type="file" ref={regionInputRef} accept=".reg,.txt" style={{ display: 'none' }} onChange={handleLoadRegions} />
 
             {/* 2. Top Menubar */}
