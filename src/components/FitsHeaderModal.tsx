@@ -89,7 +89,7 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
     const handleSaveEdit = async (card: HeaderCard) => {
         if (editingKey === card.keyword && editValue !== card.value) {
             try {
-                await onUpdateKeyword(card.keyword, editValue, card.isNumeric);
+                await onUpdateKeyword(card.keyword, editValue, card.isNumeric, card.comment);
             } catch (err) {
                 alert(`Failed to update ${card.keyword}. Ensure the value matches the FITS standard type.`);
             }
@@ -281,7 +281,7 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
                                     </div>
                                     
                                     {/* Comment Cell */}
-                                    <div className="d-flex align-items-center px-3 flex-grow-1 text-truncate text-muted fst-italic" title={c.comment}>
+                                    <div className="d-flex align-items-center px-3 flex-grow-1 text-truncate fst-italic" title={c.comment}>
                                         {c.comment}
                                     </div>
                                 </div>
