@@ -19,6 +19,8 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
     const [search, setSearch] = useState('');
     const [editingKey, setEditingKey] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
+    const [editingCommentKey, setEditingCommentKey] = useState<string | null>(null);
+    const [editCommentValue, setEditCommentValue] = useState('');
 
     // State for the new keyword form
     const [newKey, setNewKey] = useState('');
@@ -95,6 +97,17 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
             }
         }
         setEditingKey(null);
+    };
+
+    const handleSaveCommentEdit = async (c: any) => {
+        if (editingCommentKey) {
+            if (editCommentValue !== c.comment) {
+                // Determine if the existing value was numeric (adjust this logic if you have a c.isNumeric flag)
+                const isNum = !isNaN(Number(c.value)) && c.value.trim() !== ''; 
+                await onUpdateKeyword(c.keyword, c.value, isNum, editCommentValue);
+            }
+            setEditingCommentKey(null);
+        }
     };
 
     const handleAddKeyword = async () => {
@@ -279,10 +292,36 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
                                             <span className="text-truncate w-100">{c.value}</span>
                                         )}
                                     </div>
-                                    
-                                    {/* Comment Cell */}
-                                    <div className="d-flex align-items-center px-3 flex-grow-1 text-truncate fst-italic" title={c.comment}>
-                                        {c.comment}
+
+                                    {/* Comment Cell (Editable) */}
+                                    <div 
+                                        className="d-flex align-items-center px-3 flex-grow-1 text-truncate fst-italic position-relative" 
+                                        style={{ cursor: c.isCommentOnly ? 'default' : 'cell' }}
+                                        onDoubleClick={() => { 
+                                            if(!c.isCommentOnly) { 
+                                                setEditingCommentKey(c.keyword); 
+                                                setEditCommentValue(c.comment || ''); 
+                                            } 
+                                        }}
+                                        title={c.isCommentOnly ? '' : "Double-click to edit comment"}
+                                    >
+                                        {editingCommentKey === c.keyword ? (
+                                            <input 
+                                                type="text" 
+                                                className="form-control form-control-sm border-0 rounded-0 w-100 h-100 px-2"
+                                                style={{ backgroundColor: 'var(--fv-accent)', color: '#000', position: 'absolute', top: 0, left: 0, fontStyle: 'normal' }}
+                                                value={editCommentValue}
+                                                onChange={(e) => setEditCommentValue(e.target.value)}
+                                                onBlur={() => handleSaveCommentEdit(c)}
+                                                onKeyDown={(e) => { 
+                                                    if (e.key === 'Enter') handleSaveCommentEdit(c); 
+                                                    if (e.key === 'Escape') setEditingCommentKey(null); 
+                                                }}
+                                                autoFocus
+                                            />
+                                        ) : (
+                                            <span className="text-truncate w-100">{c.comment}</span>
+                                        )}
                                     </div>
                                 </div>
                             ))
