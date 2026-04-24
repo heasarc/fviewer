@@ -2,11 +2,19 @@ import { useCallback } from 'react';
 
 export function useCommandHandler(
     processFile: (file: File) => void,
+    colormap: string,
     setColormap: (cmap: string) => void,
-    setStretch: (cmap: string) => void
+    stretch: string,
+    setStretch: (cmap: string) => void,
 ) {
-  return useCallback(async (command: any) => {
+  return useCallback(async (command: any, sendReply: (msg: any) => void) => {
     console.log("Received remote command:", command);
+
+    // Helper to send a simple OK
+    const ack = () => sendReply({ message_id: command.message_id, status: 'ok' });
+
+    // Helper to send data
+    const replyData = (data: any) => sendReply({ message_id: command.message_id, ...data });
     
     switch (command.action) {
       case 'load_file':
@@ -20,6 +28,7 @@ export function useCommandHandler(
           // Create the File object and pass it to your app's logic
           const file = new File([blob], filename, { type: 'application/octet-stream' });
           processFile(file);
+          ack();
           
         } catch (error) {
           console.error("Error loading remote file:", error);
@@ -27,21 +36,25 @@ export function useCommandHandler(
         break;
     
     case 'set_colormap':
-        // Apply the new colormap from Python!
-        if (command.cmap) {
-            setColormap(command.cmap);
-        }
+        if (command.cmap) setColormap(command.cmap);
+        ack();
+        break;
+
+    case 'get_colormap':
+        replyData({ colormap });
         break;
 
     case 'set_stretch':
-        // Apply the new colormap from Python!
-        if (command.stretch) {
-            setStretch(command.stretch);
-        }
+        if (command.stretch) setStretch(command.stretch);
+        ack();
+        break;
+
+    case 'get_stretch':
+        replyData({ stretch });
         break;
     
       default:
-        console.warn("Unknown command:", command.action);
+        sendReply({ message_id: command.message_id, error: `Unknown command: ${command.action}` });
     }
-  }, [processFile]);
+  }, [processFile, colormap, setColormap, stretch, setStretch]);
 }

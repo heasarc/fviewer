@@ -96,7 +96,9 @@ function App() {
     };
 
     // Handle API commands
-    const handleRemoteCommand = useCommandHandler(processFile, setColormap, setStretch);
+    const handleRemoteCommand = useCommandHandler(
+        processFile, colormap, setColormap, stretch, setStretch
+    );
     // Listen for commands
     const { clientId, isConnected } = useWebSocket(handleRemoteCommand);
 
