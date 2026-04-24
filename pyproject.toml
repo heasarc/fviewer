@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.100.0",
     "requests>=2.33.1",
+    "uuid>=1.30",
     "uvicorn>=0.23.0",
     "websockets>=11.0",
 ]

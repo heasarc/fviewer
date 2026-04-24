@@ -24,7 +24,7 @@ function getWebSocketUrl(clientId: string): string {
   return `${protocol}//${host}${basePath}ws/${clientId}`;
 }
 
-export function useWebSocket(onCommand: (command: any) => void) {
+export function useWebSocket(onCommand: (command: any, sendReply: (msg: any) => void) => void) {
   const [clientId] = useState(() => crypto.randomUUID());
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -44,13 +44,16 @@ export function useWebSocket(onCommand: (command: any) => void) {
     ws.onclose = () => setIsConnected(false);
 
     ws.onmessage = (event) => {
-      try {
-        const command = JSON.parse(event.data);
-        // 2. Call the ref, not the dependency!
-        savedCallback.current(command);
-      } catch (error) {
-        console.error("Failed to parse WebSocket message", error);
-      }
+      const command = JSON.parse(event.data);
+      // 1. Create the reply function dynamically
+      const sendReply = (msg: any) => {
+          if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify(msg));
+          }
+      };
+
+      // 2. Pass BOTH the command AND the reply function to your handler
+      savedCallback.current(command, sendReply);
     };
 
     return () => ws.close();

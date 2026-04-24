@@ -1,4 +1,6 @@
 import os
+import asyncio
+import uuid
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -11,6 +13,7 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 class ConnectionManager:
     def __init__(self):
         self.active_connections: dict[str, WebSocket] = {}
+        self.pending_requests: dict[str, asyncio.Future] = {}
 
     async def connect(self, client_id: str, websocket: WebSocket):
         await websocket.accept()
@@ -28,6 +31,27 @@ class ConnectionManager:
         for ws in self.active_connections.values():
             await ws.send_json(message)
 
+    async def send_and_wait(self, client_id: str, message: dict, timeout=5.0):
+        """Sends a message and waits for the frontend to reply."""
+        if client_id not in self.active_connections:
+            return {"error": "Client not connected"}
+
+        msg_id = str(uuid.uuid4())
+        message["message_id"] = msg_id
+
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+        self.pending_requests[msg_id] = future
+
+        await self.active_connections[client_id].send_json(message)
+
+        try:
+            return await asyncio.wait_for(future, timeout)
+        except asyncio.TimeoutError:
+            return {"error": "Timeout waiting for frontend"}
+        finally:
+            self.pending_requests.pop(msg_id, None)
+
 
 manager = ConnectionManager()
 
@@ -37,24 +61,26 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await manager.connect(client_id, websocket)
     try:
         while True:
-            _ = await websocket.receive_text()
+            # Listen for replies from React
+            data = await websocket.receive_json()
+            msg_id = data.get("message_id")
+            if msg_id and msg_id in manager.pending_requests:
+                manager.pending_requests[msg_id].set_result(data)
     except WebSocketDisconnect:
         manager.disconnect(client_id)
 
 
 @app.post("/api/command")
-async def receive_command(command: dict, client_id: str = None):
-    """If client_id is provided, send to that specific viewer.
-    Otherwise, broadcast."""
-    if client_id:
-        await manager.send_to_client(client_id, command)
-    else:
-        await manager.broadcast(command)
-    return {
-        "status": "success",
-        "command": command,
-        "client_id": client_id or "all"
-    }
+async def receive_command(command: dict, client_id: str):
+    # ALL commands wait for an acknowledgment from React
+    result = await manager.send_and_wait(client_id, command)
+
+    # If React (or the timeout) returned an error, return a 400 Bad Request
+    if "error" in result:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    return result
 
 
 @app.get("/api/clients")
