@@ -27,3 +27,6 @@ class FViewer:
 
     def set_colormap(self, cmap: str):
         return self._send("set_colormap", cmap=cmap)
+
+    def set_stretch(self, stretch: str):
+        return self._send("set_stretch", stretch=stretch)
