@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useFits } from './hooks/useFits';
+import { useWebSocket } from './hooks/useWebSocket';
+import { useCommandHandler } from './hooks/useCommandHandler';
 import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
 import type { Region } from './components/FitsImage';
@@ -9,8 +11,10 @@ import fviewerLogo from '/fviewer-logo.svg';
 import { FITS_FORMATS, ALLOWED_EXTS } from './utils/constants';
 
 function App() {
+    // initialize the worker
     const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile, readImage, getHduList, 
           checkWcs, pixToWorld, readHeader, updateKeyword } = useFits();
+    
     
     // File & HDU State
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -44,13 +48,18 @@ function App() {
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-    
-        // Check if the file ends with any of the allowed extensions
+        
+        await processFile(file);
+        
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    // handle the logic of opening a file, from upload or from the API
+    const processFile = async (file: File) => {
         const fileName = file.name.toLowerCase();
         const isValid = ALLOWED_EXTS.some(ext => fileName.endsWith(ext));
         if (!isValid) {
             alert(`Please select a valid FITS file. Allowed extensions: ${FITS_FORMATS}`);
-            if (fileInputRef.current) fileInputRef.current.value = '';
             return;
         }
 
@@ -80,9 +89,13 @@ function App() {
             alert("Failed to load FITS file.");
         } finally {
             setIsLoading(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
+
+    // Handle API commands
+    const handleRemoteCommand = useCommandHandler(processFile);
+    // Listen for commands
+    const { clientId, isConnected } = useWebSocket(handleRemoteCommand);
 
     // keep the plot panel refs in sync
     useEffect(() => {
@@ -477,7 +490,18 @@ function App() {
 
                         {/* Right-aligned Status / Filename & Toggles */}
                         <div className="d-flex align-items-center gap-3 ms-3 ms-md-0 pb-2 pb-md-0">
-                            <span className="text-truncate d-none d-sm-block fv-text-muted" style={{ fontSize: '0.8rem', maxWidth: '200px' }}>{fileName}</span>
+                            {/* API Connection Status */}
+                            <div 
+                                className="d-none d-md-flex align-items-center" 
+                                title={`API Client ID: ${clientId?.split('-')[0]} (${isConnected ? 'Connected' : 'Disconnected'})`}
+                            >
+                                <i className={`bi ${isConnected ? 'bi-plug-fill fv-text-primary' : 'bi-plug fv-text-muted'}`} style={{ fontSize: '1rem' }}></i>
+                            </div>
+
+                            <span className="text-truncate d-none d-sm-block fv-text-muted" style={{ fontSize: '0.8rem', maxWidth: '200px' }}>
+                                {fileName}
+                            </span>
+                            
                             {isLoading && <div className="spinner-border spinner-border-sm fv-text-primary" role="status"></div>}
                             
                             {/* Plotter Toggle Button */}
