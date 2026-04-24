@@ -38,6 +38,9 @@ function App() {
     const [plotYErr, setPlotYErr] = useState<string>('');
     const [plotType, setPlotType] = useState<'scatter' | 'histogram'>('scatter');
     const [activeRegionPixels, setActiveRegionPixels] = useState<number[] | null>(null);
+    
+    const [colormap, setColormap] = useState('gray');
+    const [stretch, setStretch] = useState('linear');
 
     const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
     const [rawHeaderString, setRawHeaderString] = useState('');
@@ -93,7 +96,7 @@ function App() {
     };
 
     // Handle API commands
-    const handleRemoteCommand = useCommandHandler(processFile);
+    const handleRemoteCommand = useCommandHandler(processFile, setColormap, setStretch);
     // Listen for commands
     const { clientId, isConnected } = useWebSocket(handleRemoteCommand);
 
@@ -600,6 +603,10 @@ function App() {
                                                     onSaveRegions={handleSaveRegions}
                                                     onLoadRegions={() => regionInputRef.current?.click()} 
                                                     onRegionChange={handleRegionChange}
+                                                    colormap={colormap}
+                                                    setColormap={setColormap}
+                                                    stretch={stretch}
+                                                    setStretch={setStretch}
                                                 />
                                             </div>
                                         </div>

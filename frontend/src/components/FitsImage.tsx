@@ -15,6 +15,11 @@ interface FitsImageProps {
     onSaveRegions: () => void;
     onLoadRegions: () => void;
     onRegionChange?: (region: Region | null) => void;
+
+    colormap: string;
+    setColormap: React.Dispatch<React.SetStateAction<string>>;
+    stretch: string;
+    setStretch: React.Dispatch<React.SetStateAction<string>>;
 }
 
 export type DrawMode = 'pan' | 'circle' | 'box' | 'ellipse' | 'annulus';
@@ -33,14 +38,12 @@ export interface Region {
 
 export const FitsImage: React.FC<FitsImageProps> = ({ 
         data, width, height, checkWcs, pixToWorld, regions, setRegions, 
-        onSaveRegions, onLoadRegions, onRegionChange 
+        onSaveRegions, onLoadRegions, onRegionChange,
+        colormap, setColormap, stretch, setStretch
     }) => {
     const viewportRef = useRef<HTMLDivElement>(null); 
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    
-    // Rendering State
-    const [colormap, setColormap] = useState('gray');
-    const [stretch, setStretch] = useState('linear');
+
 
     // Interactivity & Transform State
     const [zoom, setZoom] = useState<number | null>(1);

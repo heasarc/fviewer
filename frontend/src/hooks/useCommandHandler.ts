@@ -1,6 +1,10 @@
 import { useCallback } from 'react';
 
-export function useCommandHandler(processFile: (file: File) => void) {
+export function useCommandHandler(
+    processFile: (file: File) => void,
+    setColormap: (cmap: string) => void,
+    setStretch: (cmap: string) => void
+) {
   return useCallback(async (command: any) => {
     console.log("Received remote command:", command);
     
@@ -21,7 +25,21 @@ export function useCommandHandler(processFile: (file: File) => void) {
           console.error("Error loading remote file:", error);
         }
         break;
+    
+    case 'set_colormap':
+        // Apply the new colormap from Python!
+        if (command.cmap) {
+            setColormap(command.cmap);
+        }
+        break;
 
+    case 'set_stretch':
+        // Apply the new colormap from Python!
+        if (command.stretch) {
+            setStretch(command.stretch);
+        }
+        break;
+    
       default:
         console.warn("Unknown command:", command.action);
     }
