@@ -44,13 +44,42 @@ class FViewer:
         return self._send("load_file", path=path)
 
     def get_colormap(self):
-        return self._send("get_colormap")
+        return self._send("get_colormap").get('colormap', '')
 
     def get_stretch(self):
-        return self._send("get_stretch")
+        return self._send("get_stretch").get('stretch', '')
 
     def set_colormap(self, cmap: str):
         return self._send("set_colormap", cmap=cmap)
 
     def set_stretch(self, stretch: str):
         return self._send("set_stretch", stretch=stretch)
+
+    def get_regions(self) -> list:
+        """Returns the raw internal list of region dictionaries."""
+        return self._send("get_regions").get("regions", [])
+
+    def clear_regions(self):
+        """Removes all drawn regions."""
+        self._send("clear_regions")
+
+    def add_circle(self, x: float, y: float, radius: float,
+                   color: str = '#00ff00'):
+        self._send(
+            "add_region", type="circle", x=x, y=y, radius=radius, color=color)
+
+    def add_box(self, x: float, y: float, width: float, height: float,
+                angle: float = 0, color: str = '#00ff00'):
+        self._send(
+            "add_region", type="box", x=x, y=y, width=width, height=height,
+            angle=angle, color=color)
+
+    def add_ellipse(self, x: float, y: float, rx: float, ry: float,
+                    angle: float = 0, color: str = '#00ff00'):
+        self._send("add_region", type="ellipse", x=x, y=y, rx=rx, ry=ry,
+                   angle=angle, color=color)
+
+    def add_annulus(self, x: float, y: float, inner_r: float,
+                    outer_r: float, color: str = '#00ff00'):
+        self._send("add_region", type="annulus", x=x, y=y, innerR=inner_r,
+                   outerR=outer_r, color=color)
