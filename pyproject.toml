@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fviewer"
+dynamic = ["version"]
+description = "A modern, browser-based astronomical FITS file viewer"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "websockets>=11.0",
+]
+
+authors = [
+    { name = "Abdu Zoghbi", email = "a.zoghbi@nasa.gov" },
+]
+
+[project.scripts]
+# This exposes the "fviewer" command line tool
+fviewer = "fviewer.cli:main"
+
+[tool.hatch.version]
+path = "fviewer/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+# Tell the builder to include our Python code and the compiled Vite static files
+packages = ["fviewer"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/fviewer",
+    "/frontend",    # Include source so others can build from source distribution
+]
+exclude = [
+    "/.git",
+    "/frontend/node_modules",
+]
