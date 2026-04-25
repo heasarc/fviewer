@@ -27,12 +27,7 @@ fviewer = "fviewer.cli:main"
 [tool.hatch.version]
 path = "fviewer/__init__.py"
 
-# Build the front end before packaging
-[tool.hatch.build.targets.wheel.hooks.custom]
-path = "hatch_build.py"
 
-[tool.hatch.build.targets.sdist.hooks.custom]
-path = "hatch_build.py"
 
 [dependency-groups]
 dev = [
@@ -46,7 +41,7 @@ packages = ["fviewer"]
 [tool.hatch.build.targets.sdist]
 include = [
     "/fviewer",
-    "/frontend",    # Include source so others can build from source distribution
+    "/fviewer/static",
 ]
 exclude = [
     "/.git",
