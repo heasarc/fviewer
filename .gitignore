@@ -24,5 +24,4 @@ dist-ssr
 *.sln
 *.sw?
 
-fviewer/static
 *pyc
