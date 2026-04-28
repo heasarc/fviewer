@@ -23,6 +23,11 @@ Powered by WebAssembly (C++ `cfitsio` and `wcslib`) and React, FViewer processes
     *   1D Histograms.
     *   **Region Integration:** Draw a region on an image to instantly generate a histogram of the enclosed pixel intensities in the plotter sidebar.
 
+### Optinal Server that creats an API.
+* Its enables interacting with the app from python.
+* Allows remote analysis (e.g. running in a remote srver inside jupyterlab)
+
+
 ## 🛠️ Technology Stack
 *   **Frontend:** React 18, TypeScript, Vite
 *   **Styling:** Bootstrap 5 (CSS & Icons), custom IDE-style dark theme
