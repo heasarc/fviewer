@@ -7,6 +7,7 @@ import { FitsImage } from './components/FitsImage';
 import type { Region } from './components/FitsImage';
 import { FitsPlot } from './components/FitsPlot';
 import { FitsHeaderModal } from './components/FitsHeaderModal';
+import { ServerFileModal } from './components/ServerFileModal';
 import fviewerLogo from '/fviewer-logo.svg';
 import { FITS_FORMATS, ALLOWED_EXTS } from './utils/constants';
 
@@ -44,6 +45,8 @@ function App() {
 
     const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
     const [rawHeaderString, setRawHeaderString] = useState('');
+
+    const [isServerModalOpen, setIsServerModalOpen] = useState(false);
 
     const [regions, setRegions] = useState<Region[]>([]);
     const regionInputRef = useRef<HTMLInputElement>(null);
@@ -104,6 +107,28 @@ function App() {
     );
     // Listen for commands
     const { clientId, isConnected } = useWebSocket(handleRemoteCommand);
+
+    // Server File listing
+    const handleServerFileSelect = async (serverPath: string) => {
+        try {
+            setIsLoading(true);
+            // Fetch the file from the server endpoint we built earlier!
+            const response = await fetch(`/api/file?path=${encodeURIComponent(serverPath)}`);
+            if (!response.ok) throw new Error("Failed to fetch file");
+            
+            const blob = await response.blob();
+            const filename = serverPath.split('/').pop() || 'remote.fits';
+            const file = new File([blob], filename, { type: 'application/octet-stream' });
+            
+            // Pass it to your existing file processor
+            await processFile(file);
+        } catch (error) {
+            console.error("Error loading server file:", error);
+            alert("Failed to load file from server.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     // keep the plot panel refs in sync
     useEffect(() => {
@@ -451,6 +476,9 @@ function App() {
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">File</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
                                     <li><button className="dropdown-item fv-dropdown-item" onClick={() => fileInputRef.current?.click()}><i className="bi bi-folder2-open"></i> Open Local File...</button></li>
+                                    {isConnected && (
+                                        <li><button className="dropdown-item fv-dropdown-item" onClick={() => setIsServerModalOpen(true)}><i className="bi bi-plug-fill"></i> Open From Server...</button></li>
+                                    )}
                                     <li><hr className="dropdown-divider border-secondary my-1" /></li>
                                     <li><button className="dropdown-item fv-dropdown-item" onClick={handleSave} disabled={hduList.length === 0 || isLoading}><i className="bi bi-save"></i> Save Edited FITS</button></li>
                                 </ul>
@@ -799,6 +827,11 @@ function App() {
                     const newHeader = await readHeader();
                     setRawHeaderString(newHeader);
                 }}
+            />
+            <ServerFileModal 
+                isOpen={isServerModalOpen} 
+                onClose={() => setIsServerModalOpen(false)} 
+                onFileSelect={handleServerFileSelect} 
             />
         </div>
     );
