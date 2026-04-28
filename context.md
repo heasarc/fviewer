@@ -37,6 +37,7 @@ We have successfully transitioned from a static client-side MVP to a hybrid Pyth
 3. **`VirtualTable.tsx` (Table Viewer):** A custom, zero-dependency virtualized grid for 100,000+ row binary tables with double-click editing.
 4. **`FitsPlot.tsx`:** 2D Scatter Plots and 1D Histograms linked to drawn regions.
 5. **`FitsHeaderModal.tsx`:** Searchable FITS header card viewer/editor.
+6. **`ServerFileModal`**: When a backend server is running, this is used to open a file brower on the server side.
 
 ### Current Task
 Understanding this architecture, I would like to do the following:
