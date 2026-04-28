@@ -100,6 +100,48 @@ async def serve_local_file(path: str):
     return FileResponse(path)
 
 
+@app.get("/api/fs/list")
+def list_directory(path: str = "."):
+    """Returns the contents of a directory on the server."""
+    abs_path = os.path.abspath(path)
+    if not os.path.exists(abs_path):
+        raise HTTPException(status_code=404, detail="Directory not found")
+
+    EXTENSIONS = ['.fits', '.fit', '.arf', '.rmf', '.rsp', '.pha']
+    EXTENSIONS = {f'{ex}{extra}' for ex in EXTENSIONS for extra in ['', '.gz']}
+
+    items = []
+    try:
+        # Add a "Go Up" option if not at the root
+        parent_dir = os.path.dirname(abs_path)
+        if parent_dir != abs_path:
+            items.append({"name": "..", "path": parent_dir, "is_dir": True})
+
+        for entry in os.scandir(abs_path):
+            # Optional: Hide hidden files
+            if entry.name.startswith('.') and entry.name != '..':
+                continue
+
+            is_dir = entry.is_dir()
+            # If it's a file, only show FITS files
+            # (optional, customize as needed)
+            if not is_dir and not entry.name.lower().endswith(
+                    EXTENSIONS):
+                continue
+
+            items.append({
+                "name": entry.name,
+                "path": entry.path,
+                "is_dir": is_dir
+            })
+
+        # Sort: Directories first, then alphabetically
+        items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
+        return {"current_path": abs_path, "items": items}
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+
 @app.get("/api/health")
 def health_check():
     return {"status": 'OK'}
