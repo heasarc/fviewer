@@ -5,8 +5,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
+# If running standalone, this defaults to "" (empty string)
+# If running in Jupyter, this becomes "/fviewer"
+root_path = os.getenv("FVIEWER_ROOT_PATH", "")
 
-app = FastAPI(title="FViewer API")
+app = FastAPI(title="FViewer API", root_path=root_path)
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 
@@ -108,7 +111,8 @@ def list_directory(path: str = "."):
         raise HTTPException(status_code=404, detail="Directory not found")
 
     EXTENSIONS = ['.fits', '.fit', '.arf', '.rmf', '.rsp', '.pha']
-    EXTENSIONS = {f'{ex}{extra}' for ex in EXTENSIONS for extra in ['', '.gz']}
+    EXTENSIONS = tuple(
+        f'{ex}{extra}' for ex in EXTENSIONS for extra in ['', '.gz'])
 
     items = []
     try:

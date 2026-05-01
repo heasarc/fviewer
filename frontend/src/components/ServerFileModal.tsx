@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import {getApiUrl} from '../hooks/useWebSocket';
 
 interface ServerFileModalProps {
     isOpen: boolean;
@@ -15,7 +16,7 @@ export function ServerFileModal({ isOpen, onClose, onFileSelect }: ServerFileMod
         if (!isOpen) return;
         
         setLoading(true);
-        fetch(`/api/fs/list?path=${encodeURIComponent(currentPath)}`)
+        fetch(getApiUrl(`/api/fs/list?path=${encodeURIComponent(currentPath)}`))
             .then(res => res.json())
             .then(data => {
                 if (data.items) {
