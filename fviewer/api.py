@@ -2,8 +2,13 @@ import requests
 
 
 class FViewer:
-    def __init__(self, host="127.0.0.1", port=8000, client_id=None):
-        self.base_url = f"http://{host}:{port}/api"
+    def __init__(self, host="127.0.0.1", port=8000, base_url=None, client_id=None):
+        # if base_url is given, use it, otherwise use host and port
+        # e.g. in remote jupyterlab, pass base_url directly
+        if base_url is not None:
+            self.base_url = base_url
+        else:
+            self.base_url = f"http://{host}:{port}/api"
         # If None, commands broadcast to all clients
         self.client_id = client_id
 

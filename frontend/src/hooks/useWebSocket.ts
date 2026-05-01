@@ -1,27 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 
-// Utility to build a robust WebSocket URL
-function getWebSocketUrl(clientId: string): string {
-  // 1. Check for an explicit override in the URL params
-  // e.g., https://fviewer.local/?ws_url=wss://remote-server.com/jupyter/proxy/8000/ws
-  const params = new URLSearchParams(window.location.search);
-  const wsOverride = params.get('ws_url');
-  
-  if (wsOverride) {
-    // Ensure no trailing slash before appending clientId
-    return `${wsOverride.replace(/\/$/, '')}/${clientId}`;
-  }
+// This will return "/" in standalone, or "/fviewer/" in JupyterLab
+export function getBasePath(): string {
+  let path = window.location.pathname;
+  return path.endsWith('/') ? path : path + '/';
+}
 
-  // 2. Fallback to current location (works if served directly by FastAPI)
+// FOR HTTP (API CALLS)
+export function getApiUrl(endpoint: string): string {
+  // endpoint should be passed WITHOUT a leading slash (e.g., 'api/fs/list')
+  return `${getBasePath()}${endpoint}`;
+}
+
+// 2. FOR WEBSOCKETS (Cleaned up)
+export function getWebSocketUrl(clientId: string): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.host;
-  let basePath = window.location.pathname;
   
-  if (!basePath.endsWith('/')) {
-    basePath += '/';
-  }
-  
-  return `${protocol}//${host}${basePath}ws/${clientId}`;
+  return `${protocol}//${host}${getBasePath()}ws/${clientId}`;
 }
 
 export function useWebSocket(onCommand: (command: any, sendReply: (msg: any) => void) => void) {

@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import type { Region } from '../components/FitsImage';
+import {getApiUrl} from './useWebSocket';
 
 export function useCommandHandler(
     processFile: (file: File) => void,
@@ -19,7 +20,7 @@ export function useCommandHandler(
     switch (command.action) {
       case 'load_file':
         try {
-          const response = await fetch(`/api/file?path=${encodeURIComponent(command.path)}`);
+          const response = await fetch(getApiUrl(`/api/file?path=${encodeURIComponent(command.path)}`));
           if (!response.ok) throw new Error("Failed to fetch file");
           
           const blob = await response.blob();

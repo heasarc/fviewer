@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useFits } from './hooks/useFits';
-import { useWebSocket } from './hooks/useWebSocket';
+import { useWebSocket, getApiUrl } from './hooks/useWebSocket';
 import { useCommandHandler } from './hooks/useCommandHandler';
 import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
@@ -113,7 +113,7 @@ function App() {
         try {
             setIsLoading(true);
             // Fetch the file from the server endpoint we built earlier!
-            const response = await fetch(`/api/file?path=${encodeURIComponent(serverPath)}`);
+            const response = await fetch(getApiUrl(`/api/file?path=${encodeURIComponent(serverPath)}`));
             if (!response.ok) throw new Error("Failed to fetch file");
             
             const blob = await response.blob();
