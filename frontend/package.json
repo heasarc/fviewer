@@ -1,11 +1,11 @@
 {
   "name": "fviewer",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "python sync-version.py && vite",
+    "build": "python sync-version.py && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
