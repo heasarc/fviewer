@@ -1,3 +1,4 @@
+import os
 import requests
 
 
@@ -9,12 +10,17 @@ class FViewer:
             self.base_url = base_url
         else:
             self.base_url = f"http://{host}:{port}/api"
+        self.headers = {}
+        token = os.environ.get('JUPYTERHUB_API_TOKEN', None)
+        if token is not None:
+            self.headers['Authorization'] = "token {token}"
         # If None, commands broadcast to all clients
         self.client_id = client_id
 
     def get_clients(self):
         """List all connected frontend client IDs."""
-        response = requests.get(f"{self.base_url}/clients")
+        response = requests.get(
+            f"{self.base_url}/clients", headers=self.headers)
         response.raise_for_status()
         return response.json()["clients"]
 
@@ -35,7 +41,8 @@ class FViewer:
 
         # 3. Send the request
         response = requests.post(
-            f"{self.base_url}/command", json=payload, params=params)
+            f"{self.base_url}/command", json=payload,
+            params=params, headers=self.headers)
 
         # 4. Handle errors securely
         if response.status_code == 400:
