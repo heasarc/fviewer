@@ -122,7 +122,7 @@ function App() {
         try {
             setIsLoading(true);
             // Fetch the file from the server endpoint we built earlier!
-            const response = await fetch(getApiUrl(`/api/file?path=${encodeURIComponent(serverPath)}`));
+            const response = await fetch(getApiUrl(`api/file?path=${encodeURIComponent(serverPath)}`));
             if (!response.ok) throw new Error("Failed to fetch file");
             
             const blob = await response.blob();
