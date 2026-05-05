@@ -25,8 +25,15 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
 
     const [editingCell, setEditingCell] = useState<{ row: number, colName: string } | null>(null);
     const [editValue, setEditValue] = useState<string>('');
+
     // for tracking chuck requests and preventing spamming the worker
     const requestedChunks = useRef<Set<string>>(new Set());
+
+    // --- Column Resizing State ---
+    const [colWidths, setColWidths] = useState<Record<number, number>>({});
+    const [resizingCol, setResizingCol] = useState<{ idx: number, startX: number, startWidth: number } | null>(null);
+    const defaultColWidth = 120;
+    const getColWidth = (idx: number) => colWidths[idx] || defaultColWidth;
 
     // --- Dynamic Height Measurement ---
     useEffect(() => {
@@ -44,9 +51,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
     const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - 4);
     const endIndex = Math.min(numRows - 1, startIndex + visibleRowCount);
 
-    const colWidth = 120; 
     const rowNumWidth = 60;
-    const totalWidth = rowNumWidth + (columns.length * colWidth);
+    const totalWidth = rowNumWidth + columns.reduce((sum, _, idx) => sum + getColWidth(idx), 0);
 
     // --- Lazy Load Trigger ---
     useEffect(() => {
@@ -94,6 +100,32 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
             setEditingCell(null);
         }
     };
+
+    // --- Resizer Event Listeners ---
+    useEffect(() => {
+        if (!resizingCol) return;
+
+        const handlePointerMove = (e: PointerEvent) => {
+            const diff = e.clientX - resizingCol.startX;
+            // Constrain minimum column width to 50px
+            const newWidth = Math.max(50, resizingCol.startWidth + diff);
+            
+            setColWidths(prev => ({
+                ...prev,
+                [resizingCol.idx]: newWidth
+            }));
+        };
+
+        const handlePointerUp = () => setResizingCol(null);
+
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', handlePointerUp);
+
+        return () => {
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+        };
+    }, [resizingCol]);
 
     // --- Render Visible Rows ---
     const visibleRows = useMemo(() => {
@@ -143,7 +175,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                                 key={colIdx} role="cell"
                                 className="d-flex align-items-center px-2 border-end flex-shrink-0"
                                 style={{ 
-                                    width: colWidth, 
+                                    width: getColWidth(colIdx),
                                     borderColor: 'rgba(255,255,255,0.05)', 
                                     cursor: (isArray || isMissing) ? 'default' : 'cell',
                                     color: (val === null || isMissing) ? '#666' : 'inherit'
@@ -201,11 +233,39 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                     {columns.map((col, idx) => (
                         <div 
                             key={idx} 
-                            className="d-flex flex-column justify-content-center px-2 text-truncate border-end flex-shrink-0" 
-                            style={{ width: colWidth, borderColor: 'rgba(255,255,255,0.05)' }}
+                            // Added 'position-relative' so the resizer handle can lock to the right edge
+                            className="position-relative d-flex flex-column justify-content-center px-2 text-truncate border-end flex-shrink-0" 
+                            style={{ width: getColWidth(idx), borderColor: 'rgba(255,255,255,0.05)' }}
                         >
                             <span style={{ fontSize: '0.8rem', color: 'var(--fv-accent)' }}>{col.name}</span>
                             <span style={{ fontSize: '0.65rem', color: 'var(--bs-gray-600)' }}>{col.unit || col.form}</span>
+                            
+                            {/* NEW: Invisible Drag Handle */}
+                            <div 
+                                style={{
+                                    position: 'absolute',
+                                    right: -2, // Pull slightly over the border line
+                                    top: 0,
+                                    bottom: 0,
+                                    width: '5px',
+                                    cursor: 'col-resize',
+                                    zIndex: 10,
+                                    // Highlight if THIS specific column is currently being dragged
+                                    backgroundColor: resizingCol?.idx === idx ? 'var(--fv-accent)' : 'transparent',
+                                    transition: 'background-color 0.2s'
+                                }}
+                                onPointerDown={(e) => {
+                                    e.preventDefault(); // Prevent text highlighting while dragging
+                                    e.stopPropagation();
+                                    setResizingCol({ idx, startX: e.clientX, startWidth: getColWidth(idx) });
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--fv-panel-hover)'}
+                                onMouseLeave={(e) => {
+                                    if (resizingCol?.idx !== idx) {
+                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                    }
+                                }}
+                            />
                         </div>
                     ))}
                 </div>
