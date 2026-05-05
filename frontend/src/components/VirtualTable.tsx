@@ -1,3 +1,5 @@
+// # Copyright 2026, University of Maryland, All Rights Reserved
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import type {UIEvent} from 'react';
 

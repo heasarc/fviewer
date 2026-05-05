@@ -15,6 +15,7 @@ dependencies = [
     "uvicorn>=0.23.0",
     "websockets>=11.0",
 ]
+license = { file = "LICENSE" }
 
 authors = [
     { name = "Abdu Zoghbi", email = "a.zoghbi@nasa.gov" },
@@ -42,6 +43,8 @@ packages = ["fviewer"]
 include = [
     "/fviewer",
     "/fviewer/static",
+    "LICENSE",
+    "3rd-party-licenses"
 ]
 exclude = [
     "/.git",

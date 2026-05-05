@@ -1,3 +1,5 @@
+// # Copyright 2026, University of Maryland, All Rights Reserved
+
 // Generates a 256-value RGB Lookup Table (LUT)
 export function getColormapLUT(name: string): Uint8Array {
     const lut = new Uint8Array(256 * 3);

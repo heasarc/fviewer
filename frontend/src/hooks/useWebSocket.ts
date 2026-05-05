@@ -1,3 +1,4 @@
+// # Copyright 2026, University of Maryland, All Rights Reserved
 import { useEffect, useRef, useState } from 'react';
 
 // This will return "/" in standalone, or "/fviewer/" in JupyterLab

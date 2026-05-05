@@ -1,6 +1,7 @@
+# Copyright 2026, University of Maryland, All Rights Reserved
+
 import os
 import requests
-
 
 class FViewer:
     def __init__(self, host="127.0.0.1", port=8000, base_url=None, client_id=None):

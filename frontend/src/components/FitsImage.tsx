@@ -1,3 +1,5 @@
+// # Copyright 2026, University of Maryland, All Rights Reserved
+
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { applyStretch } from '../utils/stretches';
 import { getColormapLUT } from '../utils/colormaps';

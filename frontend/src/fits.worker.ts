@@ -1,3 +1,5 @@
+// Copyright 2026, University of Maryland, All Rights Reserved
+
 import { FitsFile } from 'wasm-cfitsio'; 
 
 // Store the active file in the worker's memory
