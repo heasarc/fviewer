@@ -7,6 +7,8 @@ interface VirtualTableProps {
     dataMap: Record<string, any[]>;
     rowHeight?: number;
     onCellEdit?: (colName: string, colNum: number, rowIndex: number, newValue: string) => void;
+    // NEW: Callback to request missing rows from the Worker
+    onFetchData?: (startRow: number, endRow: number) => void;
 }
 
 export const VirtualTable: React.FC<VirtualTableProps> = ({
@@ -14,7 +16,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
     columns,
     dataMap,
     rowHeight = 32,
-    onCellEdit
+    onCellEdit,
+    onFetchData
 }) => {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [scrollTop, setScrollTop] = useState(0);
@@ -22,6 +25,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
 
     const [editingCell, setEditingCell] = useState<{ row: number, colName: string } | null>(null);
     const [editValue, setEditValue] = useState<string>('');
+    // for tracking chuck requests and preventing spamming the worker
+    const requestedChunks = useRef<Set<string>>(new Set());
 
     // --- Dynamic Height Measurement ---
     useEffect(() => {
@@ -42,6 +47,37 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
     const colWidth = 120; 
     const rowNumWidth = 60;
     const totalWidth = rowNumWidth + (columns.length * colWidth);
+
+    // --- Lazy Load Trigger ---
+    useEffect(() => {
+        if (!onFetchData || columns.length === 0) return;
+
+        const fetchStart = Math.max(0, startIndex - 50);
+        const fetchEnd = Math.min(numRows - 1, endIndex + 50);
+
+        const testCol = columns[0].name; 
+        let needsFetch = false;
+        
+        for (let i = fetchStart; i <= fetchEnd; i++) {
+            if (dataMap[testCol]?.[i] === undefined) {
+                needsFetch = true;
+                break;
+            }
+        }
+
+        // Create a unique key for this chunk
+        const chunkKey = `${fetchStart}-${fetchEnd}`;
+
+        // Only fetch if we need to AND we haven't already asked for this exact chunk
+        if (needsFetch && !requestedChunks.current.has(chunkKey)) {
+            requestedChunks.current.add(chunkKey); // Mark as requested
+
+            const timer = setTimeout(() => {
+                onFetchData(fetchStart, fetchEnd);
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [startIndex, endIndex, columns, dataMap, numRows, onFetchData]);
 
     // --- Handlers ---
     const handleDoubleClick = (row: number, colName: string, currentValue: any) => {
@@ -67,19 +103,17 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                 <div 
                     key={i} 
                     role="row"
-                    // Bootstrap positioning, flex, and border utilities
                     className="d-flex position-absolute start-0 border-bottom"
                     style={{ 
                         top: i * rowHeight, width: totalWidth, height: rowHeight,
                         backgroundColor: i % 2 === 0 ? 'var(--fv-bg)' : 'var(--fv-panel)',
-                        borderColor: 'rgba(255,255,255,0.05)', // Faint divider for rows
+                        borderColor: 'rgba(255,255,255,0.05)',
                         fontSize: '0.85rem'
                     }}
                 >
                     {/* Sticky Row Number */}
                     <div 
                         role="cell" 
-                        // Bootstrap flex alignment, padding, and borders
                         className="d-flex align-items-center justify-content-end px-2 fw-bold border-end flex-shrink-0" 
                         style={{ 
                             width: rowNumWidth, position: 'sticky', left: 0, zIndex: 2, 
@@ -92,28 +126,34 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                     {/* Data Cells */}
                     {columns.map((col, colIdx) => {
                         let val = dataMap[col.name]?.[i];
-                        const isArray = val?.length !== undefined && typeof val !== 'string';
-                        const displayVal = isArray ? `[Array ${val.length}]` : String(val ?? '...');
+                        
+                        // NEW: Handle loading state gracefully
+                        const isMissing = val === undefined;
+                        const isArray = !isMissing && val?.length !== undefined && typeof val !== 'string';
+                        
+                        let displayVal = '...'; // Default loading string
+                        if (!isMissing) {
+                            displayVal = isArray ? `[Array ${val.length}]` : String(val ?? '');
+                        }
+
                         const isEditing = editingCell?.row === i && editingCell?.colName === col.name;
 
                         return (
                             <div 
                                 key={colIdx} role="cell"
-                                // Bootstrap flex, padding, and border utilities
                                 className="d-flex align-items-center px-2 border-end flex-shrink-0"
                                 style={{ 
                                     width: colWidth, 
-                                    borderColor: 'rgba(255,255,255,0.05)', // Faint divider for cols
-                                    cursor: isArray ? 'default' : 'cell',
-                                    color: val === null ? '#666' : 'inherit'
+                                    borderColor: 'rgba(255,255,255,0.05)', 
+                                    cursor: (isArray || isMissing) ? 'default' : 'cell',
+                                    color: (val === null || isMissing) ? '#666' : 'inherit'
                                 }}
-                                onDoubleClick={() => handleDoubleClick(i, col.name, val)}
+                                onDoubleClick={() => !isMissing && handleDoubleClick(i, col.name, val)}
                                 title={isEditing ? '' : displayVal}
                             >
                                 {isEditing ? (
                                     <input 
                                         type="text"
-                                        // Bootstrap form classes to fill the cell entirely
                                         className="form-control form-control-sm w-100 h-100 border-0 rounded-0 fw-bold"
                                         style={{ backgroundColor: 'var(--fv-accent)', color: '#000' }}
                                         value={editValue}
@@ -123,8 +163,9 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                                         autoFocus
                                     />
                                 ) : (
-                                    // Bootstrap typography utilities!
-                                    <span className="text-truncate w-100 text-end font-monospace" style={{fontSize: '0.75rem'}}>{displayVal}</span>
+                                    <span className="text-truncate w-100 text-end font-monospace" style={{fontSize: '0.75rem'}}>
+                                        {displayVal}
+                                    </span>
                                 )}
                             </div>
                         );
@@ -139,14 +180,12 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
         <div className="w-100 h-100">
             <div 
                 ref={scrollContainerRef}
-                // Bootstrap full size and overflow utilities
                 className="w-100 h-100 overflow-auto position-relative"
                 onScroll={(e: UIEvent<HTMLDivElement>) => setScrollTop(e.currentTarget.scrollTop)} 
                 style={{ backgroundColor: 'var(--fv-bg)' }}
             >
                 {/* Sticky Header */}
                 <div 
-                    // Bootstrap flex, shadow, and sticky positioning
                     className="d-flex fw-bold shadow-sm position-sticky top-0 border-bottom" 
                     style={{ 
                         width: totalWidth, height: '40px', zIndex: 3, 
@@ -162,7 +201,6 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                     {columns.map((col, idx) => (
                         <div 
                             key={idx} 
-                            // Bootstrap vertical flex layout and truncation
                             className="d-flex flex-column justify-content-center px-2 text-truncate border-end flex-shrink-0" 
                             style={{ width: colWidth, borderColor: 'rgba(255,255,255,0.05)' }}
                         >

@@ -12,11 +12,18 @@ interface FitsPlotProps {
     title?: string;
     plotType?: 'scatter' | 'histogram';
     numBins?: number;
+    pointSize?: number;
+    pointColor?: string;
+    subsetMode?: 'all' | 'range' | 'random';
+    subsetRange?: [number, number];
+    subsetRandomN?: number;
 }
 
 export const FitsPlot: React.FC<FitsPlotProps> = ({ 
     xData, yData, xErrData, yErrData, xLabel, yLabel, title, 
-    plotType = 'scatter', numBins = 50 
+    plotType = 'scatter', numBins = 50,
+    pointSize, pointColor,
+    subsetMode = 'all', subsetRange = [0, 10000], subsetRandomN = 10000
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const plotRef = useRef<uPlot | null>(null);
@@ -84,18 +91,89 @@ export const FitsPlot: React.FC<FitsPlotProps> = ({
             return null; 
         };
 
+        // --- CUSTOM UPLOT HIGH-PERFORMANCE SCATTER BUILDER ---
+        const scatterPathBuilder = (u: uPlot, seriesIdx: number, idx0: number, idx1: number) => {
+            uPlot.orient(u, seriesIdx, (_series, dataX, dataY, scaleX, scaleY, valToPosX, valToPosY, xOff, yOff, xDim, yDim) => {
+                const ctx = u.ctx;
+                ctx.fillStyle = pointColor as string; 
+                ctx.beginPath();
+                
+                // Use the user's size, or fallback to the massive dataset optimization
+                const size = pointSize || (isMassive ? 1 : 2);
+                const offset = Math.floor(size / 2);
+
+                for (let i = idx0; i <= idx1; i++) {
+                    const xVal = dataX[i];
+                    const yVal = dataY[i];
+                    if (xVal == null || yVal == null) continue;
+                    
+                    const cx = Math.round(valToPosX(xVal, scaleX, xDim, xOff));
+                    const cy = Math.round(valToPosY(yVal, scaleY, yDim, yOff));
+                    
+                    ctx.fillRect(cx - offset, cy - offset, size, size); 
+                }
+            });
+            return null; 
+        };
+
         // --- MATH & DATA PREPARATION ---
-        if (plotType === 'histogram') {
-            let min = Infinity; let max = -Infinity;
-            const valid = [];
-            for (let i = 0; i < xData.length; i++) {
-                const v = Number(xData[i]);
-                if (!isNaN(v)) {
-                    valid.push(v);
-                    if (v < min) min = v;
-                    if (v > max) max = v;
+        const len = xData.length;
+        
+        // 1. Determine which indices fall into the allowed range safely
+        let startIndex = 0;
+        let endIndex = len - 1;
+
+        if (subsetMode === 'range') {
+            // Automatically swap start and end if the user enters them backwards
+            const actualStart = Math.min(subsetRange[0], subsetRange[1]);
+            const actualEnd = Math.max(subsetRange[0], subsetRange[1]);
+            
+            startIndex = Math.max(0, actualStart);
+            endIndex = Math.min(len - 1, actualEnd);
+        }
+
+        // Ensure we never pass a negative number to Uint32Array
+        const safeLength = Math.max(0, endIndex - startIndex + 1);
+        const indices = new Uint32Array(safeLength);
+        let validCount = 0;
+
+        for (let i = startIndex; i <= endIndex; i++) {
+            const xV = Number(xData[i]);
+            if (!isNaN(xV)) {
+                if (plotType === 'histogram') {
+                    indices[validCount++] = i;
+                } else if (yData && yData[i] != null && !isNaN(Number(yData[i]))) {
+                    indices[validCount++] = i;
                 }
             }
+        }
+
+        let validIndices = indices.subarray(0, validCount);
+
+        // 2. Apply Random Sampling (Fisher-Yates / Reservoir algorithm)
+        if (subsetMode === 'random' && validCount > subsetRandomN) {
+            for (let i = 0; i < subsetRandomN; i++) {
+                const j = i + Math.floor(Math.random() * (validCount - i));
+                const temp = validIndices[i];
+                validIndices[i] = validIndices[j];
+                validIndices[j] = temp;
+            }
+            validIndices = validIndices.subarray(0, subsetRandomN);
+            validCount = subsetRandomN;
+        }
+
+        // 3. Build the final arrays
+        if (plotType === 'histogram') {
+            let min = Infinity; let max = -Infinity;
+            const valid = new Array(validCount);
+            
+            for (let i = 0; i < validCount; i++) {
+                const v = Number(xData[validIndices[i]]);
+                valid[i] = v;
+                if (v < min) min = v;
+                if (v > max) max = v;
+            }
+            
             if (valid.length > 0) {
                 if (min === max) { min -= 1; max += 1; }
                 const binWidth = (max - min) / numBins;
@@ -115,22 +193,21 @@ export const FitsPlot: React.FC<FitsPlotProps> = ({
         } 
         else {
             if (!yData) return;
-            const paired = [];
-            for (let i = 0; i < xData.length; i++) {
-                if (xData[i] != null && yData[i] != null) {
-                    paired.push([
-                        Number(xData[i]), 
-                        Number(yData[i]), 
-                        hasYErr ? Number(yErrData![i]) : 0, 
-                        hasXErr ? Number(xErrData![i]) : 0
-                    ]);
-                }
+            // Sort by X for proper rendering
+            validIndices.sort((a, b) => Number(xData[a]) - Number(xData[b]));
+
+            finalX = new Array(validCount);
+            finalY = new Array(validCount);
+            if (hasYErr) finalYErr = new Array(validCount);
+            if (hasXErr) finalXErr = new Array(validCount);
+
+            for (let i = 0; i < validCount; i++) {
+                const idx = validIndices[i];
+                finalX[i] = Number(xData[idx]);
+                finalY[i] = Number(yData[idx]);
+                if (hasYErr) finalYErr![i] = Number(yErrData![idx]);
+                if (hasXErr) finalXErr![i] = Number(xErrData![idx]);
             }
-            paired.sort((a, b) => a[0] - b[0]);
-            finalX = paired.map(p => p[0]);
-            finalY = paired.map(p => p[1]);
-            if (hasYErr) finalYErr = paired.map(p => p[2]);
-            if (hasXErr) finalXErr = paired.map(p => p[3]);
         }
 
         if (finalX.length === 0) return;
@@ -138,16 +215,25 @@ export const FitsPlot: React.FC<FitsPlotProps> = ({
         // --- DARK THEME STYLING ---
         const textColor = '#c8cfe8'; 
         const gridColor = '#3a3f60'; 
-        const accentColor = '#7ec8e3'; 
+
+        const isMassive = finalX.length > 10000;
 
         const axisConfig: uPlot.Axis = { stroke: textColor, grid: { show: true, stroke: gridColor, width: 1 }, ticks: { show: true, stroke: gridColor, width: 1 } };
 
         const seriesList: uPlot.Series[] = [
             {}, // X-axis
             {
-                label: actualYLabel, stroke: accentColor, fill: 'rgba(126, 200, 227, 0.15)',
-                paths: plotType === 'histogram' ? uPlot.paths.stepped!({ align: 1 }) : (hasYErr || hasXErr ? errorBarBuilder : () => null),
-                points: { show: plotType === 'scatter', size: 4, fill: accentColor, stroke: accentColor }
+                label: actualYLabel, 
+                stroke: pointColor, 
+                fill: 'rgba(126, 200, 227, 0.15)',
+                // Use our custom builders for scatter, or uPlot's built-in stepped path for histograms
+                paths: plotType === 'histogram' 
+                    ? uPlot.paths.stepped!({ align: 1 }) 
+                    : (hasYErr || hasXErr ? errorBarBuilder : scatterPathBuilder),
+                
+                // Disable uPlot's default point rendering entirely, 
+                // because our custom path builders draw the points much faster!
+                points: { show: false } 
             }
         ];
 
@@ -179,7 +265,10 @@ export const FitsPlot: React.FC<FitsPlotProps> = ({
             window.removeEventListener('resize', handleResize);
             plotRef.current?.destroy(); plotRef.current = null;
         };
-    }, [xData, yData, xErrData, yErrData, xLabel, yLabel, title, plotType, numBins]);
+    }, [
+        xData, yData, xErrData, yErrData, xLabel, yLabel, title, plotType, numBins,
+        pointSize, pointColor, subsetMode, subsetRange[0], subsetRange[1], subsetRandomN
+    ]);
 
     return <div className="w-100 h-100 d-flex justify-content-center align-items-center" ref={containerRef} />;
 };

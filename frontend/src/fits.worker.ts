@@ -1,7 +1,33 @@
-import { FitsFile } from 'wasm-cfitsio'; // Adjust import path as needed
+import { FitsFile } from 'wasm-cfitsio'; 
 
 // Store the active file in the worker's memory
 let activeFile: FitsFile | null = null;
+
+// Cache columns in the worker so we don't repeatedly ask WASM for the whole file
+let tableCache: Record<number, any> = {};
+
+// Helper function to safely read and isolate WASM memory
+function getCachedColumn(colNum: number) {
+    if (!tableCache[colNum]) {
+        const rawResult = activeFile!.readColumn(colNum);
+        
+        let safeData;
+        // TypeScript Fix: Use ArrayBuffer.isView to safely check for TypedArrays
+        if (rawResult && rawResult.data && ArrayBuffer.isView(rawResult.data)) {
+            // Cast to any to bypass TS complaints, slice to isolate memory
+            safeData = (rawResult.data as any).slice(); 
+        } else {
+            // It's a standard JS Array (e.g., TSTRING column)
+            safeData = rawResult ? rawResult.data : [];
+        }
+
+        tableCache[colNum] = {
+            ...rawResult,
+            data: safeData
+        };
+    }
+    return tableCache[colNum];
+}
 
 // Listen for messages from the main React thread
 self.onmessage = async (e: MessageEvent) => {
@@ -13,7 +39,7 @@ self.onmessage = async (e: MessageEvent) => {
                 // payload is the raw Uint8Array from the file input
                 if (activeFile) activeFile.close(); // Clean up old file
                 activeFile = await FitsFile.open(payload);
-                
+                tableCache = {}; 
                 const numHDUs = activeFile.getNumHDUs();
                 
                 self.postMessage({ id, success: true, data: { numHDUs } });
@@ -100,13 +126,54 @@ self.onmessage = async (e: MessageEvent) => {
                 break;
             }
 
+            // --- FULL COLUMN (FOR PLOTTER) ---
             case 'READ_COLUMN': {
                 if (!activeFile) throw new Error("No file opened");
-                // payload.colNum is 1-indexed
-                const colData = activeFile.readColumn(payload.colNum);
                 
-                // Transfer the TypedArray to the main thread efficiently
-                self.postMessage({ id, success: true, data: colData });
+                const cached = getCachedColumn(payload.colNum);
+                const transferables: ArrayBuffer[] = [];
+                let sendData = { ...cached };
+                
+                if (cached.data.buffer) {
+                    // Clone our safe cache so we don't lose it when transferring
+                    const transferClone = cached.data.slice();
+                    transferables.push(transferClone.buffer);
+                    sendData.data = transferClone;
+                }
+
+                (self as any).postMessage({ id, success: true, data: sendData }, transferables);
+                break;
+            }
+
+            // --- CHUNKED ROWS (FOR VIRTUAL TABLE) ---
+            case 'READ_TABLE_CHUNK': {
+                if (!activeFile) throw new Error("No file opened");
+                const { startRow, endRow } = payload;
+                const numCols = activeFile.getNumCols();
+                
+                const chunkData: Record<string, any> = {};
+                const transferables: ArrayBuffer[] = [];
+
+                for (let i = 1; i <= numCols; i++) {
+                    const colInfo = activeFile.getColumnInfo(i);
+                    if (!colInfo) continue;
+                    
+                    const cached = getCachedColumn(i);
+
+                    if (cached.data.buffer) {
+                        // Slice creates a new ArrayBuffer representing just the chunk
+                        const chunk = cached.data.slice(startRow, endRow + 1);
+                        chunkData[colInfo.name] = chunk;
+                        transferables.push(chunk.buffer);
+                    } else if (Array.isArray(cached.data)) {
+                        // Standard JS array chunking (Strings)
+                        chunkData[colInfo.name] = cached.data.slice(startRow, endRow + 1);
+                    } else {
+                        chunkData[colInfo.name] = new Array((endRow - startRow) + 1).fill('Unsupported');
+                    }
+                }
+
+                (self as any).postMessage({ id, success: true, data: chunkData }, transferables);
                 break;
             }
 
@@ -138,16 +205,17 @@ self.onmessage = async (e: MessageEvent) => {
                 const imageResult = activeFile.readImage();
                 if (!imageResult) throw new Error("Current HDU is not an image");
                 
-                // Read dimensions from the FITS header
                 const width = parseInt(activeFile.readKeyword("NAXIS1") || "0", 10);
                 const height = parseInt(activeFile.readKeyword("NAXIS2") || "0", 10);
 
-                // Send the dimensions along with the pixel data
-                self.postMessage({ 
+                const transferables = imageResult.data?.buffer ? [imageResult.data.buffer] : [];
+
+                // Fix: Cast self to any here as well
+                (self as any).postMessage({ 
                     id, 
                     success: true, 
                     data: { ...imageResult, width, height } 
-                });
+                }, transferables);
                 break;
             }
 
