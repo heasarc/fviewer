@@ -384,8 +384,10 @@ function App() {
     const handleSaveRegions = () => {
         if (regions.length === 0) return alert("No regions to save.");
         
-        let fileContent = "# Region file format: DS9-style (fviewer)\n";
-        fileContent += "global color=#00ff00\n";
+        // Standard DS9 headers
+        let fileContent = "# Region file format: DS9 version 4.1\n";
+        fileContent += "global color=green dashlist=8 3 width=1 font=\"helvetica 10 normal roman\" select=1 highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 include=1 source=1\n";
+        fileContent += "image\n"; // Explicitly declare image/pixel coordinate space
         
         regions.forEach(r => {
             let line = "";
@@ -396,14 +398,14 @@ function App() {
                 h = Math.abs(r.endY - r.startY);
                 cx = (r.startX + r.endX) / 2;
                 cy = (r.startY + r.endY) / 2;
-                line = `box(${cx.toFixed(2)},${cy.toFixed(2)},${w.toFixed(2)},${h.toFixed(2)},${r.angle || 0})`;
+                line = `box(${cx.toFixed(3)},${cy.toFixed(3)},${w.toFixed(3)},${h.toFixed(3)},${(r.angle || 0).toFixed(3)})`;
             } 
             else if (r.type === 'ellipse') {
                 w = Math.abs(r.endX - r.startX); // rx
                 h = Math.abs(r.endY - r.startY); // ry
                 cx = r.startX;
                 cy = r.startY;
-                line = `ellipse(${cx.toFixed(2)},${cy.toFixed(2)},${w.toFixed(2)},${h.toFixed(2)},${r.angle || 0})`;
+                line = `ellipse(${cx.toFixed(3)},${cy.toFixed(3)},${w.toFixed(3)},${h.toFixed(3)},${(r.angle || 0).toFixed(3)})`;
             } 
             else { 
                 // Circle and Annulus
@@ -411,18 +413,21 @@ function App() {
                 cx = r.startX;
                 cy = r.startY;
                 if (r.type === 'annulus') {
-                    line = `annulus(${cx.toFixed(2)},${cy.toFixed(2)},${r.innerR?.toFixed(2) || (radius/2).toFixed(2)},${radius.toFixed(2)})`;
+                    const inner = r.innerR ?? (radius / 2);
+                    line = `annulus(${cx.toFixed(3)},${cy.toFixed(3)},${inner.toFixed(3)},${radius.toFixed(3)})`;
                 } else {
-                    line = `circle(${cx.toFixed(2)},${cy.toFixed(2)},${radius.toFixed(2)})`;
+                    line = `circle(${cx.toFixed(3)},${cy.toFixed(3)},${radius.toFixed(3)})`;
                 }
             }
+            
+            // Append properties correctly
             fileContent += `${line} # color=${r.color}\n`;
         });
 
         const blob = new Blob([fileContent], { type: 'text/plain' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `${fileName.replace('.fits', '')}.reg`;
+        a.download = `${fileName ? fileName.replace(/\.fits$/i, '') : 'fviewer'}.reg`;
         a.click();
         URL.revokeObjectURL(a.href);
     };
@@ -439,28 +444,33 @@ function App() {
             
             lines.forEach((line, i) => {
                 line = line.trim();
-                if (!line || line.startsWith('#') || line.startsWith('global')) return;
+                
+                // Ignore comments and coordinate system declarations (assuming 'image' for now)
+                if (!line || line.startsWith('#') || line.startsWith('global') || /^[a-z0-9]+$/i.test(line)) return;
 
+                // Match properties like color (DS9 default is green if unspecified)
                 let color = '#00ff00';
                 const colorMatch = line.match(/color=([a-zA-Z0-9#]+)/);
                 if (colorMatch) color = colorMatch[1];
 
-                const typeMatch = line.match(/^(circle|box|ellipse|annulus)\(([^)]+)\)/);
+                // Resilient regex: handles optional prefixes like "image;circle(...)" and whitespace
+                const typeMatch = line.match(/(?:[a-z0-9]+;)?\s*(circle|box|ellipse|annulus)\s*\(([^)]+)\)/i);
                 if (!typeMatch) return;
 
-                const type = typeMatch[1] as 'circle'|'box'|'ellipse'|'annulus';
-                const args = typeMatch[2].split(',').map(Number);
+                const type = typeMatch[1].toLowerCase() as 'circle'|'box'|'ellipse'|'annulus';
+                const args = typeMatch[2].split(',').map(s => Number(s.trim()));
                 
                 try {
                     let r: Region = { 
-                        id: `loaded_${Date.now()}_${i}`, type, 
+                        id: `loaded_${Date.now()}_${i}`, 
+                        type, 
                         startX: 0, startY: 0, endX: 0, endY: 0, 
                         color, angle: 0 
                     };
                     
                     if (type === 'circle') {
                         r.startX = args[0]; r.startY = args[1];
-                        r.endX = args[0] + args[2]; r.endY = args[1]; // Add radius to X to fake the end coordinate
+                        r.endX = args[0] + args[2]; r.endY = args[1]; // Fake end coords using radius
                     } else if (type === 'box') {
                         const cx = args[0], cy = args[1], w = args[2], h = args[3];
                         r.startX = cx - w/2; r.startY = cy - h/2;
@@ -474,7 +484,7 @@ function App() {
                     } else if (type === 'annulus') {
                         r.startX = args[0]; r.startY = args[1];
                         r.innerR = args[2];
-                        r.endX = args[0] + args[3]; r.endY = args[1]; // outer radius
+                        r.endX = args[0] + args[3]; r.endY = args[1]; // Set outer radius to fake end coords
                     }
                     loadedRegions.push(r);
                 } catch (err) {
