@@ -36,6 +36,7 @@ export interface Region {
     color: string;
     angle?: number;
     innerR?: number;
+    isBackground?: boolean;
 }
 
 export const FitsImage: React.FC<FitsImageProps> = ({ 
@@ -413,7 +414,10 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                     style: {
                         stroke: isHovered && drawMode === 'pan' && !isDraft ? '#fff' : r.color, 
                         strokeWidth: (isHovered && drawMode === 'pan' && !isDraft ? 4 : 2) / currZoom, 
-                        fill: 'none', pointerEvents: 'none',
+                        // Add strokeDasharray here, scaled by currZoom to keep dashes looking consistent
+                        strokeDasharray: r.isBackground ? `${6 / currZoom}, ${6 / currZoom}` : 'none',
+                        fill: 'none', 
+                        pointerEvents: 'none',
                         transition: 'stroke 0.1s, stroke-width 0.1s'
                     }
                 })}
