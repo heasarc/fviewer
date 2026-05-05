@@ -1,3 +1,5 @@
+// # Copyright 2026, University of Maryland, All Rights Reserved
+
 import { useState, useEffect } from 'react';
 import {getApiUrl} from '../hooks/useWebSocket';
 

@@ -1,3 +1,4 @@
+// # Copyright 2026, University of Maryland, All Rights Reserved
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useFits } from './hooks/useFits';
 import { useWebSocket, getApiUrl } from './hooks/useWebSocket';

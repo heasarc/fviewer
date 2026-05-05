@@ -1,3 +1,5 @@
+// # Copyright 2026, University of Maryland, All Rights Reserved
+
 import { useEffect, useRef, useCallback } from 'react';
 
 // Vite specific import for web workers

@@ -1,3 +1,5 @@
+// # Copyright 2026, University of Maryland, All Rights Reserved
+
 import React, { useState, useMemo } from 'react';
 
 interface FitsHeaderModalProps {

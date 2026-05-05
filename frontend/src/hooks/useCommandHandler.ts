@@ -1,3 +1,5 @@
+// # Copyright 2026, University of Maryland, All Rights Reserved
+
 import { useCallback } from 'react';
 import type { Region } from '../components/FitsImage';
 import {getApiUrl} from './useWebSocket';

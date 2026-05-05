@@ -1,3 +1,5 @@
+// # Copyright 2026, University of Maryland, All Rights Reserved
+
 // Maps a normalized value [0.0 - 1.0] through a non-linear stretch function
 export function applyStretch(norm: number, stretch: string): number {
     // Clamp to [0, 1] to prevent math errors
