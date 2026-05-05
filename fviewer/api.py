@@ -15,7 +15,7 @@ class FViewer:
         self.headers = {}
         token = os.environ.get('JUPYTERHUB_API_TOKEN', None)
         if token is not None:
-            self.headers['Authorization'] = "token {token}"
+            self.headers['Authorization'] = f"token {token}"
         # If None, commands broadcast to all clients
         self.client_id = client_id
 
