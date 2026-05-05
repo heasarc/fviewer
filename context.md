@@ -26,7 +26,14 @@ We have successfully transitioned from a static client-side MVP to a hybrid Pyth
     - **Center Workspace:** Displays either `<FitsImage />` or `<VirtualTable />` depending on the selected HDU.
     - **Right Sidebar (Collapsible):** Contains a dynamic Plotter UI.
     - `App.tsx` holds lifted state (like `colormap`, `stretch`, `regions`) so both the UI components and the `useCommandHandler` can read/update them.
-2. **`FitsImage.tsx` (Image Viewer):**
+    - **State Management**: Manages two separate data pools to prevent UI freezing:
+        - tableData: Holds tiny 100-row chunks for the VirtualTable.
+        - fullPlotData: Holds full-length columns for the Plotter (fetched eagerly via Transferable Objects only when the plotter panel is open, tracked via fetchedPlotColumns ref to prevent request spam).
+2. ** Web Worker (`fits.worker.ts`):**
+    - Implements a JS `tableCache` to isolate data from the WASM heap (`typed_memory_view`).
+    - Uses `.slice()` to clone ArrayBuffers instantly, protecting against C++ memory corruption (`clearDataVectors()`).
+    - Exposes two endpoints: `READ_TABLE_CHUNK` (for VirtualTable) and `READ_COLUMN` (for Plotter). Both return data using zero-copy Transferable Objects for 0ms main-thread transfer.
+3. **`FitsImage.tsx` (Image Viewer):**
    * Renders FITS pixels to a bottom `<canvas>` using custom stretches (Linear, Log, Sqrt, ASINH) and procedural colormaps (Gray, Heat, Cool, Plasma).
    * Panning, zooming, flipping, and rotating are handled via hardware-accelerated CSS `transform` on the canvas wrapper.
    * **Regions:** An `<svg>` overlay sits on top of the image canvas. Users can draw, drag, resize, and rotate Circles, Boxes, Ellipses, and Annuli. Hit detection is handled natively by SVG `onPointerDown` events.
@@ -34,10 +41,15 @@ We have successfully transitioned from a static client-side MVP to a hybrid Pyth
    * Extracts pixels inside a drawn region and sends them to the Right Sidebar to instantly plot a 1D Histogram.
    * Regions can be saved/loaded to DS9-style `.reg` text files.
    * Renders FITS pixels to a bottom `<canvas>` using custom stretches and procedural colormaps.
-3. **`VirtualTable.tsx` (Table Viewer):** A custom, zero-dependency virtualized grid for 100,000+ row binary tables with double-click editing.
-4. **`FitsPlot.tsx`:** 2D Scatter Plots and 1D Histograms linked to drawn regions.
-5. **`FitsHeaderModal.tsx`:** Searchable FITS header card viewer/editor.
-6. **`ServerFileModal`**: When a backend server is running, this is used to open a file brower on the server side.
+4. **`VirtualTable.tsx` (Table Viewer):** 
+    - A custom, zero-dependency virtualized grid for 100,000+ row binary tables with double-click editing.
+    - Uses an Intersection-Observer style lazy-loading approach (onFetchData). As the user scrolls, it debounces requests to the worker for missing 100-row chunks, ensuring infinite scrolling uses minimal RAM.
+5. **`FitsPlot.tsx`:** 
+    - 2D Scatter Plots and 1D Histograms linked to drawn regions.
+    - Uses flat, typed index arrays (Uint32Array) for in-place sorting and preparation to avoid Garbage Collection crashes on massive datasets.
+    - Accepts pointSize, pointColor, and supports Data Subsetting (subsetMode: 'all', 'range', 'random'). Random subsetting uses Reservoir Sampling.
+6. **`FitsHeaderModal.tsx`:** Searchable FITS header card viewer/editor.
+7. **`ServerFileModal`**: When a backend server is running, this is used to open a file brower on the server side.
 
 ### Current Task
 Understanding this architecture, I would like to do the following:
