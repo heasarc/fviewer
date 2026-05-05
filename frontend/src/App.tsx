@@ -384,10 +384,9 @@ function App() {
     const handleSaveRegions = () => {
         if (regions.length === 0) return alert("No regions to save.");
         
-        // Standard DS9 headers
         let fileContent = "# Region file format: DS9 version 4.1\n";
         fileContent += "global color=green dashlist=8 3 width=1 font=\"helvetica 10 normal roman\" select=1 highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 include=1 source=1\n";
-        fileContent += "image\n"; // Explicitly declare image/pixel coordinate space
+        fileContent += "image\n"; 
         
         regions.forEach(r => {
             let line = "";
@@ -401,14 +400,13 @@ function App() {
                 line = `box(${cx.toFixed(3)},${cy.toFixed(3)},${w.toFixed(3)},${h.toFixed(3)},${(r.angle || 0).toFixed(3)})`;
             } 
             else if (r.type === 'ellipse') {
-                w = Math.abs(r.endX - r.startX); // rx
-                h = Math.abs(r.endY - r.startY); // ry
+                w = Math.abs(r.endX - r.startX); 
+                h = Math.abs(r.endY - r.startY); 
                 cx = r.startX;
                 cy = r.startY;
                 line = `ellipse(${cx.toFixed(3)},${cy.toFixed(3)},${w.toFixed(3)},${h.toFixed(3)},${(r.angle || 0).toFixed(3)})`;
             } 
             else { 
-                // Circle and Annulus
                 radius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
                 cx = r.startX;
                 cy = r.startY;
@@ -420,8 +418,11 @@ function App() {
                 }
             }
             
-            // Append properties correctly
-            fileContent += `${line} # color=${r.color}\n`;
+            // Append color and conditionally append background
+            let props = `color=${r.color}`;
+            if (r.isBackground) props += ` background`;
+            
+            fileContent += `${line} # ${props}\n`;
         });
 
         const blob = new Blob([fileContent], { type: 'text/plain' });
@@ -445,15 +446,15 @@ function App() {
             lines.forEach((line, i) => {
                 line = line.trim();
                 
-                // Ignore comments and coordinate system declarations (assuming 'image' for now)
                 if (!line || line.startsWith('#') || line.startsWith('global') || /^[a-z0-9]+$/i.test(line)) return;
 
-                // Match properties like color (DS9 default is green if unspecified)
                 let color = '#00ff00';
                 const colorMatch = line.match(/color=([a-zA-Z0-9#]+)/);
                 if (colorMatch) color = colorMatch[1];
 
-                // Resilient regex: handles optional prefixes like "image;circle(...)" and whitespace
+                // Check for the background flag anywhere after the # symbol
+                const isBackground = /#.*\bbackground\b/i.test(line);
+
                 const typeMatch = line.match(/(?:[a-z0-9]+;)?\s*(circle|box|ellipse|annulus)\s*\(([^)]+)\)/i);
                 if (!typeMatch) return;
 
@@ -465,12 +466,13 @@ function App() {
                         id: `loaded_${Date.now()}_${i}`, 
                         type, 
                         startX: 0, startY: 0, endX: 0, endY: 0, 
-                        color, angle: 0 
+                        color, angle: 0,
+                        isBackground // <-- Apply the flag
                     };
                     
                     if (type === 'circle') {
                         r.startX = args[0]; r.startY = args[1];
-                        r.endX = args[0] + args[2]; r.endY = args[1]; // Fake end coords using radius
+                        r.endX = args[0] + args[2]; r.endY = args[1];
                     } else if (type === 'box') {
                         const cx = args[0], cy = args[1], w = args[2], h = args[3];
                         r.startX = cx - w/2; r.startY = cy - h/2;
@@ -484,7 +486,7 @@ function App() {
                     } else if (type === 'annulus') {
                         r.startX = args[0]; r.startY = args[1];
                         r.innerR = args[2];
-                        r.endX = args[0] + args[3]; r.endY = args[1]; // Set outer radius to fake end coords
+                        r.endX = args[0] + args[3]; r.endY = args[1];
                     }
                     loadedRegions.push(r);
                 } catch (err) {
