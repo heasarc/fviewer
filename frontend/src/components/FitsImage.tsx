@@ -477,6 +477,8 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         );
     };
 
+    const selectedRegion = regions.find(r => r.id === selectedRegionId);
+
     return (
         <div className="d-flex flex-column w-100 h-100 border rounded overflow-hidden" style={{ borderColor: 'var(--fv-border)' }}>
             
@@ -519,6 +521,27 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                                 <button className="dropdown-item fv-dropdown-item" onClick={() => setDrawMode('annulus')}>
                                     <span style={{ width: '16px' }}>{drawMode === 'annulus' && <i className="bi bi-check2"></i>}</span>
                                     <i className="bi bi-bullseye"></i> Annulus
+                                </button>
+                            </li>
+
+                            {/* Region Properties */}
+                            <li><hr className="dropdown-divider border-secondary my-1" /></li>
+                            <li>
+                                <button 
+                                    className="dropdown-item fv-dropdown-item" 
+                                    onClick={() => {
+                                        if (selectedRegionId) {
+                                            setRegions(prev => prev.map(r => 
+                                                r.id === selectedRegionId ? { ...r, isBackground: !r.isBackground } : r
+                                            ));
+                                        }
+                                    }} 
+                                    disabled={!selectedRegionId}
+                                >
+                                    <span style={{ width: '16px' }}>
+                                        {selectedRegion?.isBackground && <i className="bi bi-check2"></i>}
+                                    </span>
+                                    <i className="bi bi-dash-circle-dotted"></i> Set as Background
                                 </button>
                             </li>
 

@@ -143,6 +143,26 @@ body {
   color: var(--fv-text-bright);
 }
 
+/* Style for disabled dropdown items in the custom dark theme */
+.fv-dropdown-item:disabled {
+    color: #6c757d !important; /* Muted gray text */
+    background-color: transparent !important;
+    opacity: 0.5;
+    cursor: default;
+    pointer-events: none;
+}
+
+/* Ensure the red (Danger) and yellow (Warning) text classes also get muted when disabled */
+.fv-dropdown-item.text-warning:disabled,
+.fv-dropdown-item.text-danger:disabled {
+    color: #6c757d !important; 
+}
+
+/* Dim the Bootstrap icons inside the disabled buttons */
+.fv-dropdown-item:disabled i {
+    opacity: 0.5;
+}
+
 .menubar-btn {
   color: var(--fv-text);
   border-radius: 0; /* Keep it flat to the menubar */
