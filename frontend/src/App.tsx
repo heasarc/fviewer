@@ -5,7 +5,8 @@ import { useWebSocket, getApiUrl } from './hooks/useWebSocket';
 import { useCommandHandler } from './hooks/useCommandHandler';
 import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
-import type { Region } from './components/FitsImage';
+import type { Region } from './utils/regionUtils';
+import { parseDS9Regions, serializeDS9Regions } from './utils/regionUtils';
 import { FitsPlot } from './components/FitsPlot';
 import { FitsHeaderModal } from './components/FitsHeaderModal';
 import { ServerFileModal } from './components/ServerFileModal';
@@ -385,68 +386,9 @@ function App() {
         if (regions.length === 0) return alert("No regions to save.");
         if (!imageData) return alert("No image data loaded.");
         
-        const { width, height } = imageData; // Extract from imageData!
-
-        let fileContent = "# Region file format: DS9 version 4.1\n";
-        fileContent += "global color=green dashlist=8 3 width=1 font=\"helvetica 10 normal roman\" select=1 highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 include=1 source=1\n";
-        fileContent += `${format}\n`; 
-
-        // Helper to estimate degrees-per-pixel dynamically if saving in fk5
-        let pixScale = 1;
-        if (format === 'fk5') {
-            const c1 = await pixToWorld(width / 2, height / 2);
-            const c2 = await pixToWorld((width / 2) + 1, height / 2);
-            console.log(c1, c2);
-            if (c1 && c2) {
-                // Approximate Euclidean distance in degrees for 1 pixel
-                pixScale = Math.hypot((c2.ra - c1.ra) * Math.cos(c1.dec * Math.PI / 180), c2.dec - c1.dec);
-            } else {
-                console.warn("WCS missing. Falling back to image coordinates.");
-                format = 'image';
-            }
-        }
-        
-        for (const r of regions) {
-            let line = "";
-            let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
-
-            if (r.type === 'box') {
-                w = Math.abs(r.endX - r.startX);
-                h = Math.abs(r.endY - r.startY);
-                cx = (r.startX + r.endX) / 2;
-                cy = (r.startY + r.endY) / 2;
-            } else if (r.type === 'ellipse') {
-                w = Math.abs(r.endX - r.startX) * 2; 
-                h = Math.abs(r.endY - r.startY) * 2; 
-                cx = r.startX; cy = r.startY;
-            } else { 
-                radius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
-                cx = r.startX; cy = r.startY;
-            }
-
-            // Convert center to RA/Dec if requested
-            let outCx = cx, outCy = cy;
-            if (format === 'fk5') {
-                const world = await pixToWorld(cx, cy);
-                if (world) { outCx = world.ra; outCy = world.dec; }
-                w *= pixScale; h *= pixScale; radius *= pixScale;
-            }
-
-            if (r.type === 'box') {
-                line = `box(${outCx.toFixed(5)},${outCy.toFixed(5)},${w.toFixed(5)},${h.toFixed(5)},${(r.angle || 0).toFixed(3)})`;
-            } else if (r.type === 'ellipse') {
-                line = `ellipse(${outCx.toFixed(5)},${outCy.toFixed(5)},${(w/2).toFixed(5)},${(h/2).toFixed(5)},${(r.angle || 0).toFixed(3)})`;
-            } else if (r.type === 'annulus') {
-                const inner = (r.innerR ?? (radius / 2)) * (format === 'fk5' ? pixScale : 1);
-                line = `annulus(${outCx.toFixed(5)},${outCy.toFixed(5)},${inner.toFixed(5)},${radius.toFixed(5)})`;
-            } else {
-                line = `circle(${outCx.toFixed(5)},${outCy.toFixed(5)},${radius.toFixed(5)})`;
-            }
-            
-            let props = `color=${r.color}`;
-            if (r.isBackground) props += ` background`;
-            fileContent += `${line} # ${props}\n`;
-        }
+        const fileContent = await serializeDS9Regions(
+            regions, format, imageData.width, imageData.height, pixToWorld
+        );
 
         const blob = new Blob([fileContent], { type: 'text/plain' });
         const a = document.createElement('a');
@@ -458,112 +400,12 @@ function App() {
 
     const handleLoadRegions = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !imageData) return; // Ensure imageData exists
-
-        const { width, height } = imageData; // Extract from imageData!
+        if (!file || !imageData) return;
 
         const text = await file.text(); 
-        const lines = text.split('\n');
-        const loadedRegions: Region[] = [];
-        
-        let coordSystem = 'image'; 
-        let pixScale = 1;
-
-        // Pre-calculate pixel scale just in case we need to convert degrees to pixels
-        const c1 = await pixToWorld(width / 2, height / 2);
-        const c2 = await pixToWorld((width / 2) + 1, height / 2);
-        if (c1 && c2) {
-            pixScale = Math.hypot((c2.ra - c1.ra) * Math.cos(c1.dec * Math.PI / 180), c2.dec - c1.dec);
-        }
-
-        // Helper to safely parse DS9 strings (handles sexagesimal and trailing units like ", ', d, p)
-        const parseDS9Arg = (val: string) => {
-            let s = val.trim();
-            // Handle Sexagesimal (HH:MM:SS or DD:MM:SS)
-            if (s.includes(':')) {
-                const parts = s.split(':').map(Number);
-                const sign = (parts[0] < 0 || s.startsWith('-')) ? -1 : 1;
-                return sign * (Math.abs(parts[0]) + (parts[1] || 0) / 60 + (parts[2] || 0) / 3600);
-            }
-            // Strip letters/symbols (", ', d, p, i) and parse as float
-            return parseFloat(s.replace(/["'dpi]/gi, ''));
-        };
-
-        for (let i = 0; i < lines.length; i++) {
-            let line = lines[i].trim();
-            
-            if (['image', 'physical', 'fk5', 'fk4', 'galactic', 'icrs'].includes(line.toLowerCase())) {
-                coordSystem = line.toLowerCase();
-                continue;
-            }
-
-            if (!line || line.startsWith('#') || line.startsWith('global')) continue;
-
-            let color = '#00ff00';
-            const colorMatch = line.match(/color=([a-zA-Z0-9#]+)/);
-            if (colorMatch) color = colorMatch[1];
-            const isBackground = /#.*\bbackground\b/i.test(line);
-
-            const typeMatch = line.match(/(?:[a-z0-9]+;)?\s*(circle|box|ellipse|annulus)\s*\(([^)]+)\)/i);
-            if (!typeMatch) continue;
-
-            const type = typeMatch[1].toLowerCase() as 'circle'|'box'|'ellipse'|'annulus';
-            
-            // USE THE NEW PARSER HERE
-            const args = typeMatch[2].split(',').map(parseDS9Arg);
-            
-            try {
-                let cx = args[0], cy = args[1];
-                
-                // Convert WCS back to pixels
-                if (coordSystem !== 'image' && coordSystem !== 'physical') {
-                    const pix = await worldToPix(cx, cy); 
-                    console.log('worldToPix: ', cx, cy, pix);
-                    // Make sure worldToPix actually returns an object with .x and .y!
-                    if (pix && pix.x !== undefined && pix.y !== undefined) { 
-                        cx = pix.x; 
-                        cy = pix.y; 
-                    }
-                }
-
-                const scaleFactor = (coordSystem !== 'image' && coordSystem !== 'physical') ? (1 / pixScale) : 1;
-
-                let r: Region = { 
-                    id: `loaded_${Date.now()}_${i}`, type, 
-                    startX: cx, startY: cy, endX: cx, endY: cy, 
-                    color, angle: 0, isBackground 
-                };
-                
-                if (type === 'circle') {
-                    const radius = args[2] * scaleFactor;
-                    r.endX = cx + radius; 
-                } else if (type === 'box') {
-                    const w = args[2] * scaleFactor;
-                    const h = args[3] * scaleFactor;
-                    r.startX = cx - w/2; r.startY = cy - h/2;
-                    r.endX = cx + w/2; r.endY = cy + h/2;
-                    r.angle = args[4] || 0;
-                } else if (type === 'ellipse') {
-                    const rx = args[2] * scaleFactor;
-                    const ry = args[3] * scaleFactor;
-                    r.endX = cx + rx; r.endY = cy + ry;
-                    r.angle = args[4] || 0;
-                } else if (type === 'annulus') {
-                    r.innerR = args[2] * scaleFactor;
-                    r.endX = cx + (args[3] * scaleFactor); 
-                }
-
-                // FINAL SAFETY CHECK: Prevent React NaN crash
-                if (isNaN(r.startX) || isNaN(r.startY) || isNaN(r.endX) || isNaN(r.endY)) {
-                    console.warn("Skipped invalid region geometry:", line, args);
-                    continue;
-                }
-
-                loadedRegions.push(r);
-            } catch (err) {
-                console.warn("Skipped unparseable region line:", line);
-            }
-        }
+        const loadedRegions = await parseDS9Regions(
+            text, imageData.width, imageData.height, pixToWorld, worldToPix
+        );
         
         setRegions((prev: Region[]) => [...prev, ...loadedRegions]);
         if (regionInputRef.current) regionInputRef.current.value = ''; 
