@@ -7,10 +7,10 @@ We have successfully transitioned from a static client-side MVP to a hybrid Pyth
 * **Frontend:** React 18, TypeScript, Vite. 
 * **Styling:** Bootstrap 5 (CSS & Icons only), with a custom `theme.css` file providing a dark, compact "Desktop IDE" aesthetic. (using CSS variables like `--fv-bg`, `--fv-panel`, and the Lato font). We strictly minimize dependencies.
 * **Plotting:** `uPlot` (chosen for ultra-fast canvas rendering).
-* **Processing Backend:** Custom WebAssembly (`cfitsio`/`wcslib`) inside a background Web Worker (`useFits.ts`) to prevent UI freezing. The worker pases TypedArrays back to the React hooks.
+* **Processing Backend:** Custom WebAssembly (`cfitsio`/`wcslib`) inside a background Web Worker (`useFits.ts`) to prevent UI freezing. The worker pases TypedArrays back to the React hooks. It also exposes asynchronous pixToWorld and worldToPix functions for WCS coordinate transforms.
 * **Server/Backend:** `FastAPI` (Python) serving the Vite build, securely streaming local FITS files, and managing WebSocket connections.
 * **Python Client:** A synchronous Python class (`FViewer` in `api.py`) allowing users to control the UI and extract data from Jupyter notebooks.
-* **Packaging:** `hatchling` via `pyproject.toml` with a custom `hatch_build.py` hook that automatically syncs the Python version to `package.json`, runs `npm build`, and bundles the frontend inside the `.whl`.
+* **Packaging:** `hatchling` via `pyproject.toml`. A custom script `sync-version.py` is called along with `npm run dev` or `npm run build` hooks that automatically syncs the Python version to `package.json`.
 
 
 ### Backend & API Architecture
@@ -36,11 +36,12 @@ We have successfully transitioned from a static client-side MVP to a hybrid Pyth
 3. **`FitsImage.tsx` (Image Viewer):**
    * Renders FITS pixels to a bottom `<canvas>` using custom stretches (Linear, Log, Sqrt, ASINH) and procedural colormaps (Gray, Heat, Cool, Plasma).
    * Panning, zooming, flipping, and rotating are handled via hardware-accelerated CSS `transform` on the canvas wrapper.
-   * **Regions:** An `<svg>` overlay sits on top of the image canvas. Users can draw, drag, resize, and rotate Circles, Boxes, Ellipses, and Annuli. Hit detection is handled natively by SVG `onPointerDown` events.
-   * Real-time WCS (RA/Dec) tracking is displayed in a bottom status bar.
-   * Extracts pixels inside a drawn region and sends them to the Right Sidebar to instantly plot a 1D Histogram.
+    * Real-time WCS (RA/Dec) tracking is displayed in a bottom status bar.
+4. ** Regions **
+   * `useRegions.ts` (Hook): Manages local drawing modes (pan, circle, box, ellipse, annulus), drafts, and the mathematical calculations for dragging, resizing, and rotating shapes on the canvas.
+   * `RegionOverlay.tsx`: A stateless SVG component overlay sitting on top of the canvas. Renders shapes, hit-detection areas, and interactive drag handles. Visually distinguishes background regions with dashed outlines.
+   * `regionUtils.ts` (Parser/Serializer): compliant with standard DS9 region format. Handles async conversion of WCS coordinates (fk5 RA/Dec) to/from pixel coordinates (image) using useFits methods. Safely parses sexagesimal formats and unit suffixes, and preserves properties like color and # background.
    * Regions can be saved/loaded to DS9-style `.reg` text files.
-   * Renders FITS pixels to a bottom `<canvas>` using custom stretches and procedural colormaps.
 4. **`VirtualTable.tsx` (Table Viewer):** 
     - A custom, zero-dependency virtualized grid for 100,000+ row binary tables with double-click editing.
     - Uses an Intersection-Observer style lazy-loading approach (onFetchData). As the user scrolls, it debounces requests to the worker for missing 100-row chunks, ensuring infinite scrolling uses minimal RAM.
@@ -54,3 +55,4 @@ We have successfully transitioned from a static client-side MVP to a hybrid Pyth
 ### Current Task
 Understanding this architecture, I would like to do the following:
 **[INSERT YOUR NEXT GOAL HERE - e.g., Add commands to extract 2D image pixel arrays back to Python, or Implement multi-tab session management]**
+Do not make any assumption about the code. I can provide snippets when needed. If not sure ask.
