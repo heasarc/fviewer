@@ -128,22 +128,26 @@ class FViewer:
         return self._send("clear_regions")
 
     def add_circle(self, x: float, y: float, radius: float,
-                   color: str = '#00ff00'):
+                   color: str = '#00ff00', format: str = 'image', is_background: bool = False):
         return self._send(
-            "add_region", type="circle", x=x, y=y, radius=radius, color=color)
+            "add_region", type="circle", x=x, y=y, radius=radius, 
+            color=color, format=format, isBackground=is_background)
 
     def add_box(self, x: float, y: float, width: float, height: float,
-                angle: float = 0, color: str = '#00ff00'):
+                angle: float = 0, color: str = '#00ff00', format: str = 'image', is_background: bool = False):
         return self._send(
             "add_region", type="box", x=x, y=y, width=width, height=height,
-            angle=angle, color=color)
+            angle=angle, color=color, format=format, isBackground=is_background)
 
     def add_ellipse(self, x: float, y: float, rx: float, ry: float,
-                    angle: float = 0, color: str = '#00ff00'):
-        return self._send("add_region", type="ellipse", x=x, y=y, rx=rx, ry=ry,
-                   angle=angle, color=color)
+                    angle: float = 0, color: str = '#00ff00', format: str = 'image', is_background: bool = False):
+        return self._send(
+            "add_region", type="ellipse", x=x, y=y, rx=rx, ry=ry,
+            angle=angle, color=color, format=format, isBackground=is_background)
 
-    def add_annulus(self, x: float, y: float, inner_r: float,
-                    outer_r: float, color: str = '#00ff00'):
-        return self._send("add_region", type="annulus", x=x, y=y, innerR=inner_r,
-                   outerR=outer_r, color=color)
+    def add_annulus(self, x: float, y: float, inner_r: float, outer_r: float, 
+                    color: str = '#00ff00', format: str = 'image', is_background: bool = False):
+        return self._send(
+            "add_region", type="annulus", x=x, y=y, innerR=inner_r,
+            outerR=outer_r, color=color, format=format, isBackground=is_background)
+
