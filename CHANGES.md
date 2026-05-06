@@ -1,3 +1,6 @@
+# 0.2.4
+- add support for ds9 region format (wcs, background).
+
 # 0.2.3
 - Add option to pass a file name to open in the CLI
 - Fix API call urls
