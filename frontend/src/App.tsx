@@ -489,6 +489,14 @@ function App() {
                                 </ul>
                             </li>
 
+                            {/* About Menu */}
+                            <li className="nav-item dropdown">
+                                <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">About</button>
+                                <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
+                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.2.4</span></li>
+                                </ul>
+                            </li>
+
                             {/* Mobile HDU Menu (Only visible on small screens when Sidebar is hidden) */}
                             {hduList.length > 0 && (
                                 <li className="nav-item dropdown d-md-none">
