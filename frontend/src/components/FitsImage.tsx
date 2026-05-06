@@ -5,6 +5,7 @@ import { applyStretch } from '../utils/stretches';
 import { getColormapLUT } from '../utils/colormaps';
 import type { Region } from '../utils/regionUtils';
 import { RegionShape } from './RegionOverlay';
+import { useRegions } from '../hooks/useRegions';
 
 interface FitsImageProps {
     data: Float32Array | Int32Array | Int16Array | Uint8Array;
@@ -46,15 +47,17 @@ export const FitsImage: React.FC<FitsImageProps> = ({
     const [rotation, setRotation] = useState(0);
     
     // Region & Drawing State
-    const [drawMode, setDrawMode] = useState<DrawMode>('pan');
-    const [draftRegion, setDraftRegion] = useState<Region | null>(null);
-    
-    // Selection and Drag State
-    const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
-    const [hoveredRegionId, setHoveredRegionId] = useState<string | null>(null);
-    
+    const {
+        drawMode, setDrawMode,
+        draftRegion, setDraftRegion,
+        selectedRegionId, setSelectedRegionId,
+        hoveredRegionId, setHoveredRegionId,
+        dragAction, setDragAction,
+        deleteSelectedRegion,
+        handleRegionDrag
+    } = useRegions(setRegions);
+        
     // Tracks if we are moving the whole shape or just resizing the corner
-    const [dragAction, setDragAction] = useState<{ id: string, type: 'move' | 'resize' | 'rotate' | 'resize-inner' } | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, y: 0 });
 
@@ -113,15 +116,6 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         viewport.addEventListener('wheel', handleNativeWheel, { passive: false });
         return () => viewport.removeEventListener('wheel', handleNativeWheel);
     }, []);
-
-    // --- REGION DELETION ---
-    const deleteSelectedRegion = () => {
-        if (selectedRegionId) {
-            setRegions(prev => prev.filter(r => r.id !== selectedRegionId));
-            setSelectedRegionId(null);
-            setDragAction(null);
-        }
-    };
 
     // --- REGION CALLBACK ---
     // Ref tracks the last region sent so we don't spam the parent and cause infinite loops
@@ -230,38 +224,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
             const dx = x - dragStart.current.x;
             const dy = y - dragStart.current.y;
             
-            setRegions(prev => prev.map(r => {
-                if (r.id === dragAction.id) {
-                    if (dragAction.type === 'move') {
-                        return { ...r, startX: r.startX + dx, startY: r.startY + dy, endX: r.endX + dx, endY: r.endY + dy };
-                    } 
-                    else if (dragAction.type === 'rotate') {
-                        // Get the true center based on the shape type
-                        const cx = r.type === 'box' ? (r.startX + r.endX) / 2 : r.startX;
-                        const cy = r.type === 'box' ? (r.startY + r.endY) / 2 : r.startY;
-                        
-                        const angleRad = Math.atan2(y - cy, x - cx);
-                        return { ...r, angle: (angleRad * 180 / Math.PI) + 90 };
-                    }
-                    else if (dragAction.type === 'resize') {
-                        // Un-rotate the mouse delta so we scale along the shape's local axes
-                        const rad = -(r.angle || 0) * (Math.PI / 180);
-                        const cos = Math.cos(rad);
-                        const sin = Math.sin(rad);
-                        const localDx = dx * cos - dy * sin;
-                        const localDy = dx * sin + dy * cos;
-                        return { ...r, endX: r.endX + localDx, endY: r.endY + localDy };
-                    }
-                    else if (dragAction.type === 'resize-inner') {
-                    // Calculate the new inner radius based on mouse distance from center
-                    const cx = r.type === 'box' ? (r.startX + r.endX) / 2 : r.startX;
-                    const cy = r.type === 'box' ? (r.startY + r.endY) / 2 : r.startY;
-                    const newInnerR = Math.max(1, Math.hypot(x - cx, y - cy));
-                    return { ...r, innerR: newInnerR };
-                }
-                }
-                return r;
-            }));
+            handleRegionDrag(x, y, dx, dy);
             
             dragStart.current = { x, y }; 
             return;

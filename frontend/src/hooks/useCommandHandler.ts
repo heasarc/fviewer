@@ -1,7 +1,7 @@
 // # Copyright 2026, University of Maryland, All Rights Reserved
 
 import { useCallback } from 'react';
-import type { Region } from '../components/FitsImage';
+import type { Region } from '../utils/regionUtils';
 import {getApiUrl} from './useWebSocket';
 
 export function useCommandHandler(
