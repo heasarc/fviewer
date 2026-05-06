@@ -14,7 +14,7 @@ interface FitsImageProps {
     // region-related
     regions: Region[];
     setRegions: React.Dispatch<React.SetStateAction<Region[]>>;
-    onSaveRegions: () => void;
+    onSaveRegions: (format: 'image' | 'fk5') => void;
     onLoadRegions: () => void;
     onRegionChange?: (region: Region | null) => void;
 
@@ -579,9 +579,24 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                                 </button>
                             </li>
                             <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={onSaveRegions} disabled={regions.length === 0}>
+                                <button 
+                                    className="dropdown-item fv-dropdown-item" 
+                                    onClick={() => onSaveRegions('image')} 
+                                    disabled={regions.length === 0}
+                                >
                                     <span style={{ width: '16px' }}></span>
-                                    <i className="bi bi-download"></i> Save Regions
+                                    <i className="bi bi-download"></i> Save as Image
+                                </button>
+                            </li>
+                            <li>
+                                <button 
+                                    className="dropdown-item fv-dropdown-item" 
+                                    onClick={() => onSaveRegions('fk5')} 
+                                    // Disable if no regions exist OR if the image has no WCS!
+                                    disabled={regions.length === 0 || !hasWCS} 
+                                >
+                                    <span style={{ width: '16px' }}></span>
+                                    <i className="bi bi-globe"></i> Save as WCS/FK5
                                 </button>
                             </li>
                         </ul>

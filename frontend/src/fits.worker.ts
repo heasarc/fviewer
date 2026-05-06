@@ -236,6 +236,14 @@ self.onmessage = async (e: MessageEvent) => {
                 break;
             }
 
+            case 'WORLD_TO_PIX': {
+                if (!activeFile) throw new Error("No file opened");
+                const { ra, dec } = payload;
+                const coords = activeFile.worldToPix(ra, dec); // returns {y, y} or null
+                self.postMessage({ id, success: true, data: coords });
+                break;
+            }
+
             default:
                 throw new Error(`Unknown action: ${action}`);
         }

@@ -66,12 +66,13 @@ export function useFits() {
     const readImage = useCallback(() => sendCommand('READ_IMAGE'), [sendCommand]);
     const checkWcs = useCallback(() => sendCommand('CHECK_WCS'), [sendCommand]);
     const pixToWorld = useCallback((x: number, y: number) => sendCommand('PIX_TO_WORLD', { x, y }), [sendCommand]);
+    const worldToPix = useCallback((x: number, y: number) => sendCommand('WORLD_TO_PIX', { x, y }), [sendCommand]);
     const updateKeyword = useCallback((key: string, value: string | number, isNumeric: boolean, comment?: string) => {
         return sendCommand('UPDATE_KEYWORD', { key, value, isNumeric, comment });
     }, [sendCommand]);
 
     return { 
         openFile, readHeader, getHduList, moveToHDU, getTableInfo, readColumn, writeCell, 
-        saveFile, readImage, checkWcs, pixToWorld, updateKeyword, readTableChunk
+        saveFile, readImage, checkWcs, pixToWorld, worldToPix, updateKeyword, readTableChunk
     };
 }
