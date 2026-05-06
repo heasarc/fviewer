@@ -10,7 +10,8 @@ export function useCommandHandler(
     stretch: string, setStretch: (cmap: string) => void,
     regions: any[], setRegions: (updater: any) => void,
     imageData: any,
-    pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>
+    pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>,
+    worldToPix: (ra: number, dec: number) => Promise<{ x: number, y: number } | null>
 ) {
   return useCallback(async (command: any, sendReply: (msg: any) => void) => {
     console.log("Received remote command:", command);
@@ -114,32 +115,67 @@ export function useCommandHandler(
       ack();
       break;
 
-    case 'add_region': { // Note the curly braces to scope variables
-      const { type, x, y, color = '#00ff00', angle = 0 } = command;
+    case 'add_region': { 
+      let { type, x, y, color = '#00ff00', angle = 0, format = 'image', isBackground = false } = command;
+      let radius = command.radius, width = command.width, height = command.height;
+      let rx = command.rx, ry = command.ry, innerR = command.innerR, outerR = command.outerR;
+
+      // 2. CONVERT FROM WCS TO PIXELS IF REQUESTED
+      if (format === 'fk5' || format === 'wcs') {
+          if (!imageData || !worldToPix || !pixToWorld) {
+              return sendReply({ message_id: command.message_id, error: "Image data or WCS not ready." });
+          }
+
+          // Calculate pixel scale
+          let pixScale = 1;
+          const c1 = await pixToWorld(imageData.width / 2, imageData.height / 2);
+          const c2 = await pixToWorld((imageData.width / 2) + 1, imageData.height / 2);
+          if (c1 && c2) {
+              pixScale = Math.hypot((c2.ra - c1.ra) * Math.cos(c1.dec * Math.PI / 180), c2.dec - c1.dec);
+          }
+
+          // Convert center
+          const pix = await worldToPix(x, y);
+          if (!pix || pix.x === undefined || pix.y === undefined) {
+              return sendReply({ message_id: command.message_id, error: "Invalid WCS coordinates." });
+          }
+          x = pix.x;
+          y = pix.y;
+
+          // Convert sizes (degrees -> pixels)
+          const scaleFactor = 1 / pixScale;
+          if (radius !== undefined) radius *= scaleFactor;
+          if (width !== undefined) width *= scaleFactor;
+          if (height !== undefined) height *= scaleFactor;
+          if (rx !== undefined) rx *= scaleFactor;
+          if (ry !== undefined) ry *= scaleFactor;
+          if (innerR !== undefined) innerR *= scaleFactor;
+          if (outerR !== undefined) outerR *= scaleFactor;
+      }
       
       let r: Region = { 
           id: `api_${Date.now()}_${Math.floor(Math.random()*1000)}`, 
           type, 
-          startX: 0, startY: 0, 
-          endX: 0, endY: 0, 
-          color, 
-          angle
+          startX: 0, startY: 0, endX: 0, endY: 0, 
+          color, angle, isBackground 
       };
 
+      // 3. BUILD REGION USING THE SCALED VARIABLES
       if (type === 'circle') {
           r.startX = x; r.startY = y;
-          r.endX = x + command.radius; r.endY = y;
+          r.endX = x + radius; r.endY = y;
       } else if (type === 'box') {
-          r.startX = x - command.width/2; r.startY = y - command.height/2;
-          r.endX = x + command.width/2; r.endY = y + command.height/2;
+          r.startX = x - width/2; r.startY = y - height/2;
+          r.endX = x + width/2; r.endY = y + height/2;
       } else if (type === 'ellipse') {
           r.startX = x; r.startY = y;
-          r.endX = x + command.rx; r.endY = y + command.ry;
+          r.endX = x + rx; r.endY = y + ry;
       } else if (type === 'annulus') {
           r.startX = x; r.startY = y;
-          r.innerR = command.innerR;
-          r.endX = x + command.outerR; r.endY = y;
+          r.innerR = innerR;
+          r.endX = x + outerR; r.endY = y;
       }
+
       setRegions((prev: any[]) => [...prev, r]);
       ack();
       break;

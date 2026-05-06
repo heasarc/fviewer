@@ -114,8 +114,7 @@ function App() {
         colormap, setColormap,
         stretch, setStretch,
         regions, setRegions,
-        imageData,
-        pixToWorld
+        imageData, pixToWorld, worldToPix
     );
     // Listen for commands
     const { clientId, isConnected } = useWebSocket(handleRemoteCommand);
