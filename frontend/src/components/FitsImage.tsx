@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { applyStretch } from '../utils/stretches';
 import { getColormapLUT } from '../utils/colormaps';
+import type { Region } from '../utils/regionUtils';
 
 interface FitsImageProps {
     data: Float32Array | Int32Array | Int16Array | Uint8Array;
@@ -26,18 +27,6 @@ interface FitsImageProps {
 
 export type DrawMode = 'pan' | 'circle' | 'box' | 'ellipse' | 'annulus';
 
-export interface Region {
-    id: string;
-    type: 'circle' | 'box' | 'ellipse' | 'annulus';
-    startX: number;
-    startY: number;
-    endX: number;
-    endY: number;
-    color: string;
-    angle?: number;
-    innerR?: number;
-    isBackground?: boolean;
-}
 
 export const FitsImage: React.FC<FitsImageProps> = ({ 
         data, width, height, checkWcs, pixToWorld, regions, setRegions, 
