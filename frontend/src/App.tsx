@@ -518,6 +518,7 @@ function App() {
                 // Convert WCS back to pixels
                 if (coordSystem !== 'image' && coordSystem !== 'physical') {
                     const pix = await worldToPix(cx, cy); 
+                    console.log('worldToPix: ', cx, cy, pix);
                     // Make sure worldToPix actually returns an object with .x and .y!
                     if (pix && pix.x !== undefined && pix.y !== undefined) { 
                         cx = pix.x; 
