@@ -111,9 +111,17 @@ class FViewer:
     def set_stretch(self, stretch: str):
         return self._send("set_stretch", stretch=stretch)
 
-    def get_regions(self) -> list:
-        """Returns the raw internal list of region dictionaries."""
-        return self._send("get_regions").get("regions", [])
+    def get_regions(self, format="image") -> list:
+        """
+        Returns the list of region dictionaries.
+        
+        Args:
+            format (str): 'image' for raw pixel coordinates, or 'fk5' for RA/Dec coordinates.
+        """
+        if format not in ["image", "fk5", "wcs"]:
+            raise ValueError("format must be 'image' or 'fk5'")
+            
+        return self._send("get_regions", format=format).get("regions", [])
 
     def clear_regions(self):
         """Removes all drawn regions."""
