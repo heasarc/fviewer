@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { applyStretch } from '../utils/stretches';
 import { getColormapLUT } from '../utils/colormaps';
 import type { Region } from '../utils/regionUtils';
+import { RegionShape } from './RegionOverlay';
 
 interface FitsImageProps {
     data: Float32Array | Int32Array | Int16Array | Uint8Array;
@@ -320,150 +321,18 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         }
     };
 
+    // Add this simple bridge function near where your mouse handlers are
+    const handleRegionAction = (id: string, type: 'move' | 'rotate' | 'resize' | 'resize-inner', e: React.MouseEvent) => {
+        if (drawMode !== 'pan') return;
+        setSelectedRegionId(id);
+        setDragAction({ id, type }); 
+        dragStart.current = getCanvasCoords(e.clientX, e.clientY);
+    };
+
+
     const resetView = () => {
         setZoom(1); setPan({ x: 0, y: 0 });
         setFlipX(false); setFlipY(false); setRotation(0);
-    };
-
-    // --- SVG REGION RENDERER ---
-    const renderRegionSVG = (r: Region, isDraft = false) => {
-        const isSelected = r.id === selectedRegionId;
-        const isHovered = r.id === hoveredRegionId;
-        const currZoom = zoom ?? 1;
-        const handleSize = 10 / (currZoom ?? 1);
-        
-        let shapeElement;
-        let cx: number, cy: number, topEdgeY: number = 0;
-
-        if (r.type === 'box') {
-            const minX = Math.min(r.startX, r.endX);
-            const minY = Math.min(r.startY, r.endY);
-            const w = Math.abs(r.endX - r.startX);
-            const h = Math.abs(r.endY - r.startY);
-            cx = (r.startX + r.endX) / 2;
-            cy = (r.startY + r.endY) / 2;
-            topEdgeY = minY;
-            shapeElement = <rect x={minX} y={minY} width={w} height={h} />;
-        } 
-        else if (r.type === 'ellipse') {
-            cx = r.startX;
-            cy = r.startY;
-            const rx = Math.abs(r.endX - r.startX);
-            const ry = Math.abs(r.endY - r.startY);
-            topEdgeY = cy - ry;
-            shapeElement = <ellipse cx={cx} cy={cy} rx={rx} ry={ry} />;
-        }
-        else if (r.type === 'annulus') {
-            cx = r.startX;
-            cy = r.startY;
-            const outerRadius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
-            const innerRadius = r.innerR ?? (outerRadius * 0.5); // Use the saved inner radius
-            topEdgeY = cy - outerRadius;
-            shapeElement = (
-                <g>
-                    <circle cx={cx} cy={cy} r={outerRadius} />
-                    <circle cx={cx} cy={cy} r={innerRadius} />
-                </g>
-            );
-        }
-        else { // 'circle'
-            const radius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
-            cx = r.startX;
-            cy = r.startY;
-            topEdgeY = cy - radius;
-            shapeElement = <circle cx={cx} cy={cy} r={radius} />;
-        }
-
-        const handleRegionMouseDown = (e: React.MouseEvent) => {
-            if (drawMode !== 'pan') return;
-            e.stopPropagation(); 
-            setSelectedRegionId(r.id);
-            setDragAction({ id: r.id, type: 'move' }); 
-            dragStart.current = getCanvasCoords(e.clientX, e.clientY);
-        };
-
-        return (
-            <g key={r.id} transform={`rotate(${r.angle || 0} ${cx} ${cy})`}>
-                
-                {/* 1. Invisible Fat Click Target */}
-                {React.cloneElement(shapeElement, {
-                    style: {
-                        stroke: 'rgba(255,255,255,0.01)', 
-                        strokeWidth: Math.max(10, 20 / currZoom), fill: 'none',
-                        pointerEvents: isDraft || drawMode !== 'pan' ? 'none' : 'stroke',
-                        cursor: drawMode === 'pan' ? 'move' : 'crosshair'
-                    },
-                    onMouseDown: handleRegionMouseDown,
-                    onMouseEnter: () => setHoveredRegionId(r.id),
-                    onMouseLeave: () => setHoveredRegionId(null)
-                })}
-                
-                {/* 2. Thin Visual Outline */}
-                {React.cloneElement(shapeElement, {
-                    style: {
-                        stroke: isHovered && drawMode === 'pan' && !isDraft ? '#fff' : r.color, 
-                        strokeWidth: (isHovered && drawMode === 'pan' && !isDraft ? 4 : 2) / currZoom, 
-                        // Add strokeDasharray here, scaled by currZoom to keep dashes looking consistent
-                        strokeDasharray: r.isBackground ? `${6 / currZoom}, ${6 / currZoom}` : 'none',
-                        fill: 'none', 
-                        pointerEvents: 'none',
-                        transition: 'stroke 0.1s, stroke-width 0.1s'
-                    }
-                })}
-
-                {/* 3. Handles (Only visible when selected) */}
-                {isSelected && !isDraft && (
-                    <>
-                        {/* Rotation Handle (Only for Box and Ellipse) */}
-                        {(r.type === 'box' || r.type === 'ellipse') && (
-                            <>
-                                <line x1={cx} y1={topEdgeY} x2={cx} y2={topEdgeY - (25/currZoom)} stroke={r.color} strokeWidth={1/currZoom} pointerEvents="none" />
-                                <circle 
-                                    cx={cx} cy={topEdgeY - (25/currZoom)} r={handleSize/2} fill={r.color} 
-                                    style={{ cursor: 'crosshair', pointerEvents: 'all' }}
-                                    onMouseDown={(e) => {
-                                        if (drawMode !== 'pan') return;
-                                        e.stopPropagation();
-                                        setDragAction({ id: r.id, type: 'rotate' });
-                                        dragStart.current = getCanvasCoords(e.clientX, e.clientY);
-                                    }}
-                                />
-                            </>
-                        )}
-
-                        {/* Outer Resize Handle (Bottom Right / Outer Perimeter) */}
-                        <rect 
-                            x={r.endX - handleSize / 2} y={r.endY - handleSize / 2} 
-                            width={handleSize} height={handleSize} 
-                            fill="#fff" stroke={r.color} strokeWidth={1/currZoom}
-                            style={{ cursor: 'nwse-resize', pointerEvents: 'all' }}
-                            onMouseDown={(e) => {
-                                if (drawMode !== 'pan') return;
-                                e.stopPropagation();
-                                setDragAction({ id: r.id, type: 'resize' });
-                                dragStart.current = getCanvasCoords(e.clientX, e.clientY);
-                            }}
-                        />
-                        {/* Inner Resize Handle (Only for Annulus - placed at 3 o'clock on inner ring) */}
-                        {r.type === 'annulus' && (
-                            <rect 
-                                x={cx + (r.innerR ?? (Math.hypot(r.endX - r.startX, r.endY - r.startY) * 0.5)) - handleSize / 2} 
-                                y={cy - handleSize / 2} 
-                                width={handleSize} height={handleSize} 
-                                fill="#fff" stroke={r.color} strokeWidth={1/currZoom}
-                                style={{ cursor: 'e-resize', pointerEvents: 'all' }}
-                                onMouseDown={(e) => {
-                                    if (drawMode !== 'pan') return;
-                                    e.stopPropagation();
-                                    setDragAction({ id: r.id, type: 'resize-inner' });
-                                    dragStart.current = getCanvasCoords(e.clientX, e.clientY);
-                                }}
-                            />
-                        )}
-                    </>
-                )}
-            </g>
-        );
     };
 
     const selectedRegion = regions.find(r => r.id === selectedRegionId);
@@ -737,9 +606,24 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                         transformOrigin: 'center center',
                     }}>
                         <canvas ref={canvasRef} width={width} height={height} style={{ imageRendering: 'pixelated', display: 'block', width: '100%', height: '100%' }} />
+        
                         <svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}>
-                            {regions.map(r => renderRegionSVG(r))}
-                            {draftRegion && renderRegionSVG(draftRegion, true)}
+                            {regions.map(r => (
+                                <RegionShape 
+                                    key={r.id} region={r} zoom={zoom} drawMode={drawMode}
+                                    isSelected={r.id === selectedRegionId}
+                                    isHovered={r.id === hoveredRegionId}
+                                    onAction={handleRegionAction}
+                                    onHover={setHoveredRegionId}
+                                />
+                            ))}
+                            {draftRegion && (
+                                <RegionShape 
+                                    region={draftRegion} isDraft zoom={zoom} drawMode={drawMode}
+                                    isSelected={false} isHovered={false}
+                                    onAction={handleRegionAction} onHover={() => {}}
+                                />
+                            )}
                         </svg>
                     </div>
                 )}
