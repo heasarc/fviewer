@@ -127,7 +127,7 @@ export function useCommandHandler(
 
       const validFormats = ['image', 'wcs', 'fk5'];
       if (!validFormats.includes(command.format)) {
-          return sendReply({ message_id: command.message_id, error: `Invalid region format: ${command.type}` });
+          return sendReply({ message_id: command.message_id, error: `Invalid region format: ${command.format}` });
       }
       let { format = 'image' } = command;
 
@@ -145,9 +145,6 @@ export function useCommandHandler(
           return sendReply({ message_id: command.message_id, error: "radius must be numbers." });
       }
 
-      if (typeof command.angle !== 'number') {
-          return sendReply({ message_id: command.message_id, error: "angle must be numbers." });
-      }
       let { angle = 0 } = command;
 
 
