@@ -103,6 +103,9 @@ self.onmessage = async (e: MessageEvent) => {
             case 'MOVE_TO_HDU': {
                 if (!activeFile) throw new Error("No file opened");
                 const status = activeFile.moveToHDU(payload.hduNum);
+
+                // CLEAR THE CACHE for the new HDU!
+                tableCache = {};
                 
                 // Determine HDU type by reading keywords
                 const xtension = activeFile.readKeyword("XTENSION")?.trim() || "";
@@ -194,10 +197,13 @@ self.onmessage = async (e: MessageEvent) => {
                 if (!activeFile) throw new Error("No file opened");
                 
                 // activeFile.save() flushes cfitsio and returns a Uint8Array
-                const fileBytes = activeFile.save(); 
-                
-                // Send the bytes back. (Modern browsers transfer Uint8Array efficiently)
-                self.postMessage({ id, success: true, data: fileBytes });
+                const fileBytes = activeFile.save();
+
+                // Transfer the buffer efficiently
+                (self as any).postMessage(
+                    { id, success: true, data: fileBytes }, 
+                    [fileBytes.buffer]
+                );
                 break;
             }
 
@@ -254,7 +260,18 @@ self.onmessage = async (e: MessageEvent) => {
             default:
                 throw new Error(`Unknown action: ${action}`);
         }
-    } catch (error) {
-        self.postMessage({ id, success: false, error: (error as Error).message });
+    } catch (error: any) {
+        // Handle standard JS errors, Emscripten strings, or Emscripten pointer exceptions
+        let errorMsg = "Unknown WASM Error";
+        if (error instanceof Error) {
+            errorMsg = error.message;
+        } else if (typeof error === 'string') {
+            errorMsg = error;
+        } else if (error && typeof error === 'object') {
+            // Emscripten sometimes throws objects containing the C++ exception pointer
+            errorMsg = error.message || JSON.stringify(error);
+        }
+        
+        self.postMessage({ id, success: false, error: errorMsg });
     }
 };
