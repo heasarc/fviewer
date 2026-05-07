@@ -15,15 +15,64 @@ export interface Region {
     isBackground?: boolean;
 }
 
-// Helper to safely parse DS9 strings
-const parseDS9Arg = (val: string) => {
-    let s = val.trim();
+// Helper to safely parse DS9 strings, handling sexagesimal and unit suffixes
+const parseDS9Arg = (val: string, index: number) => {
+    let s = val.trim().toLowerCase();
+    
+    // 1. Handle unit suffixes for sizes and radii (index >= 2)
+    if (index >= 2) {
+        if (s.endsWith('"')) return parseFloat(s) / 3600; // arcsec to degrees
+        if (s.endsWith("'")) return parseFloat(s) / 60;   // arcmin to degrees
+        if (s.endsWith('d')) return parseFloat(s);        // degrees
+        if (s.endsWith('r')) return parseFloat(s) * (180 / Math.PI); // radians to degrees
+        if (s.endsWith('p') || s.endsWith('i')) return parseFloat(s); // pixels/image
+    }
+
+    // 2. Handle HMS (Hours, Minutes, Seconds) - Typically for RA
+    if (s.includes('h') && s.includes('m')) {
+        const match = s.match(/([+-]?\d+)h(\d+)m([0-9.]+)s?/);
+        if (match) {
+            const h = Math.abs(parseFloat(match[1]));
+            const m = parseFloat(match[2]);
+            const sec = parseFloat(match[3]);
+            const sign = (s.startsWith('-') || parseFloat(match[1]) < 0) ? -1 : 1;
+            // RA in HMS is multiplied by 15 to convert to standard decimal degrees
+            return sign * (h + m / 60 + sec / 3600) * 15;
+        }
+    }
+
+    // 3. Handle DMS (Degrees, Minutes, Seconds) - Typically for Dec
+    if (s.includes('d') && s.includes('m')) {
+        const match = s.match(/([+-]?\d+)d(\d+)m([0-9.]+)s?/);
+        if (match) {
+            const d = Math.abs(parseFloat(match[1]));
+            const m = parseFloat(match[2]);
+            const sec = parseFloat(match[3]);
+            const sign = (s.startsWith('-') || parseFloat(match[1]) < 0) ? -1 : 1;
+            return sign * (d + m / 60 + sec / 3600);
+        }
+    }
+
+    // 4. Handle standard colon-separated format (e.g., 12:34:56.7)
     if (s.includes(':')) {
         const parts = s.split(':').map(Number);
+        const degOrHour = Math.abs(parts[0] || 0);
+        const m = parts[1] || 0;
+        const sec = parts[2] || 0;
         const sign = (parts[0] < 0 || s.startsWith('-')) ? -1 : 1;
-        return sign * (Math.abs(parts[0]) + (parts[1] || 0) / 60 + (parts[2] || 0) / 3600);
+        
+        let parsed = sign * (degOrHour + m / 60 + sec / 3600);
+        
+        // DS9 Convention: If it's the first coordinate (RA) and in colon format, 
+        // it is assumed to be in hours, so we convert it to degrees.
+        if (index === 0) {
+            parsed *= 15; 
+        }
+        return parsed;
     }
-    return parseFloat(s.replace(/["'dpi]/gi, ''));
+
+    // 5. Fallback: parse pure numbers (strip any lingering unrecognized characters)
+    return parseFloat(s.replace(/[^0-9.-]/g, ''));
 };
 
 export const parseDS9Regions = async (
@@ -77,6 +126,9 @@ export const parseDS9Regions = async (
                 }
             }
 
+            // --- FIX: Convert FITS Bottom-Left origin to SVG Top-Left origin ---
+            cy = height - cy; 
+
             const scaleFactor = (coordSystem !== 'image' && coordSystem !== 'physical') ? (1 / pixScale) : 1;
 
             let r: Region = { 
@@ -92,11 +144,13 @@ export const parseDS9Regions = async (
                 const w = args[2] * scaleFactor; const h = args[3] * scaleFactor;
                 r.startX = cx - w/2; r.startY = cy - h/2;
                 r.endX = cx + w/2; r.endY = cy + h/2;
-                r.angle = args[4] || 0;
+                // --- FIX: Invert DS9 counter-clockwise angle to SVG clockwise angle ---
+                r.angle = -(args[4] || 0);
             } else if (type === 'ellipse') {
                 const rx = args[2] * scaleFactor; const ry = args[3] * scaleFactor;
                 r.endX = cx + rx; r.endY = cy + ry;
-                r.angle = args[4] || 0;
+                // --- FIX: Invert angle ---
+                r.angle = -(args[4] || 0);
             } else if (type === 'annulus') {
                 r.innerR = args[2] * scaleFactor; r.endX = cx + (args[3] * scaleFactor); 
             }
@@ -137,28 +191,26 @@ export const serializeDS9Regions = async (
         let line = "";
         let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
 
-        if (r.type === 'box') {
-            w = Math.abs(r.endX - r.startX); h = Math.abs(r.endY - r.startY);
-            cx = (r.startX + r.endX) / 2; cy = (r.startY + r.endY) / 2;
-        } else if (r.type === 'ellipse') {
-            w = Math.abs(r.endX - r.startX) * 2; h = Math.abs(r.endY - r.startY) * 2; 
-            cx = r.startX; cy = r.startY;
-        } else { 
-            radius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
-            cx = r.startX; cy = r.startY;
-        }
+        // ... (keep your existing width/height/cx/cy math)
 
-        let outCx = cx, outCy = cy;
+        let outCx = cx;
+        // --- FIX: Convert SVG Top-Left back to FITS Bottom-Left ---
+        let outCy = height - cy; 
+        
+        // --- FIX: Revert the angle for DS9 ---
+        const outAngle = -(r.angle || 0); 
+
         if (format === 'fk5') {
-            const world = await pixToWorld(cx, cy);
+            // Note: pass outCy (the true FITS pixel Y) to pixToWorld, not the SVG cy!
+            const world = await pixToWorld(outCx, outCy);
             if (world) { outCx = world.ra; outCy = world.dec; }
             w *= pixScale; h *= pixScale; radius *= pixScale;
         }
 
         if (r.type === 'box') {
-            line = `box(${outCx.toFixed(5)},${outCy.toFixed(5)},${w.toFixed(5)},${h.toFixed(5)},${(r.angle || 0).toFixed(3)})`;
+            line = `box(${outCx.toFixed(5)},${outCy.toFixed(5)},${w.toFixed(5)},${h.toFixed(5)},${outAngle.toFixed(3)})`;
         } else if (r.type === 'ellipse') {
-            line = `ellipse(${outCx.toFixed(5)},${outCy.toFixed(5)},${(w/2).toFixed(5)},${(h/2).toFixed(5)},${(r.angle || 0).toFixed(3)})`;
+            line = `ellipse(${outCx.toFixed(5)},${outCy.toFixed(5)},${(w/2).toFixed(5)},${(h/2).toFixed(5)},${outAngle.toFixed(3)})`;
         } else if (r.type === 'annulus') {
             const inner = (r.innerR ?? (radius / 2)) * (format === 'fk5' ? pixScale : 1);
             line = `annulus(${outCx.toFixed(5)},${outCy.toFixed(5)},${inner.toFixed(5)},${radius.toFixed(5)})`;
