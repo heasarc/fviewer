@@ -21,6 +21,9 @@ export default defineConfig({
     }
   },
   assetsInclude: ['**/*.fits'],  // for testing
+  optimizeDeps: {
+    include: ['wasm-cfitsio']
+  },
   test: {
     // Enable browser mode
     browser: {
