@@ -38,6 +38,13 @@ export function useCommandHandler(
           
         } catch (error) {
           console.error("Error loading remote file:", error);
+          // Safely extract the message
+          const errorMessage = error instanceof Error 
+            ? error.message 
+            : "An unknown network error occurred";
+            
+          // Send the error back to release the Python client instantly!
+          sendReply({ message_id: command.message_id, error: errorMessage });
         }
         break;
     
@@ -60,51 +67,47 @@ export function useCommandHandler(
       break;
     
     case 'get_regions':
-      // CHECK FORMAT AND CONVERT TO WCS IF REQUESTED
       if (command.format === 'fk5' || command.format === 'wcs') {
-        if (!imageData || !pixToWorld) {
-            return sendReply({ message_id: command.message_id, error: "Image data or WCS not ready." });
+        if (!imageData || !imageData.pixScale || !pixToWorld) {
+            return sendReply({ message_id: command.message_id, error: "Image data, pixel scale, or WCS not ready." });
         }
 
-        const { width, height } = imageData;
-        let pixScale = 1;
-        const c1 = await pixToWorld(width / 2, height / 2);
-        const c2 = await pixToWorld((width / 2) + 1, height / 2);
-        if (c1 && c2) {
-            pixScale = Math.hypot((c2.ra - c1.ra) * Math.cos(c1.dec * Math.PI / 180), c2.dec - c1.dec);
-        }
+        // Use the native WCS scale provided by your FITS header
+        const scaleX = Math.abs(imageData.pixScale.scaleX || 1);
+        const scaleY = Math.abs(imageData.pixScale.scaleY || 1);
+        const avgScale = (scaleX + scaleY) / 2;
 
         const wcsRegions = [];
         for (const r of regions) {
           let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
 
+          // Scale dimensions accurately using X/Y axes
           if (r.type === 'box') {
-              w = Math.abs(r.endX - r.startX) * pixScale;
-              h = Math.abs(r.endY - r.startY) * pixScale;
+              w = Math.abs(r.endX - r.startX) * scaleX;
+              h = Math.abs(r.endY - r.startY) * scaleY;
               cx = (r.startX + r.endX) / 2; cy = (r.startY + r.endY) / 2;
           } else if (r.type === 'ellipse') {
-              w = Math.abs(r.endX - r.startX) * 2 * pixScale; 
-              h = Math.abs(r.endY - r.startY) * 2 * pixScale; 
+              w = Math.abs(r.endX - r.startX) * 2 * scaleX; 
+              h = Math.abs(r.endY - r.startY) * 2 * scaleY; 
               cx = r.startX; cy = r.startY;
           } else { 
-              radius = Math.hypot(r.endX - r.startX, r.endY - r.startY) * pixScale;
+              // Pixel hypotenuse * average scale
+              radius = Math.hypot(r.endX - r.startX, r.endY - r.startY) * avgScale;
               cx = r.startX; cy = r.startY;
           }
 
           const world = await pixToWorld(cx, cy);
-          if (!world) continue; // Skip if WCS conversion fails
+          if (!world) continue;
 
-          // Build a clean dictionary for the Python user
           const base = { id: r.id, type: r.type, color: r.color, angle: r.angle, isBackground: r.isBackground, ra: world.ra, dec: world.dec };
           
           if (r.type === 'box') wcsRegions.push({ ...base, width: w, height: h });
           else if (r.type === 'ellipse') wcsRegions.push({ ...base, rx: w/2, ry: h/2 });
-          else if (r.type === 'annulus') wcsRegions.push({ ...base, innerR: (r.innerR || radius/2) * pixScale, outerR: radius });
+          else if (r.type === 'annulus') wcsRegions.push({ ...base, innerR: (r.innerR || radius/2) * avgScale, outerR: radius });
           else wcsRegions.push({ ...base, radius });
         }
         replyData({ regions: wcsRegions });
       } else {
-        // Default image/pixel fallback
         replyData({ regions });
       }
       break;
@@ -116,23 +119,52 @@ export function useCommandHandler(
       break;
 
     case 'add_region': { 
-      let { type, x, y, color = '#00ff00', angle = 0, format = 'image', isBackground = false } = command;
+
+      const validTypes = ['circle', 'box', 'ellipse', 'annulus'];
+      if (!validTypes.includes(command.type)) {
+          return sendReply({ message_id: command.message_id, error: `Invalid region type: ${command.type}` });
+      }
+
+      const validFormats = ['image', 'wcs', 'fk5'];
+      if (!validFormats.includes(command.format)) {
+          return sendReply({ message_id: command.message_id, error: `Invalid region format: ${command.type}` });
+      }
+      let { format = 'image' } = command;
+
+      // Validate that color is a valid hex or standard color string to prevent injection
+      const colorRegex = /^#([0-9A-F]{3}){1,2}$|^[a-zA-Z]+$/i;
+      let color = colorRegex.test(command.color) ? command.color : '#00ff00';
+      
+      // Ensure coordinates are actual numbers, not NaN or undefined
+      if (typeof command.x !== 'number' || typeof command.y !== 'number') {
+          return sendReply({ message_id: command.message_id, error: "Coordinates must be numbers." });
+      }
+      let {x, y} = command;
+
+      if (typeof command.radius !== 'number') {
+          return sendReply({ message_id: command.message_id, error: "radius must be numbers." });
+      }
+
+      if (typeof command.angle !== 'number') {
+          return sendReply({ message_id: command.message_id, error: "angle must be numbers." });
+      }
+      let { angle = 0 } = command;
+
+
+      let { type, isBackground = false } = command;
       let radius = command.radius, width = command.width, height = command.height;
       let rx = command.rx, ry = command.ry, innerR = command.innerR, outerR = command.outerR;
 
       // 2. CONVERT FROM WCS TO PIXELS IF REQUESTED
       if (format === 'fk5' || format === 'wcs') {
-          if (!imageData || !worldToPix || !pixToWorld) {
-              return sendReply({ message_id: command.message_id, error: "Image data or WCS not ready." });
+          if (!imageData || !imageData.pixScale || !worldToPix) {
+              return sendReply({ message_id: command.message_id, error: "Image data, pixel scale, or WCS not ready." });
           }
 
-          // Calculate pixel scale
-          let pixScale = 1;
-          const c1 = await pixToWorld(imageData.width / 2, imageData.height / 2);
-          const c2 = await pixToWorld((imageData.width / 2) + 1, imageData.height / 2);
-          if (c1 && c2) {
-              pixScale = Math.hypot((c2.ra - c1.ra) * Math.cos(c1.dec * Math.PI / 180), c2.dec - c1.dec);
-          }
+          // Use the native WCS scale
+          const scaleX = Math.abs(imageData.pixScale.scaleX || 1);
+          const scaleY = Math.abs(imageData.pixScale.scaleY || 1);
+          const avgScale = (scaleX + scaleY) / 2;
 
           // Convert center
           const pix = await worldToPix(x, y);
@@ -142,15 +174,14 @@ export function useCommandHandler(
           x = pix.x;
           y = pix.y;
 
-          // Convert sizes (degrees -> pixels)
-          const scaleFactor = 1 / pixScale;
-          if (radius !== undefined) radius *= scaleFactor;
-          if (width !== undefined) width *= scaleFactor;
-          if (height !== undefined) height *= scaleFactor;
-          if (rx !== undefined) rx *= scaleFactor;
-          if (ry !== undefined) ry *= scaleFactor;
-          if (innerR !== undefined) innerR *= scaleFactor;
-          if (outerR !== undefined) outerR *= scaleFactor;
+          // Convert sizes (degrees -> pixels) using accurate factors
+          if (radius !== undefined) radius /= avgScale;
+          if (width !== undefined) width /= scaleX;
+          if (height !== undefined) height /= scaleY;
+          if (rx !== undefined) rx /= scaleX;
+          if (ry !== undefined) ry /= scaleY;
+          if (innerR !== undefined) innerR /= avgScale;
+          if (outerR !== undefined) outerR /= avgScale;
       }
       
       let r: Region = { 
@@ -184,5 +215,6 @@ export function useCommandHandler(
     default:
       sendReply({ message_id: command.message_id, error: `Unknown command: ${command.action}` });
     }
-  }, [processFile, colormap, setColormap, stretch, setStretch, regions, setRegions, imageData, pixToWorld]);
+  }, [processFile, colormap, setColormap, stretch, setStretch, regions, setRegions,
+      imageData, pixToWorld, worldToPix]);
 }
