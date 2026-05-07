@@ -1,7 +1,7 @@
 {
   "name": "fviewer",
   "private": true,
-  "version": "0.2.5",
+  "version": "0.2.4",
   "type": "module",
   "scripts": {
     "dev": "python sync-version.py && vite",
