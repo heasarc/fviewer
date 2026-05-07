@@ -1,6 +1,7 @@
 # Copyright 2026, University of Maryland, All Rights Reserved
 
 import os
+from pathlib import Path
 import asyncio
 import uuid
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -9,11 +10,27 @@ from fastapi.responses import FileResponse
 
 # If running standalone, this defaults to "" (empty string)
 # If running in Jupyter, this becomes "/fviewer"
-root_path = os.getenv("FVIEWER_ROOT_PATH", "")
+ROOT_PATH = os.getenv("FVIEWER_ROOT_PATH", "")
 
-app = FastAPI(title="FViewer API", root_path=root_path)
+# worksapce root folder so the server browser does not go wondering
+WORKSPACE_ROOT = Path(os.getenv("FVIEWER_WORKSPACE", Path.cwd())).resolve()
+
+
+app = FastAPI(title="FViewer API", root_path=ROOT_PATH)
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
+def get_secure_path(user_path: str) -> Path:
+    """Validates that the requested path is within the WORKSPACE_ROOT."""
+    # Combine the root with the user input and resolve() it.
+    # resolve() evaluates all symlinks and '..' up-level references to an absolute path.
+    target_path = (WORKSPACE_ROOT / user_path).resolve()
+    
+    # Ensure the resolved target path is strictly inside the WORKSPACE_ROOT
+    if not target_path.is_relative_to(WORKSPACE_ROOT):
+        raise HTTPException(
+            status_code=403, detail="Path traversal detected. Access denied.")
+    
+    return target_path
 
 class ConnectionManager:
     def __init__(self):
@@ -96,20 +113,25 @@ def get_clients():
 
 @app.get("/api/file")
 async def serve_local_file(path: str):
-    """Securely serve a local file from the Python backend to
-    the React frontend."""
-    if not os.path.isfile(path):
-        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+    """Securely serve a local file from the Python backend to the React frontend."""
+    secure_path = get_secure_path(path)
+    
+    if not secure_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found.")
 
-    # FileResponse automatically handles chunked streaming for large files
-    return FileResponse(path)
+    return FileResponse(secure_path)
 
 
 @app.get("/api/fs/list")
 def list_directory(path: str = "."):
     """Returns the contents of a directory on the server."""
-    abs_path = os.path.abspath(path)
-    if not os.path.exists(abs_path):
+
+    try:
+        secure_path = get_secure_path(path)
+    except HTTPException:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    if not secure_path.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")
 
     EXTENSIONS = ['.fits', '.fit', '.arf', '.rmf', '.rsp', '.pha']
@@ -119,31 +141,39 @@ def list_directory(path: str = "."):
     items = []
     try:
         # Add a "Go Up" option if not at the root
-        parent_dir = os.path.dirname(abs_path)
-        if parent_dir != abs_path:
-            items.append({"name": "..", "path": parent_dir, "is_dir": True})
+        if secure_path != WORKSPACE_ROOT:
+            items.append({
+                "name": "..", 
+                # Send the relative path back to the client so they stay jailed
+                "path": str(secure_path.parent.relative_to(WORKSPACE_ROOT)), 
+                "is_dir": True
+            })
 
-        for entry in os.scandir(abs_path):
-            # Optional: Hide hidden files
-            if entry.name.startswith('.') and entry.name != '..':
+        for entry in secure_path.iterdir():
+            # Hide hidden files
+            if entry.name.startswith('.'):
                 continue
 
             is_dir = entry.is_dir()
-            # If it's a file, only show FITS files
-            # (optional, customize as needed)
-            if not is_dir and not entry.name.lower().endswith(
-                    EXTENSIONS):
+            
+            # If it's a file, only show allowed extensions
+            if not is_dir and not entry.name.lower().endswith(EXTENSIONS):
                 continue
 
             items.append({
                 "name": entry.name,
-                "path": entry.path,
+                # Store the relative path from the workspace root
+                "path": str(entry.relative_to(WORKSPACE_ROOT)),
                 "is_dir": is_dir
             })
 
         # Sort: Directories first, then alphabetically
         items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
-        return {"current_path": abs_path, "items": items}
+        
+        return {
+            "current_path": str(secure_path.relative_to(WORKSPACE_ROOT)), 
+            "items": items
+        }
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")
 
