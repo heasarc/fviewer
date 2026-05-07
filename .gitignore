@@ -25,3 +25,5 @@ dist-ssr
 *.sw?
 
 *pyc
+.vitest-attachments
+__screenshots__
