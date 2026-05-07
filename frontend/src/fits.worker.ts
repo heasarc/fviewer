@@ -8,18 +8,20 @@ let activeFile: FitsFile | null = null;
 // Cache columns in the worker so we don't repeatedly ask WASM for the whole file
 let tableCache: Record<number, any> = {};
 
-// Helper function to safely read and isolate WASM memory
+// Helper function to safely read and isolate WASM memory for full columns
+// TODO: For large tables, this may cause OOM.
 function getCachedColumn(colNum: number) {
     if (!tableCache[colNum]) {
-        const rawResult = activeFile!.readColumn(colNum);
+        // Get total rows to read the full column
+        const totalRows = activeFile!.getNumRows();
+        
+        // Pass 0 (or 1 depending on your JS-to-C++ index mapping) and totalRows
+        const rawResult = activeFile!.readColumn(colNum, 0, totalRows);
         
         let safeData;
-        // TypeScript Fix: Use ArrayBuffer.isView to safely check for TypedArrays
         if (rawResult && rawResult.data && ArrayBuffer.isView(rawResult.data)) {
-            // Cast to any to bypass TS complaints, slice to isolate memory
             safeData = (rawResult.data as any).slice(); 
         } else {
-            // It's a standard JS Array (e.g., TSTRING column)
             safeData = rawResult ? rawResult.data : [];
         }
 
@@ -154,6 +156,8 @@ self.onmessage = async (e: MessageEvent) => {
             case 'READ_TABLE_CHUNK': {
                 if (!activeFile) throw new Error("No file opened");
                 const { startRow, endRow } = payload;
+                
+                const numRowsToRead = (endRow - startRow) + 1;
                 const numCols = activeFile.getNumCols();
                 
                 const chunkData: Record<string, any> = {};
@@ -163,18 +167,19 @@ self.onmessage = async (e: MessageEvent) => {
                     const colInfo = activeFile.getColumnInfo(i);
                     if (!colInfo) continue;
                     
-                    const cached = getCachedColumn(i);
-
-                    if (cached.data.buffer) {
-                        // Slice creates a new ArrayBuffer representing just the chunk
-                        const chunk = cached.data.slice(startRow, endRow + 1);
-                        chunkData[colInfo.name] = chunk;
-                        transferables.push(chunk.buffer);
-                    } else if (Array.isArray(cached.data)) {
-                        // Standard JS array chunking (Strings)
-                        chunkData[colInfo.name] = cached.data.slice(startRow, endRow + 1);
+                    // Call your updated WASM method directly for the specific chunk!
+                    const rawChunkResult = activeFile.readColumn(i, startRow, numRowsToRead);
+                    
+                    if (rawChunkResult && rawChunkResult.data && ArrayBuffer.isView(rawChunkResult.data)) {
+                        // Slice it immediately to copy it out of the WASM heap safely
+                        const chunkCopy = (rawChunkResult.data as any).slice();
+                        chunkData[colInfo.name] = chunkCopy;
+                        transferables.push(chunkCopy.buffer);
+                    } else if (Array.isArray(rawChunkResult?.data)) {
+                        // Standard JS Array (e.g. Strings)
+                        chunkData[colInfo.name] = rawChunkResult.data;
                     } else {
-                        chunkData[colInfo.name] = new Array((endRow - startRow) + 1).fill('Unsupported');
+                        chunkData[colInfo.name] = new Array(numRowsToRead).fill('Unsupported');
                     }
                 }
 
