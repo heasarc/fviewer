@@ -1,5 +1,6 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { playwright } from '@vitest/browser-playwright'; 
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -18,5 +19,19 @@ export default defineConfig({
         assetFileNames: `assets/[name].[ext]`
       }
     }
-  }
+  },
+  assetsInclude: ['**/*.fits'],  // for testing
+  test: {
+    // Enable browser mode
+    browser: {
+      enabled: true,
+      provider: playwright(),
+      headless: true, // Set to false if you want to visibly see the browser open
+      instances: [
+        { browser: 'chromium' }
+      ]
+    },
+    // Pattern to find your tests
+    include: ['tests/**/*.test.{ts,tsx}'],
+  },
 })
