@@ -1,6 +1,7 @@
 // # Copyright 2026, University of Maryland, All Rights Reserved
 
 // src/utils/regionUtils.ts
+import type { PixelScale } from 'wasm-cfitsio';
 
 export interface Region {
     id: string;
@@ -77,22 +78,31 @@ const parseDS9Arg = (val: string, index: number) => {
 
 export const parseDS9Regions = async (
     text: string,
-    width: number,
+    _width: number,
     height: number,
-    pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>,
-    worldToPix: (ra: number, dec: number) => Promise<{ x: number, y: number } | null>
+    _pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>,
+    worldToPix: (ra: number, dec: number) => Promise<{ x: number, y: number } | null>,
+    pixelScale: PixelScale | null
 ): Promise<Region[]> => {
     const lines = text.split('\n');
     const loadedRegions: Region[] = [];
     
     let coordSystem = 'image'; 
+    
+    // --- se the provided pixel scale (average the absolute X and Y scales) ---
+    // (WCS scales are often negative on one axis, e.g., RA decreasing as X increases)
     let pixScale = 1;
-
-    const c1 = await pixToWorld(width / 2, height / 2);
-    const c2 = await pixToWorld((width / 2) + 1, height / 2);
-    if (c1 && c2) {
-        pixScale = Math.hypot((c2.ra - c1.ra) * Math.cos(c1.dec * Math.PI / 180), c2.dec - c1.dec);
+    if (pixelScale) {
+        pixScale = (Math.abs(pixelScale.scaleX) + Math.abs(pixelScale.scaleY)) / 2;
     }
+
+    // manual pixScale; commented out; since we are getting it directly from wcsliib
+    // const c1 = await pixToWorld(width / 2, height / 2);
+    // const c2 = await pixToWorld((width / 2) + 1, height / 2);
+    // if (c1 && c2) {
+    //     pixScale = Math.hypot((c2.ra - c1.ra) * Math.cos(c1.dec * Math.PI / 180), c2.dec - c1.dec);
+    // }
+    
 
     for (let i = 0; i < lines.length; i++) {
         let line = lines[i].trim();
@@ -168,23 +178,24 @@ export const parseDS9Regions = async (
 export const serializeDS9Regions = async (
     regions: Region[],
     format: 'image' | 'fk5',
-    width: number,
+    _width: number,
     height: number,
-    pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>
+    pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>,
+    pixelScale: PixelScale | null
 ): Promise<string> => {
     let fileContent = "# Region file format: DS9 version 4.1\n";
     fileContent += "global color=green dashlist=8 3 width=1 font=\"helvetica 10 normal roman\" select=1 highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 include=1 source=1\n";
+    // Fallback to image if we requested fk5 but have no WCS scale
+    if (format === 'fk5' && !pixelScale) {
+        format = 'image';
+    }
+    
     fileContent += `${format}\n`; 
 
+    // --- Derive pixScale directly from WCS ---
     let pixScale = 1;
-    if (format === 'fk5') {
-        const c1 = await pixToWorld(width / 2, height / 2);
-        const c2 = await pixToWorld((width / 2) + 1, height / 2);
-        if (c1 && c2) {
-            pixScale = Math.hypot((c2.ra - c1.ra) * Math.cos(c1.dec * Math.PI / 180), c2.dec - c1.dec);
-        } else {
-            format = 'image';
-        }
+    if (format === 'fk5' && pixelScale) {
+        pixScale = (Math.abs(pixelScale.scaleX) + Math.abs(pixelScale.scaleY)) / 2;
     }
     
     for (const r of regions) {

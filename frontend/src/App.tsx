@@ -388,7 +388,7 @@ function App() {
         if (!imageData) return alert("No image data loaded.");
         
         const fileContent = await serializeDS9Regions(
-            regions, format, imageData.width, imageData.height, pixToWorld
+            regions, format, imageData.width, imageData.height, pixToWorld, imageData.pixScale
         );
 
         const blob = new Blob([fileContent], { type: 'text/plain' });
@@ -405,7 +405,7 @@ function App() {
 
         const text = await file.text(); 
         const loadedRegions = await parseDS9Regions(
-            text, imageData.width, imageData.height, pixToWorld, worldToPix
+            text, imageData.width, imageData.height, pixToWorld, worldToPix, imageData.pixScale,
         );
         
         setRegions((prev: Region[]) => [...prev, ...loadedRegions]);
@@ -493,7 +493,7 @@ function App() {
                             <li className="nav-item dropdown">
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">About</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
-                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.2.4</span></li>
+                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.2.5</span></li>
                                 </ul>
                             </li>
 

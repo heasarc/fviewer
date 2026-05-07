@@ -244,6 +244,13 @@ self.onmessage = async (e: MessageEvent) => {
                 break;
             }
 
+            case 'PIX_SCALE': {
+                if (!activeFile) throw new Error("No file opened");
+                const scale = activeFile.getPixelScale();
+                self.postMessage({ id, success: true, data: scale });
+                break;
+            }
+
             default:
                 throw new Error(`Unknown action: ${action}`);
         }
