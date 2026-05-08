@@ -24,7 +24,7 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 
 # Define the URLs that are allowed to talk to this API
-origins = [
+ORIGINS = [
     "http://localhost:5173",      # Local Vite dev server
     "http://127.0.0.1:5173",
     "http://localhost:8000",      # Local compiled UI
@@ -33,7 +33,7 @@ origins = [
 ]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -118,6 +118,19 @@ manager = ConnectionManager()
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    
+    # Extract the Origin header from the incoming WebSocket request
+    origin = websocket.headers.get("origin")
+
+    # Verify it's coming from an allowed UI
+    # Also check for "*" just in case you ever open it up completely.
+    if origin and origin not in ORIGINS and "*" not in ORIGINS:
+        print(("FViewer: Blocked WebSocket connection from "
+               f"unauthorized origin: {origin}"))
+        await websocket.close(code=1008) # 1008 = Policy Violation
+        return
+
+    # Accept the connection safely
     await manager.connect(client_id, websocket)
     try:
         while True:
@@ -172,7 +185,7 @@ def list_directory(path: str = "."):
     if not secure_path.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")
 
-    EXTENSIONS = ['.fits', '.fit', '.arf', '.rmf', '.rsp', '.pha']
+    EXTENSIONS = ['.fits', '.fit', '.arf', '.rmf', '.rsp', '.pha', '.img']
     EXTENSIONS = tuple(
         f'{ex}{extra}' for ex in EXTENSIONS for extra in ['', '.gz'])
 
