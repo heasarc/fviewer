@@ -1,6 +1,7 @@
 # Copyright 2026, University of Maryland, All Rights Reserved
 
 import os
+import re
 from pathlib import Path
 import asyncio
 import uuid
@@ -25,15 +26,15 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 # Define the URLs that are allowed to talk to this API
 ORIGINS = [
-    "http://localhost:5173",      # Local Vite dev server
-    "http://127.0.0.1:5173",
-    "http://localhost:8000",      # Local compiled UI
-    "http://127.0.0.1:8000",
     os.getenv("FVIEWER_ORIGIN", "")
 ]
+# Regex to allow ANY port on localhost or 127.0.0.1
+# Matches: http://localhost:8123, http://127.0.0.1:40593, etc.
+LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ORIGINS,
+    allow_origin_regex=LOCAL_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -122,12 +123,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     # Extract the Origin header from the incoming WebSocket request
     origin = websocket.headers.get("origin")
 
-    # Verify it's coming from an allowed UI
-    # Also check for "*" just in case you ever open it up completely.
-    if origin and origin not in ORIGINS and "*" not in ORIGINS:
-        print(("FViewer: Blocked WebSocket connection from "
-               f"unauthorized origin: {origin}"))
-        await websocket.close(code=1008) # 1008 = Policy Violation
+    is_allowed = False
+
+    # 1. Allow if it matches a static origin or wildcard
+    if origin in ORIGINS or "*" in ORIGINS:
+        is_allowed = True
+    # 2. Allow if it matches our dynamic local regex
+    elif origin and re.match(LOCAL_ORIGIN_REGEX, origin):
+        is_allowed = True
+
+    if not is_allowed and origin is not None:
+        print(f"Blocked WebSocket connection from: {origin}")
+        await websocket.close(code=1008)
         return
 
     # Accept the connection safely
