@@ -11,6 +11,7 @@ interface FitsImageProps {
     data: Float32Array | Int32Array | Int16Array | Uint8Array;
     width: number;
     height: number;
+    isConnected: boolean;
     checkWcs: () => Promise<boolean>;
     pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>;
     
@@ -32,7 +33,7 @@ export type DrawMode = 'pan' | 'circle' | 'box' | 'ellipse' | 'annulus';
 
 
 export const FitsImage: React.FC<FitsImageProps> = ({ 
-        data, width, height, checkWcs, pixToWorld, regions, setRegions, 
+        data, width, height, isConnected, checkWcs, pixToWorld, regions, setRegions, 
         onSaveRegions, onLoadRegions, onLoadServerRegions, onRegionChange,
         colormap, setColormap, stretch, setStretch
     }) => {
@@ -400,12 +401,14 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                                     <i className="bi bi-folder2-open"></i> Load Local Regions...
                                 </button>
                             </li>
-                            <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={onLoadServerRegions}>
-                                    <span style={{ width: '16px' }}></span>
-                                    <i className="bi bi-cloud-arrow-down"></i> Load Server Regions...
-                                </button>
-                            </li>
+                            {isConnected && (                                    
+                                <li>
+                                    <button className="dropdown-item fv-dropdown-item" onClick={onLoadServerRegions}>
+                                        <span style={{ width: '16px' }}></span>
+                                        <i className="bi bi-cloud-arrow-down"></i> Load Server Regions...
+                                    </button>
+                                </li>
+                            )}
                             <li>
                                 <button 
                                     className="dropdown-item fv-dropdown-item" 
