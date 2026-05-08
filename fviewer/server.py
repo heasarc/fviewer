@@ -2,6 +2,7 @@
 
 import os
 import re
+from urllib.parse import urlparse
 from pathlib import Path
 import asyncio
 import uuid
@@ -123,6 +124,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     # Extract the Origin header from the incoming WebSocket request
     origin = websocket.headers.get("origin")
 
+    # Get the host the browser is actually talking to
+    # Jupyter proxy uses x-forwarded-host, standard connections use host
+    host = websocket.headers.get("x-forwarded-host") or websocket.headers.get("host")
+
     is_allowed = False
 
     # 1. Allow if it matches a static origin or wildcard
@@ -131,6 +136,12 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     # 2. Allow if it matches our dynamic local regex
     elif origin and re.match(LOCAL_ORIGIN_REGEX, origin):
         is_allowed = True
+    # 3. Dynamically allow Same-Origin requests (Jupyter Proxy)
+    elif origin and host:
+        # Parse the origin to extract just its host (removes http:// or https://)
+        origin_host = urlparse(origin).netloc
+        if origin_host == host:
+            is_allowed = True
 
     if not is_allowed and origin is not None:
         print(f"Blocked WebSocket connection from: {origin}")
