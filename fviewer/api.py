@@ -151,3 +151,35 @@ class FViewer:
             "add_region", type="annulus", x=x, y=y, innerR=inner_r,
             outerR=outer_r, color=color, format=format, isBackground=is_background)
 
+    def load_regions(self, filepath: str):
+        """Read a local .reg file and send its text to the viewer."""
+        with open(filepath, 'r') as f:
+            content = f.read()
+            
+        return self._send("load_regions_from_string", content=content)
+
+    def save_regions(self, filepath: str, format: str = "image"):
+        """Fetch regions as a DS9 string from the viewer and save to disk."""
+        if format not in ["image", "fk5"]:
+            raise ValueError("format must be 'image' or 'fk5'")
+        
+        # Enforce safe file extensions
+        safe_exts = ('.reg', '.txt')
+        if not filepath.lower().endswith(safe_exts):
+            raise ValueError(f"For security, filepath must end with one of {safe_exts}")
+            
+        response = self._send("get_regions_string", format=format)
+        content = response.get("content", "")
+
+        # Prevent Resource Exhaustion / Massive File writes
+        # 5 Megabytes is extremely large for a region text file.
+        # If it's larger than this, it's likely a malicious payload.
+        max_bytes = 5 * 1024 * 1024 
+        if len(content.encode('utf-8')) > max_bytes:
+            raise RuntimeError("Received region data exceeds 5MB limit. Aborting save.")
+        
+        with open(filepath, 'w') as f:
+            f.write(content)
+            
+        return {"status": "ok", "file": filepath}
+

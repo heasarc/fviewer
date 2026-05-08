@@ -3,6 +3,7 @@
 import { useCallback } from 'react';
 import type { Region } from '../utils/regionUtils';
 import {getApiUrl} from './useWebSocket';
+import {parseDS9Regions, serializeDS9Regions} from '../utils/regionUtils';
 
 export function useCommandHandler(
     processFile: (file: File) => void,
@@ -208,6 +209,51 @@ export function useCommandHandler(
       ack();
       break;
     }
+
+    case 'load_regions_from_string':
+      try {
+        if (!imageData || !imageData.width || !imageData.height) {
+            return sendReply({ message_id: command.message_id, error: "Image data not ready." });
+        }
+        
+        const newRegions = await parseDS9Regions(
+            command.content, 
+            imageData.width, 
+            imageData.height, 
+            pixToWorld, 
+            worldToPix, 
+            imageData.pixScale || null
+        );
+        
+        // Append the loaded regions to the existing ones
+        setRegions((prev: any[]) => [...prev, ...newRegions]); 
+        ack();
+      } catch (err) {
+        sendReply({ message_id: command.message_id, error: "Failed to parse regions." });
+      }
+      break;
+
+    case 'get_regions_string':
+      try {
+        if (!imageData || !imageData.width || !imageData.height) {
+            return sendReply({ message_id: command.message_id, error: "Image data not ready." });
+        }
+        
+        const format = command.format || 'image';
+        const text = await serializeDS9Regions(
+            regions, 
+            format, 
+            imageData.width, 
+            imageData.height, 
+            pixToWorld, 
+            imageData.pixScale || null
+        );
+        
+        replyData({ content: text });
+      } catch (err) {
+        sendReply({ message_id: command.message_id, error: "Failed to serialize regions." });
+      }
+      break;
     
     default:
       sendReply({ message_id: command.message_id, error: `Unknown command: ${command.action}` });
