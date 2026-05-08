@@ -635,6 +635,7 @@ function App() {
                                             <div className="flex-grow-1 position-relative d-flex flex-column" style={{ minHeight: 0 }}>
                                                 <FitsImage 
                                                     data={imageData.data} width={imageData.width} height={imageData.height} 
+                                                    isConnected={isConnected}
                                                     checkWcs={checkWcs} pixToWorld={pixToWorld}
                                                     regions={regions}
                                                     setRegions={setRegions}
