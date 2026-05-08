@@ -5,8 +5,11 @@ from pathlib import Path
 import asyncio
 import uuid
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import Header, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+
 
 # If running standalone, this defaults to "" (empty string)
 # If running in Jupyter, this becomes "/fviewer"
@@ -18,6 +21,23 @@ WORKSPACE_ROOT = Path(os.getenv("FVIEWER_WORKSPACE", Path.cwd())).resolve()
 
 app = FastAPI(title="FViewer API", root_path=ROOT_PATH)
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+
+
+# Define the URLs that are allowed to talk to this API
+origins = [
+    "http://localhost:5173",      # Local Vite dev server
+    "http://127.0.0.1:5173",
+    "http://localhost:8000",      # Local compiled UI
+    "http://127.0.0.1:8000",
+    os.getenv("FVIEWER_ORIGIN", "")
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def get_secure_path(user_path: str) -> Path:
     """Validates that the requested path is within the WORKSPACE_ROOT."""
@@ -31,6 +51,24 @@ def get_secure_path(user_path: str) -> Path:
             status_code=403, detail="Path traversal detected. Access denied.")
     
     return target_path
+
+
+def verify_token(authorization: str = Header(None)):
+    """Dependency to check the JupyterHub API token."""
+    expected_token = os.getenv('JUPYTERHUB_API_TOKEN')
+    
+    # Only enforce security if the environment actually has a token configured.
+    # (This allows you to still run it locally without a token)
+    if expected_token:
+        if not authorization:
+            raise HTTPException(
+                status_code=401, detail="Missing Authorization header")
+        
+        # Strip the "token " prefix and compare
+        provided_token = authorization.replace("token ", "").strip()
+        if provided_token != expected_token:
+            raise HTTPException(status_code=403, detail="Invalid token")
+
 
 class ConnectionManager:
     def __init__(self):
@@ -92,7 +130,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         manager.disconnect(client_id)
 
 
-@app.post("/api/command")
+@app.post("/api/command", dependencies=[Depends(verify_token)])
 async def receive_command(command: dict, client_id: str):
     # ALL commands wait for an acknowledgment from React
     result = await manager.send_and_wait(client_id, command)
@@ -105,7 +143,7 @@ async def receive_command(command: dict, client_id: str):
     return result
 
 
-@app.get("/api/clients")
+@app.get("/api/clients", dependencies=[Depends(verify_token)])
 def get_clients():
     """Return a list of connected client IDs."""
     return {"clients": list(manager.active_connections.keys())}
