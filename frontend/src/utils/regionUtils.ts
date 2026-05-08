@@ -202,7 +202,16 @@ export const serializeDS9Regions = async (
         let line = "";
         let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
 
-        // ... (keep your existing width/height/cx/cy math)
+        if (r.type === 'box') {
+            w = Math.abs(r.endX - r.startX); h = Math.abs(r.endY - r.startY);
+            cx = (r.startX + r.endX) / 2; cy = (r.startY + r.endY) / 2;
+        } else if (r.type === 'ellipse') {
+            w = Math.abs(r.endX - r.startX) * 2; h = Math.abs(r.endY - r.startY) * 2; 
+            cx = r.startX; cy = r.startY;
+        } else { 
+            radius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
+            cx = r.startX; cy = r.startY;
+        }
 
         let outCx = cx;
         // --- FIX: Convert SVG Top-Left back to FITS Bottom-Left ---
