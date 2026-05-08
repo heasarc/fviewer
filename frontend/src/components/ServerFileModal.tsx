@@ -1,15 +1,16 @@
 // # Copyright 2026, University of Maryland, All Rights Reserved
 
 import { useState, useEffect } from 'react';
-import {getApiUrl} from '../hooks/useWebSocket';
+import { getApiUrl } from '../hooks/useWebSocket';
 
 interface ServerFileModalProps {
     isOpen: boolean;
     onClose: () => void;
     onFileSelect: (serverPath: string) => void;
+    mode?: 'fits' | 'region' | null;
 }
 
-export function ServerFileModal({ isOpen, onClose, onFileSelect }: ServerFileModalProps) {
+export function ServerFileModal({ isOpen, onClose, onFileSelect, mode }: ServerFileModalProps) {
     const [currentPath, setCurrentPath] = useState<string>('.');
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
@@ -32,12 +33,26 @@ export function ServerFileModal({ isOpen, onClose, onFileSelect }: ServerFileMod
 
     if (!isOpen) return null;
 
+    // Filter items based on the current mode
+    const visibleItems = items.filter(item => {
+        if (item.is_dir) return true; // Always show directories
+        
+        const isReg = item.name.toLowerCase().endsWith('.reg');
+        if (mode === 'region') {
+            return isReg; // Only show .reg files
+        } else {
+            return !isReg; // Hide .reg files when looking for FITS
+        }
+    });
+
     return (
         <div className="modal show d-block" style={{ backgroundColor: 'var(--fv-panel)' }}>
             <div className="modal-dialog modal-lg modal-dialog-scrollable">
                 <div className="modal-content fv-bg fv-text">
                     <div className="modal-header border-secondary">
-                        <h5 className="modal-title">Open from Server</h5>
+                        <h5 className="modal-title">
+                            {mode === 'region' ? 'Load Region from Server' : 'Open FITS from Server'}
+                        </h5>
                         <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
                     </div>
                     <div className="modal-body p-0">
@@ -49,7 +64,7 @@ export function ServerFileModal({ isOpen, onClose, onFileSelect }: ServerFileMod
                             <div className="p-4 text-center"><div className="spinner-border text-primary"></div></div>
                         ) : (
                             <div className="list-group list-group-flush rounded-0">
-                                {items.map((item, i) => (
+                                {visibleItems.map((item, i) => (
                                     <button 
                                         key={i}
                                         className="list-group-item list-group-item-action bg-transparent text-white border-secondary d-flex align-items-center"
@@ -62,7 +77,13 @@ export function ServerFileModal({ isOpen, onClose, onFileSelect }: ServerFileMod
                                             }
                                         }}
                                     >
-                                        <i className={`bi ${item.is_dir ? 'bi-folder' : 'bi-file-earmark-image text-info'} me-3`}></i>
+                                        <i className={`bi ${
+                                            item.is_dir 
+                                                ? 'bi-folder' 
+                                                : (item.name.toLowerCase().endsWith('.reg') 
+                                                    ? 'bi-bounding-box text-success' 
+                                                    : 'bi-file-earmark-image text-info')
+                                        } me-3`}></i>
                                         {item.name}
                                     </button>
                                 ))}

@@ -19,6 +19,7 @@ interface FitsImageProps {
     setRegions: React.Dispatch<React.SetStateAction<Region[]>>;
     onSaveRegions: (format: 'image' | 'fk5') => void;
     onLoadRegions: () => void;
+    onLoadServerRegions: () => void;
     onRegionChange?: (region: Region | null) => void;
 
     colormap: string;
@@ -32,7 +33,7 @@ export type DrawMode = 'pan' | 'circle' | 'box' | 'ellipse' | 'annulus';
 
 export const FitsImage: React.FC<FitsImageProps> = ({ 
         data, width, height, checkWcs, pixToWorld, regions, setRegions, 
-        onSaveRegions, onLoadRegions, onRegionChange,
+        onSaveRegions, onLoadRegions, onLoadServerRegions, onRegionChange,
         colormap, setColormap, stretch, setStretch
     }) => {
     const viewportRef = useRef<HTMLDivElement>(null); 
@@ -396,7 +397,13 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                             <li>
                                 <button className="dropdown-item fv-dropdown-item" onClick={onLoadRegions}>
                                     <span style={{ width: '16px' }}></span>
-                                    <i className="bi bi-folder2-open"></i> Load Regions...
+                                    <i className="bi bi-folder2-open"></i> Load Local Regions...
+                                </button>
+                            </li>
+                            <li>
+                                <button className="dropdown-item fv-dropdown-item" onClick={onLoadServerRegions}>
+                                    <span style={{ width: '16px' }}></span>
+                                    <i className="bi bi-cloud-arrow-down"></i> Load Server Regions...
                                 </button>
                             </li>
                             <li>
@@ -406,7 +413,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                                     disabled={regions.length === 0}
                                 >
                                     <span style={{ width: '16px' }}></span>
-                                    <i className="bi bi-download"></i> Save as Image
+                                    <i className="bi bi-download"></i> Save in Image Coords
                                 </button>
                             </li>
                             <li>
@@ -417,7 +424,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                                     disabled={regions.length === 0 || !hasWCS} 
                                 >
                                     <span style={{ width: '16px' }}></span>
-                                    <i className="bi bi-globe"></i> Save as WCS/FK5
+                                    <i className="bi bi-globe"></i> Save in WCS/FK5 Coords
                                 </button>
                             </li>
                         </ul>

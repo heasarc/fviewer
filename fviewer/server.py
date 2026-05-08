@@ -203,7 +203,7 @@ def list_directory(path: str = "."):
     if not secure_path.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")
 
-    EXTENSIONS = ['.fits', '.fit', '.arf', '.rmf', '.rsp', '.pha', '.img']
+    EXTENSIONS = ['.fits', '.fit', '.arf', '.rmf', '.rsp', '.pha', '.img', '.reg']
     EXTENSIONS = tuple(
         f'{ex}{extra}' for ex in EXTENSIONS for extra in ['', '.gz'])
 

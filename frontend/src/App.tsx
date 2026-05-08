@@ -56,7 +56,7 @@ function App() {
     const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
     const [rawHeaderString, setRawHeaderString] = useState('');
 
-    const [isServerModalOpen, setIsServerModalOpen] = useState(false);
+    const [serverModalMode, setServerModalMode] = useState<'fits' | 'region' | null>(null);
 
     const [regions, setRegions] = useState<Region[]>([]);
     const regionInputRef = useRef<HTMLInputElement>(null);
@@ -123,21 +123,30 @@ function App() {
     const handleServerFileSelect = async (serverPath: string) => {
         try {
             setIsLoading(true);
-            // Fetch the file from the server endpoint we built earlier!
             const response = await fetch(getApiUrl(`api/file?path=${encodeURIComponent(serverPath)}`));
             if (!response.ok) throw new Error("Failed to fetch file");
             
-            const blob = await response.blob();
-            const filename = serverPath.split('/').pop() || 'remote.fits';
-            const file = new File([blob], filename, { type: 'application/octet-stream' });
-            
-            // Pass it to your existing file processor
-            await processFile(file);
+            // Route based on the mode
+            if (serverModalMode === 'region' || serverPath.endsWith('.reg')) {
+                if (!imageData) throw new Error("No image data available for region coordinate conversion.");
+                const text = await response.text();
+                const newRegions = await parseDS9Regions(
+                    text, imageData.width, imageData.height, 
+                    pixToWorld, worldToPix, imageData.pixScale || null
+                );
+                setRegions((prev: Region[]) => [...prev, ...newRegions]);
+            } else {
+                const blob = await response.blob();
+                const filename = serverPath.split('/').pop() || 'remote.fits';
+                const file = new File([blob], filename, { type: 'application/octet-stream' });
+                await processFile(file);
+            }
         } catch (error) {
             console.error("Error loading server file:", error);
             alert("Failed to load file from server.");
         } finally {
             setIsLoading(false);
+            setServerModalMode(null); // Close the modal
         }
     };
 
@@ -465,7 +474,7 @@ function App() {
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
                                     <li><button className="dropdown-item fv-dropdown-item" onClick={() => fileInputRef.current?.click()}><i className="bi bi-folder2-open"></i> Open Local File...</button></li>
                                     {isConnected && (
-                                        <li><button className="dropdown-item fv-dropdown-item" onClick={() => setIsServerModalOpen(true)}><i className="bi bi-plug-fill"></i> Open From Server...</button></li>
+                                        <li><button className="dropdown-item fv-dropdown-item" onClick={() => setServerModalMode('fits')}><i className="bi bi-plug-fill"></i> Open From Server...</button></li>
                                     )}
                                     <li><hr className="dropdown-divider border-secondary my-1" /></li>
                                     <li><button className="dropdown-item fv-dropdown-item" onClick={handleSave} disabled={hduList.length === 0 || isLoading}><i className="bi bi-save"></i> Save Edited FITS</button></li>
@@ -630,7 +639,8 @@ function App() {
                                                     regions={regions}
                                                     setRegions={setRegions}
                                                     onSaveRegions={handleSaveRegions}
-                                                    onLoadRegions={() => regionInputRef.current?.click()} 
+                                                    onLoadRegions={() => regionInputRef.current?.click()}
+                                                    onLoadServerRegions={() => setServerModalMode('region')}
                                                     onRegionChange={handleRegionChange}
                                                     colormap={colormap}
                                                     setColormap={setColormap}
@@ -926,9 +936,10 @@ function App() {
                 }}
             />
             <ServerFileModal 
-                isOpen={isServerModalOpen} 
-                onClose={() => setIsServerModalOpen(false)} 
-                onFileSelect={handleServerFileSelect} 
+                isOpen={serverModalMode !== null}
+                mode={serverModalMode}
+                onClose={() => setServerModalMode(null)} 
+                onFileSelect={handleServerFileSelect}
             />
         </div>
     );
