@@ -1,3 +1,6 @@
+# 0.2.5
+- add security checks and tests.
+
 # 0.2.4
 - add support for ds9 region format (wcs, background).
 
