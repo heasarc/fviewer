@@ -1,15 +1,43 @@
 // # Copyright 2026, University of Maryland, All Rights Reserved
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import type {UIEvent} from 'react';
+/**
+ * @fileoverview Virtualized Table Component for FViewer.
+ * 
+ * Renders massive FITS binary tables (100,000+ rows) without freezing the browser.
+ * It achieves this via two techniques:
+ * 1. DOM Virtualization: Only the rows currently visible on-screen (plus a small buffer) 
+ *    are rendered as HTML elements.
+ * 2. Lazy Loading: It monitors the scroll position and fires `onFetchData` to request 
+ *    missing chunks of data from the Web Worker asynchronously.
+ */
 
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import type { UIEvent } from 'react';
+
+/**
+ * Props for the VirtualTable component.
+ */
 interface VirtualTableProps {
+    /** Total number of rows in the FITS table. */
     numRows: number;
+    /** Array of column schema objects (name, unit, format) from the FITS header. */
     columns: any[];
+    /** 
+     * A sparse dictionary mapping column names to arrays of data. 
+     * Because data is lazy-loaded in chunks, many indices in these arrays may be `undefined`.
+     */
     dataMap: Record<string, any[]>;
+    /** Fixed pixel height for each row. Default is 32. */
     rowHeight?: number;
+    /** 
+     * Callback fired when a user double-clicks a cell, edits the text, and hits Enter.
+     * Triggers a Web Worker write command.
+     */
     onCellEdit?: (colName: string, colNum: number, rowIndex: number, newValue: string) => void;
-    // NEW: Callback to request missing rows from the Worker
+    /** 
+     * Callback fired when the user scrolls to a section of the table where data is missing.
+     * Requests a specific chunk (e.g., rows 500 to 600) from the Web Worker.
+     */
     onFetchData?: (startRow: number, endRow: number) => void;
 }
 
@@ -28,7 +56,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
     const [editingCell, setEditingCell] = useState<{ row: number, colName: string } | null>(null);
     const [editValue, setEditValue] = useState<string>('');
 
-    // for tracking chuck requests and preventing spamming the worker
+    // Tracks requested chunk ranges (e.g., "0-50") to prevent spamming the Web Worker
+    // with duplicate requests while waiting for the WASM thread to respond.
     const requestedChunks = useRef<Set<string>>(new Set());
 
     // --- Column Resizing State ---
@@ -38,6 +67,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
     const getColWidth = (idx: number) => colWidths[idx] || defaultColWidth;
 
     // --- Dynamic Height Measurement ---
+    // Uses ResizeObserver to ensure the virtualization math adapts perfectly 
+    // if the user resizes the browser window or the FViewer side panel.
     useEffect(() => {
         if (!scrollContainerRef.current) return;
         const observer = new ResizeObserver(entries => {
@@ -48,6 +79,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
     }, []);
 
     // --- Virtualization Math ---
+    // Calculate exactly which indices to render based on the scroll position.
     const visibleRowCount = Math.ceil(containerHeight / rowHeight) + 10;
     const totalHeight = numRows * rowHeight;
     const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - 4);
@@ -57,6 +89,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
     const totalWidth = rowNumWidth + columns.reduce((sum, _, idx) => sum + getColWidth(idx), 0);
 
     // --- Lazy Load Trigger ---
+    // Monitors the currently visible view (plus a 50-row buffer). If the `dataMap` 
+    // is missing data for these rows, it queues a fetch request to the Web Worker.
     useEffect(() => {
         if (!onFetchData || columns.length === 0) return;
 
@@ -80,6 +114,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
         if (needsFetch && !requestedChunks.current.has(chunkKey)) {
             requestedChunks.current.add(chunkKey); // Mark as requested
 
+            // Debounce the request slightly to avoid triggering hundreds of tiny 
+            // requests if the user grabs the scrollbar and drags it rapidly to the bottom.
             const timer = setTimeout(() => {
                 onFetchData(fetchStart, fetchEnd);
             }, 100);
@@ -89,6 +125,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
 
     // --- Handlers ---
     const handleDoubleClick = (row: number, colName: string, currentValue: any) => {
+        // Prevent editing vector/array columns for now
         if (currentValue?.length !== undefined && typeof currentValue !== 'string') return;
         setEditingCell({ row, colName });
         setEditValue(String(currentValue ?? ''));
@@ -109,7 +146,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
 
         const handlePointerMove = (e: PointerEvent) => {
             const diff = e.clientX - resizingCol.startX;
-            // Constrain minimum column width to 50px
+            // Constrain minimum column width to 50px to prevent invisible columns
             const newWidth = Math.max(50, resizingCol.startWidth + diff);
             
             setColWidths(prev => ({
@@ -145,7 +182,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                         fontSize: '0.85rem'
                     }}
                 >
-                    {/* Sticky Row Number */}
+                    {/* Sticky Row Number (Stays visible when scrolling right) */}
                     <div 
                         role="cell" 
                         className="d-flex align-items-center justify-content-end px-2 fw-bold border-end flex-shrink-0" 
@@ -161,7 +198,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                     {columns.map((col, colIdx) => {
                         let val = dataMap[col.name]?.[i];
                         
-                        // NEW: Handle loading state gracefully
+                        // Handle loading state gracefully while waiting for worker chunks
                         const isMissing = val === undefined;
                         const isArray = !isMissing && val?.length !== undefined && typeof val !== 'string';
                         
@@ -218,7 +255,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                 onScroll={(e: UIEvent<HTMLDivElement>) => setScrollTop(e.currentTarget.scrollTop)} 
                 style={{ backgroundColor: 'var(--fv-bg)' }}
             >
-                {/* Sticky Header */}
+                {/* Sticky Header Row */}
                 <div 
                     className="d-flex fw-bold shadow-sm position-sticky top-0 border-bottom" 
                     style={{ 
@@ -235,14 +272,14 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                     {columns.map((col, idx) => (
                         <div 
                             key={idx} 
-                            // Added 'position-relative' so the resizer handle can lock to the right edge
+                            // 'position-relative' allows the resizer handle to lock to the right edge
                             className="position-relative d-flex flex-column justify-content-center px-2 text-truncate border-end flex-shrink-0" 
                             style={{ width: getColWidth(idx), borderColor: 'rgba(255,255,255,0.05)' }}
                         >
                             <span style={{ fontSize: '0.8rem', color: 'var(--fv-accent)' }}>{col.name}</span>
                             <span style={{ fontSize: '0.65rem', color: 'var(--bs-gray-600)' }}>{col.unit || col.form}</span>
                             
-                            {/* NEW: Invisible Drag Handle */}
+                            {/* Invisible Drag Handle for Column Resizing */}
                             <div 
                                 style={{
                                     position: 'absolute',
@@ -272,10 +309,10 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                     ))}
                 </div>
 
-                {/* Invisible Spacer */}
+                {/* Invisible Spacer to establish the full scrollable height of the table */}
                 <div className="position-absolute top-0 start-0" style={{ height: totalHeight, width: totalWidth, marginTop: '40px' }} />
                 
-                {/* Visible Rows Container */}
+                {/* Visible Rows Container (Only renders the subset of active rows) */}
                 <div className="position-absolute top-0 start-0" style={{ width: totalWidth, marginTop: '40px' }}>
                     {visibleRows}
                 </div>
