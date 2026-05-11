@@ -52,6 +52,26 @@ We have successfully transitioned from a static client-side MVP to a hybrid Pyth
 6. **`FitsHeaderModal.tsx`:** Searchable FITS header card viewer/editor.
 7. **`ServerFileModal`**: When a backend server is running, this is used to open a file brower on the server side.
 
+
+### Testing 
+The project uses strictly isolated testing environments tailored to the hybrid stack:
+
+*   **Frontend & WASM (Vitest + Playwright):** Runs in "Browser Mode" to natively test Web Workers and WASM zero-copy memory chunking, avoiding Node.js/Emscripten polyfill conflicts. React hooks are tested for correct state updates and input sanitization.
+*   **FastAPI Backend (Pytest + HTTPX):** Validates security (e.g., path traversal prevention). Asynchronous WebSocket routing and `send_and_wait` Futures are tested using pure `asyncio` to avoid FastAPI `TestClient` deadlocks.
+*   **Python Client (Pytest + Responses):** Mocks REST calls to validate JSON payload formatting, dynamic session connection logic, and authentication token injection.
+*   **End-to-End (Pytest-Playwright):** Starts a live `uvicorn` server and headless Chromium browser. Validates the complete bidirectional loop: Python API sends a command -> WebSocket routes it -> React/WASM processes it -> Playwright asserts the actual DOM/canvas updates.
+
+
+### Security
+The application enforces strict boundaries across the hybrid stack to prevent unauthorized access and execution:
+
+*   **Filesystem Jailing:** Endpoints reading local disk (`/api/file`, `/api/fs/list`) use `pathlib.Path.is_relative_to()` to strictly confine access to the workspace root, blocking path traversal attacks.
+*   **API Authentication:** Control endpoints (like `/api/command`) require the `JUPYTERHUB_API_TOKEN`, preventing unauthorized local network users from hijacking the UI.
+*   **CORS & WebSockets:** Regex-based `CORSMiddleware` safely supports dynamic Jupyter ports. WebSockets explicitly validate `Origin` against `Host` headers to prevent Cross-Site WebSocket Hijacking (CSWSH).
+*   **Payload Sanitization:** The React command handler strictly validates all incoming WebSocket payloads (types, coordinate bounds, color hexes) before mutating state to prevent XSS or UI crashes.
+*   **Jupyter Integration:** The TypeScript lab extension uses a custom Lumino Widget to embed FViewer in a clean `<iframe>`, avoiding conflicting `sandbox` attributes and resolving browser security warnings.
+
+
 ### Current Task
 Understanding this architecture, I would like to do the following:
 **[INSERT YOUR NEXT GOAL HERE - e.g., Add commands to extract 2D image pixel arrays back to Python, or Implement multi-tab session management]**
