@@ -1,25 +1,49 @@
 // Copyright 2026, University of Maryland, All Rights Reserved
 
+/**
+ * @fileoverview Web Worker for FViewer.
+ * Runs `cfitsio` / `wcslib` via WebAssembly in a background thread.
+ * This prevents intensive parsing, WCS calculations, and data fetching 
+ * from freezing the main React UI thread.
+ */
+
 import { FitsFile } from 'wasm-cfitsio'; 
 
-// Store the active file in the worker's memory
+/** 
+ * Holds the current active FITS file instance in the worker's memory. 
+ * Must be closed before opening a new file to prevent WASM memory leaks.
+ */
 let activeFile: FitsFile | null = null;
 
-// Cache columns in the worker so we don't repeatedly ask WASM for the whole file
+/** 
+ * Caches full-column reads to avoid repeatedly asking WASM to parse the same data.
+ * Keyed by column index (1-based generally, depending on cfitsio mapping).
+ */
 let tableCache: Record<number, any> = {};
 
-// Helper function to safely read and isolate WASM memory for full columns
-// TODO: For large tables, this may cause OOM.
+/**
+ * Helper function to safely read and isolate WASM memory for full columns.
+ * 
+ * CRITICAL MEMORY BEHAVIOR: 
+ * When WASM returns a TypedArray (like Float32Array), it is typically a "view" 
+ * directly into the C++ heap. If the C++ side frees or reallocates that memory, 
+ * the JS view becomes corrupted. To prevent this, we immediately call `.slice()` 
+ * to clone the data out of the WASM heap into pure JS memory.
+ * 
+ * @param {number} colNum - The index of the column to read.
+ * @returns {Object} The cached column data with a safe, cloned buffer.
+ */
 function getCachedColumn(colNum: number) {
     if (!tableCache[colNum]) {
         // Get total rows to read the full column
         const totalRows = activeFile!.getNumRows();
         
-        // Pass 0 (or 1 depending on your JS-to-C++ index mapping) and totalRows
+        // Read from row 0 (or 1 depending on JS-to-C++ index mapping) to totalRows
         const rawResult = activeFile!.readColumn(colNum, 0, totalRows);
         
         let safeData;
         if (rawResult && rawResult.data && ArrayBuffer.isView(rawResult.data)) {
+            // Clone instantly to protect against C++ memory corruption/reallocation
             safeData = (rawResult.data as any).slice(); 
         } else {
             safeData = rawResult ? rawResult.data : [];
@@ -33,7 +57,12 @@ function getCachedColumn(colNum: number) {
     return tableCache[colNum];
 }
 
-// Listen for messages from the main React thread
+/**
+ * Main message router for commands sent from the React thread.
+ * Uses `postMessage` to send data back. Heavy payloads use the second argument 
+ * (Transferable Objects) to pass ownership of ArrayBuffers without copying, 
+ * resulting in 0ms transfer times to the main UI thread.
+ */
 self.onmessage = async (e: MessageEvent) => {
     const { id, action, payload } = e.data;
 
@@ -41,7 +70,7 @@ self.onmessage = async (e: MessageEvent) => {
         switch (action) {
             case 'OPEN_FILE': {
                 // payload is the raw Uint8Array from the file input
-                if (activeFile) activeFile.close(); // Clean up old file
+                if (activeFile) activeFile.close(); // Clean up old file to free WASM memory
                 activeFile = await FitsFile.open(payload);
                 tableCache = {}; 
                 const numHDUs = activeFile.getNumHDUs();
@@ -106,7 +135,7 @@ self.onmessage = async (e: MessageEvent) => {
                 if (!activeFile) throw new Error("No file opened");
                 const status = activeFile.moveToHDU(payload.hduNum);
 
-                // CLEAR THE CACHE for the new HDU!
+                // CLEAR THE CACHE for the new HDU to prevent reading old data!
                 tableCache = {};
                 
                 // Determine HDU type by reading keywords
@@ -142,12 +171,14 @@ self.onmessage = async (e: MessageEvent) => {
                 let sendData = { ...cached };
                 
                 if (cached.data.buffer) {
-                    // Clone our safe cache so we don't lose it when transferring
+                    // Clone our safe JS cache so we don't lose access to it in the worker 
+                    // when transferring ownership of the ArrayBuffer to the main thread.
                     const transferClone = cached.data.slice();
                     transferables.push(transferClone.buffer);
                     sendData.data = transferClone;
                 }
 
+                // Transfer ownership of the buffer array for 0ms main-thread transfer
                 (self as any).postMessage({ id, success: true, data: sendData }, transferables);
                 break;
             }
@@ -167,7 +198,7 @@ self.onmessage = async (e: MessageEvent) => {
                     const colInfo = activeFile.getColumnInfo(i);
                     if (!colInfo) continue;
                     
-                    // Call your updated WASM method directly for the specific chunk!
+                    // Call the WASM method directly for the specific chunk
                     const rawChunkResult = activeFile.readColumn(i, startRow, numRowsToRead);
                     
                     if (rawChunkResult && rawChunkResult.data && ArrayBuffer.isView(rawChunkResult.data)) {
@@ -176,13 +207,14 @@ self.onmessage = async (e: MessageEvent) => {
                         chunkData[colInfo.name] = chunkCopy;
                         transferables.push(chunkCopy.buffer);
                     } else if (Array.isArray(rawChunkResult?.data)) {
-                        // Standard JS Array (e.g. Strings)
+                        // Standard JS Array (e.g. for String columns)
                         chunkData[colInfo.name] = rawChunkResult.data;
                     } else {
                         chunkData[colInfo.name] = new Array(numRowsToRead).fill('Unsupported');
                     }
                 }
 
+                // Push chunk to main thread using zero-copy Transferable Objects
                 (self as any).postMessage({ id, success: true, data: chunkData }, transferables);
                 break;
             }
@@ -201,10 +233,10 @@ self.onmessage = async (e: MessageEvent) => {
             case 'SAVE_FILE': {
                 if (!activeFile) throw new Error("No file opened");
                 
-                // activeFile.save() flushes cfitsio and returns a Uint8Array
+                // activeFile.save() flushes cfitsio buffers and returns a Uint8Array
                 const fileBytes = activeFile.save();
 
-                // Transfer the buffer efficiently
+                // Transfer the buffer efficiently to the main thread for downloading
                 (self as any).postMessage(
                     { id, success: true, data: fileBytes }, 
                     [fileBytes.buffer]
@@ -223,7 +255,7 @@ self.onmessage = async (e: MessageEvent) => {
 
                 const transferables = imageResult.data?.buffer ? [imageResult.data.buffer] : [];
 
-                // Fix: Cast self to any here as well
+                // Send massive image array directly to main thread without copying
                 (self as any).postMessage({ 
                     id, 
                     success: true, 
@@ -250,7 +282,7 @@ self.onmessage = async (e: MessageEvent) => {
             case 'WORLD_TO_PIX': {
                 if (!activeFile) throw new Error("No file opened");
                 const { ra, dec } = payload;
-                const coords = activeFile.worldToPix(ra, dec); // returns {y, y} or null
+                const coords = activeFile.worldToPix(ra, dec); // returns {x, y} or null
                 self.postMessage({ id, success: true, data: coords });
                 break;
             }
@@ -266,7 +298,7 @@ self.onmessage = async (e: MessageEvent) => {
                 throw new Error(`Unknown action: ${action}`);
         }
     } catch (error: any) {
-        // Handle standard JS errors, Emscripten strings, or Emscripten pointer exceptions
+        // Safely handle standard JS errors, Emscripten strings, or Emscripten pointer exceptions
         let errorMsg = "Unknown WASM Error";
         if (error instanceof Error) {
             errorMsg = error.message;
