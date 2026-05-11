@@ -191,10 +191,11 @@ class FViewer:
         Retrieves a list of all currently drawn regions from the viewer.
 
         Args:
-            format (str): 'image' for pixel coords, 'fk5'/'wcs' for RA/Dec.
+            format (str): 'image', 'physical', 'fk5', or 'wcs'.
         """
-        if format not in ["image", "fk5", "wcs"]:
-            raise ValueError("format must be 'image', 'fk5', or 'wcs'")
+        if format not in ["image", "physical", "fk5", "wcs"]:
+            raise ValueError(
+                "format must be 'image', 'physical', 'fk5', or 'wcs'")
 
         return self._send("get_regions", format=format).get("regions", [])
 
@@ -311,12 +312,12 @@ class FViewer:
 
         Args:
             filepath (str): Destination path. Must end in `.reg` or `.txt`.
-            format (str): Coordinate format ('image' or 'fk5').
+            format (str): Coordinate format ('image', 'physical', or 'fk5').
 
         Returns:
             Dict[str, str]: Status and output filepath.
         """
-        if format not in ["image", "fk5"]:
+        if format not in ["image", "physical", "fk5"]:
             raise ValueError("format must be 'image' or 'fk5'")
 
         safe_exts = (".reg", ".txt")

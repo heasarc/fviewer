@@ -38,7 +38,7 @@ interface FitsImageProps {
     // Region State Management
     regions: Region[];
     setRegions: React.Dispatch<React.SetStateAction<Region[]>>;
-    onSaveRegions: (format: 'image' | 'fk5') => void;
+    onSaveRegions: (format: 'image' | 'physical' | 'fk5') => void;
     onLoadRegions: () => void;
     onLoadServerRegions: () => void;
     /** Callback fired when a region's coordinates change (debounced/hashed). */
@@ -78,6 +78,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         deleteSelectedRegion,
         handleRegionDrag
     } = useRegions(setRegions);
+    const [saveFormat, setSaveFormat] = useState<'image' | 'physical' | 'fk5'>('image');
         
     // Tracks if we are moving the whole shape or just resizing the corner
     const [isDragging, setIsDragging] = useState(false);
@@ -454,26 +455,33 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                                     </button>
                                 </li>
                             )}
-                            <li>
-                                <button 
-                                    className="dropdown-item fv-dropdown-item" 
-                                    onClick={() => onSaveRegions('image')} 
-                                    disabled={regions.length === 0}
-                                >
-                                    <span style={{ width: '16px' }}></span>
-                                    <i className="bi bi-download"></i> Save in Image Coords
-                                </button>
-                            </li>
-                            <li>
-                                <button 
-                                    className="dropdown-item fv-dropdown-item" 
-                                    onClick={() => onSaveRegions('fk5')} 
-                                    // Disable if no regions exist OR if the image has no WCS!
-                                    disabled={regions.length === 0 || !hasWCS} 
-                                >
-                                    <span style={{ width: '16px' }}></span>
-                                    <i className="bi bi-globe"></i> Save in WCS/FK5 Coords
-                                </button>
+                            
+                            <li><hr className="dropdown-divider border-secondary my-1" /></li>
+                            
+                            {/* COMPACT SAVE UI */}
+                            <li className="px-3 py-1">
+                                <label className="fv-text-muted mb-1" style={{ fontSize: '0.75rem' }}>Save Regions</label>
+                                <div className="input-group input-group-sm">
+                                    <select 
+                                        className="form-select border-secondary bg-dark text-white" 
+                                        value={saveFormat}
+                                        onChange={(e) => setSaveFormat(e.target.value as any)}
+                                        style={{ boxShadow: 'none' }}
+                                        disabled={regions.length === 0}
+                                    >
+                                        <option value="image" title="Current image pixel coordinates">Image</option>
+                                        <option value="physical" title="Original unbinned/uncropped coordinates">Physical</option>
+                                        <option value="fk5" disabled={!hasWCS} title="World Coordinate System (RA/Dec)">FK5</option>
+                                    </select>
+                                    <button 
+                                        className="btn btn-outline-secondary" 
+                                        onClick={() => onSaveRegions(saveFormat)} 
+                                        disabled={regions.length === 0 || (saveFormat === 'fk5' && !hasWCS)}
+                                        title="Download .reg file"
+                                    >
+                                        <i className="bi bi-download"></i> Save
+                                    </button>
+                                </div>
                             </li>
                         </ul>
                     </div>

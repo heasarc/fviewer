@@ -1,3 +1,7 @@
+# 0.2.6
+- add more docs
+- Add support for physical units in region files
+
 # 0.2.5
 - add security checks and tests.
 - Add support for saving and loading region files from the server.
