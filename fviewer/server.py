@@ -1,37 +1,52 @@
 # Copyright 2026, University of Maryland, All Rights Reserved
 
+"""
+FastAPI Server Backend for FViewer.
+
+This server acts as the secure middleman between the Python Jupyter client
+(`api.py`) and the React/WASM frontend.
+
+Key Responsibilities:
+1. Serves the static Vite build (React frontend).
+2. Manages WebSocket connections for real-time UI control.
+3. Bridges synchronous Python API calls to the asynchronous React UI
+   using an `asyncio.Future` pattern (`send_and_wait`).
+4. Enforces strict security boundaries, including token authentication,
+   CORS regex matching, Cross-Site WebSocket Hijacking (CSWSH) prevention,
+   and Path Traversal jailing.
+"""
+
+import asyncio
 import os
 import re
-from urllib.parse import urlparse
-from pathlib import Path
-import asyncio
 import uuid
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi import Header, Depends
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+from urllib.parse import urlparse
 
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket
+from fastapi import WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 # If running standalone, this defaults to "" (empty string)
 # If running in Jupyter, this becomes "/fviewer"
 ROOT_PATH = os.getenv("FVIEWER_ROOT_PATH", "")
 
-# worksapce root folder so the server browser does not go wondering
+# Workspace root folder so the server browser does not go wandering
 WORKSPACE_ROOT = Path(os.getenv("FVIEWER_WORKSPACE", Path.cwd())).resolve()
-
 
 app = FastAPI(title="FViewer API", root_path=ROOT_PATH)
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 
 # Define the URLs that are allowed to talk to this API
-ORIGINS = [
-    os.getenv("FVIEWER_ORIGIN", "")
-]
+ORIGINS = [os.getenv("FVIEWER_ORIGIN", "")]
+
 # Regex to allow ANY port on localhost or 127.0.0.1
 # Matches: http://localhost:8123, http://127.0.0.1:40593, etc.
 LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ORIGINS,
@@ -41,60 +56,109 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 def get_secure_path(user_path: str) -> Path:
-    """Validates that the requested path is within the WORKSPACE_ROOT."""
-    # Combine the root with the user input and resolve() it.
-    # resolve() evaluates all symlinks and '..' up-level references to an absolute path.
+    """
+    Validates that the requested path is safely within the WORKSPACE_ROOT.
+
+    This prevents Directory Traversal (Path Traversal) attacks by resolving
+    all symlinks and `..` up-level references and ensuring the final
+    absolute path remains inside the designated workspace.
+
+    Args:
+        user_path (str): The relative path requested by the user.
+
+    Returns:
+        Path: The resolved, absolute, and verified safe pathlib.Path object.
+
+    Raises:
+        HTTPException: 403 error if path traversal is detected.
+    """
     target_path = (WORKSPACE_ROOT / user_path).resolve()
-    
-    # Ensure the resolved target path is strictly inside the WORKSPACE_ROOT
+
     if not target_path.is_relative_to(WORKSPACE_ROOT):
         raise HTTPException(
-            status_code=403, detail="Path traversal detected. Access denied.")
-    
+            status_code=403, detail="Path traversal detected. Access denied."
+        )
+
     return target_path
 
 
 def verify_token(authorization: str = Header(None)):
-    """Dependency to check the JupyterHub API token."""
-    expected_token = os.getenv('JUPYTERHUB_API_TOKEN')
-    
-    # Only enforce security if the environment actually has a token configured.
-    # (This allows you to still run it locally without a token)
+    """
+    Dependency to check the JupyterHub API token for sensitive endpoints.
+
+    Only enforces security if the environment actually has a token configured.
+    This allows local developers to run the server without a token while
+    protecting remote JupyterHub deployments.
+
+    Args:
+        authorization (str): The HTTP Authorization header.
+
+    Raises:
+        HTTPException: 401 if missing, 403 if invalid.
+    """
+    expected_token = os.getenv("JUPYTERHUB_API_TOKEN")
+
     if expected_token:
         if not authorization:
             raise HTTPException(
-                status_code=401, detail="Missing Authorization header")
-        
-        # Strip the "token " prefix and compare
+                status_code=401, detail="Missing Authorization header"
+            )
+
         provided_token = authorization.replace("token ", "").strip()
         if provided_token != expected_token:
             raise HTTPException(status_code=403, detail="Invalid token")
 
 
 class ConnectionManager:
+    """
+    Manages active WebSocket connections and async request routing.
+    """
+
     def __init__(self):
         self.active_connections: dict[str, WebSocket] = {}
         self.pending_requests: dict[str, asyncio.Future] = {}
 
     async def connect(self, client_id: str, websocket: WebSocket):
+        """Accepts and stores a new WebSocket connection."""
         await websocket.accept()
         self.active_connections[client_id] = websocket
 
     def disconnect(self, client_id: str):
+        """Removes a disconnected WebSocket."""
         if client_id in self.active_connections:
             del self.active_connections[client_id]
 
     async def send_to_client(self, client_id: str, message: dict):
+        """Sends a Fire-and-Forget message to a specific client."""
         if ws := self.active_connections.get(client_id):
             await ws.send_json(message)
 
     async def broadcast(self, message: dict):
+        """Broadcasts a message to all connected React clients."""
         for ws in self.active_connections.values():
             await ws.send_json(message)
 
-    async def send_and_wait(self, client_id: str, message: dict, timeout=5.0):
-        """Sends a message and waits for the frontend to reply."""
+    async def send_and_wait(
+        self, client_id: str, message: dict, timeout=5.0
+    ) -> dict:
+        """
+        Sends a message to the React frontend and waits for its reply.
+
+        This uses an `asyncio.Future` pattern. A unique message_id is
+        generated, sent over the WebSocket, and the function awaits the Future.
+        The WebSocket listener endpoint resolves the Future when the React
+        client responds with the matching message_id.
+
+        Args:
+            client_id (str): Target frontend client.
+            message (dict): Payload to send.
+            timeout (float): Maximum wait time in seconds.
+
+        Returns:
+            dict: The response payload from React, or an error dictionary.
+        """
         if client_id not in self.active_connections:
             return {"error": "Client not connected"}
 
@@ -120,13 +184,16 @@ manager = ConnectionManager()
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
-    
-    # Extract the Origin header from the incoming WebSocket request
-    origin = websocket.headers.get("origin")
+    """
+    WebSocket endpoint connecting the React UI to the FastAPI server.
 
-    # Get the host the browser is actually talking to
-    # Jupyter proxy uses x-forwarded-host, standard connections use host
-    host = websocket.headers.get("x-forwarded-host") or websocket.headers.get("host")
+    SECURITY (CSWSH Prevention): Explicitly validates the `Origin` header
+    against the `Host` header to block Cross-Site WebSocket Hijacking.
+    """
+    origin = websocket.headers.get("origin")
+    host = websocket.headers.get("x-forwarded-host") or websocket.headers.get(
+        "host"
+    )
 
     is_allowed = False
 
@@ -136,9 +203,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     # 2. Allow if it matches our dynamic local regex
     elif origin and re.match(LOCAL_ORIGIN_REGEX, origin):
         is_allowed = True
-    # 3. Dynamically allow Same-Origin requests (Jupyter Proxy)
+    # 3. Dynamically allow Same-Origin requests (Jupyter Proxy support)
     elif origin and host:
-        # Parse the origin to extract just its host (removes http:// or https://)
         origin_host = urlparse(origin).netloc
         if origin_host == host:
             is_allowed = True
@@ -148,13 +214,14 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         await websocket.close(code=1008)
         return
 
-    # Accept the connection safely
     await manager.connect(client_id, websocket)
     try:
         while True:
             # Listen for replies from React
             data = await websocket.receive_json()
             msg_id = data.get("message_id")
+
+            # Resolve the pending Future if a Python client is waiting
             if msg_id and msg_id in manager.pending_requests:
                 manager.pending_requests[msg_id].set_result(data)
     except WebSocketDisconnect:
@@ -163,12 +230,14 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 
 @app.post("/api/command", dependencies=[Depends(verify_token)])
 async def receive_command(command: dict, client_id: str):
-    # ALL commands wait for an acknowledgment from React
+    """
+    REST endpoint hit by the Python API client (`api.py`).
+    Routes the command to the React frontend via WebSocket and waits
+    for the acknowledgment/data response.
+    """
     result = await manager.send_and_wait(client_id, command)
 
-    # If React (or the timeout) returned an error, return a 400 Bad Request
     if "error" in result:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=result["error"])
 
     return result
@@ -176,15 +245,15 @@ async def receive_command(command: dict, client_id: str):
 
 @app.get("/api/clients", dependencies=[Depends(verify_token)])
 def get_clients():
-    """Return a list of connected client IDs."""
+    """Returns a list of connected browser client IDs."""
     return {"clients": list(manager.active_connections.keys())}
 
 
 @app.get("/api/file")
 async def serve_local_file(path: str):
-    """Securely serve a local file from the Python backend to the React frontend."""
+    """Securely streams a local file from the backend to the React frontend."""
     secure_path = get_secure_path(path)
-    
+
     if not secure_path.is_file():
         raise HTTPException(status_code=404, detail="File not found.")
 
@@ -193,8 +262,10 @@ async def serve_local_file(path: str):
 
 @app.get("/api/fs/list")
 def list_directory(path: str = "."):
-    """Returns the contents of a directory on the server."""
-
+    """
+    Returns the contents of a directory on the server for the UI File Browser.
+    Restricts visibility to allowed astronomical file extensions.
+    """
     try:
         secure_path = get_secure_path(path)
     except HTTPException:
@@ -203,45 +274,49 @@ def list_directory(path: str = "."):
     if not secure_path.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")
 
-    EXTENSIONS = ['.fits', '.fit', '.arf', '.rmf', '.rsp', '.pha', '.img', '.reg']
+    EXTENSIONS = [
+        ".fits", ".fit", ".arf", ".rmf", ".rsp", ".pha", ".img", ".reg"
+    ]
     EXTENSIONS = tuple(
-        f'{ex}{extra}' for ex in EXTENSIONS for extra in ['', '.gz'])
+        f"{ex}{extra}" for ex in EXTENSIONS for extra in ["", ".gz"]
+    )
 
     items = []
     try:
         # Add a "Go Up" option if not at the root
         if secure_path != WORKSPACE_ROOT:
-            items.append({
-                "name": "..", 
-                # Send the relative path back to the client so they stay jailed
-                "path": str(secure_path.parent.relative_to(WORKSPACE_ROOT)), 
-                "is_dir": True
-            })
+            items.append(
+                {
+                    "name": "..",
+                    "path": str(
+                        secure_path.parent.relative_to(WORKSPACE_ROOT)
+                    ),
+                    "is_dir": True,
+                }
+            )
 
         for entry in secure_path.iterdir():
-            # Hide hidden files
-            if entry.name.startswith('.'):
+            if entry.name.startswith("."):
                 continue
 
             is_dir = entry.is_dir()
-            
-            # If it's a file, only show allowed extensions
+
             if not is_dir and not entry.name.lower().endswith(EXTENSIONS):
                 continue
 
-            items.append({
-                "name": entry.name,
-                # Store the relative path from the workspace root
-                "path": str(entry.relative_to(WORKSPACE_ROOT)),
-                "is_dir": is_dir
-            })
+            items.append(
+                {
+                    "name": entry.name,
+                    "path": str(entry.relative_to(WORKSPACE_ROOT)),
+                    "is_dir": is_dir,
+                }
+            )
 
-        # Sort: Directories first, then alphabetically
         items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
-        
+
         return {
-            "current_path": str(secure_path.relative_to(WORKSPACE_ROOT)), 
-            "items": items
+            "current_path": str(secure_path.relative_to(WORKSPACE_ROOT)),
+            "items": items,
         }
     except PermissionError:
         raise HTTPException(status_code=403, detail="Permission denied")
@@ -249,8 +324,10 @@ def list_directory(path: str = "."):
 
 @app.get("/api/health")
 def health_check():
-    return {"status": 'OK'}
+    """Simple health check endpoint used by the Python client bootstrapper."""
+    return {"status": "OK"}
 
 
+# Serve the compiled React application (if built)
 if os.path.exists(STATIC_DIR):
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
