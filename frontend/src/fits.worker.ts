@@ -253,13 +253,21 @@ self.onmessage = async (e: MessageEvent) => {
                 const width = parseInt(activeFile.readKeyword("NAXIS1") || "0", 10);
                 const height = parseInt(activeFile.readKeyword("NAXIS2") || "0", 10);
 
+                // Extract Physical Coordinate Transformation keywords
+                // LTV = Linear Transformation Vector (Offset)
+                // LTM = Linear Transformation Matrix (Scale/Binning)
+                const ltv1 = parseFloat(activeFile.readKeyword("LTV1") || "0");
+                const ltv2 = parseFloat(activeFile.readKeyword("LTV2") || "0");
+                const ltm1_1 = parseFloat(activeFile.readKeyword("LTM1_1") || "1");
+                const ltm2_2 = parseFloat(activeFile.readKeyword("LTM2_2") || "1");
+
                 const transferables = imageResult.data?.buffer ? [imageResult.data.buffer] : [];
 
                 // Send massive image array directly to main thread without copying
                 (self as any).postMessage({ 
                     id, 
                     success: true, 
-                    data: { ...imageResult, width, height } 
+                    data: { ...imageResult, width, height, ltv1, ltv2, ltm1_1, ltm2_2 } 
                 }, transferables);
                 break;
             }

@@ -94,7 +94,44 @@ export function useCommandHandler(
       break;
     
     case 'get_regions':
-      if (command.format === 'fk5' || command.format === 'wcs') {
+      if (command.format === 'physical') {
+          const ltv1 = imageData?.ltv1 ?? 0;
+          const ltv2 = imageData?.ltv2 ?? 0;
+          const ltm1_1 = imageData?.ltm1_1 ?? 1;
+          const ltm2_2 = imageData?.ltm2_2 ?? 1;
+          const avgLtm = Math.abs(ltm1_1 + ltm2_2) / 2;
+
+          const physRegions = regions.map(r => {
+              let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
+
+              // Calculate image pixel sizes
+              if (r.type === 'box') {
+                  w = Math.abs(r.endX - r.startX) / Math.abs(ltm1_1);
+                  h = Math.abs(r.endY - r.startY) / Math.abs(ltm2_2);
+                  cx = (r.startX + r.endX) / 2; cy = (r.startY + r.endY) / 2;
+              } else if (r.type === 'ellipse') {
+                  w = Math.abs(r.endX - r.startX) * 2 / Math.abs(ltm1_1); 
+                  h = Math.abs(r.endY - r.startY) * 2 / Math.abs(ltm2_2); 
+                  cx = r.startX; cy = r.startY;
+              } else { 
+                  radius = Math.hypot(r.endX - r.startX, r.endY - r.startY) / avgLtm;
+                  cx = r.startX; cy = r.startY;
+              }
+
+              // Image to Physical math: Phys = (Image - LTV) / LTM
+              const physX = (cx - ltv1) / ltm1_1;
+              const physY = (cy - ltv2) / ltm2_2;
+
+              const base = { id: r.id, type: r.type, color: r.color, angle: r.angle, isBackground: r.isBackground, physical_x: physX, physical_y: physY };
+              
+              if (r.type === 'box') return { ...base, width: w, height: h };
+              if (r.type === 'ellipse') return { ...base, rx: w/2, ry: h/2 };
+              if (r.type === 'annulus') return { ...base, innerR: (r.innerR || radius/2) / avgLtm, outerR: radius };
+              return { ...base, radius };
+          });
+          replyData({ regions: physRegions });
+
+      } else if (command.format === 'fk5' || command.format === 'wcs') {
         if (!imageData || !imageData.pixScale || !pixToWorld) {
             return sendReply({ message_id: command.message_id, error: "Image data, pixel scale, or WCS not ready." });
         }
@@ -156,7 +193,7 @@ export function useCommandHandler(
           return sendReply({ message_id: command.message_id, error: `Invalid region type: ${command.type}` });
       }
 
-      const validFormats = ['image', 'wcs', 'fk5'];
+      const validFormats = ['image', 'wcs', 'fk5', 'physical'];
       if (!validFormats.includes(command.format)) {
           return sendReply({ message_id: command.message_id, error: `Invalid region format: ${command.format}` });
       }
@@ -182,8 +219,29 @@ export function useCommandHandler(
       let radius = command.radius, width = command.width, height = command.height;
       let rx = command.rx, ry = command.ry, innerR = command.innerR, outerR = command.outerR;
 
-      // 2. CONVERT FROM WCS TO PIXELS IF REQUESTED
-      if (format === 'fk5' || format === 'wcs') {
+      // 2. CONVERT TO PIXELS (IMAGE) IF REQUESTED
+      if (format === 'physical') {
+          // Fallbacks in case the image data isn't fully loaded yet
+          const ltv1 = imageData?.ltv1 ?? 0;
+          const ltv2 = imageData?.ltv2 ?? 0;
+          const ltm1_1 = imageData?.ltm1_1 ?? 1;
+          const ltm2_2 = imageData?.ltm2_2 ?? 1;
+
+          // Physical to Image math: Image = LTM * Phys + LTV
+          x = (ltm1_1 * x) + ltv1;
+          y = (ltm2_2 * y) + ltv2;
+
+          // Scale sizes (radius, width, height) using the matrix
+          const avgLtm = Math.abs(ltm1_1 + ltm2_2) / 2;
+          if (radius !== undefined) radius *= avgLtm;
+          if (width !== undefined) width *= Math.abs(ltm1_1);
+          if (height !== undefined) height *= Math.abs(ltm2_2);
+          if (rx !== undefined) rx *= Math.abs(ltm1_1);
+          if (ry !== undefined) ry *= Math.abs(ltm2_2);
+          if (innerR !== undefined) innerR *= avgLtm;
+          if (outerR !== undefined) outerR *= avgLtm;
+
+      } else if (format === 'fk5' || format === 'wcs') {
           if (!imageData || !imageData.pixScale || !worldToPix) {
               return sendReply({ message_id: command.message_id, error: "Image data, pixel scale, or WCS not ready." });
           }
@@ -252,7 +310,13 @@ export function useCommandHandler(
             imageData.height, 
             pixToWorld, 
             worldToPix, 
-            imageData.pixScale || null
+            imageData.pixScale || null,
+            {
+                ltv1: imageData.ltv1 ?? 0,
+                ltv2: imageData.ltv2 ?? 0,
+                ltm1_1: imageData.ltm1_1 ?? 1,
+                ltm2_2: imageData.ltm2_2 ?? 1
+            }
         );
         
         // Append the loaded regions to the existing ones
@@ -276,7 +340,13 @@ export function useCommandHandler(
             imageData.width, 
             imageData.height, 
             pixToWorld, 
-            imageData.pixScale || null
+            imageData.pixScale || null,
+            {
+                ltv1: imageData.ltv1 ?? 0,
+                ltv2: imageData.ltv2 ?? 0,
+                ltm1_1: imageData.ltm1_1 ?? 1,
+                ltm2_2: imageData.ltm2_2 ?? 1
+            }
         );
         
         replyData({ content: text });

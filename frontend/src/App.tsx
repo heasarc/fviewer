@@ -392,12 +392,21 @@ function App() {
     }, [imageData]);
 
     // --- REGION SERIALIZATION (.reg) ---
-    const handleSaveRegions = async (format: 'image' | 'fk5' = 'fk5') => {
+    const handleSaveRegions = async (format: 'image' | 'physical' | 'fk5' = 'fk5') => {
         if (regions.length === 0) return alert("No regions to save.");
         if (!imageData) return alert("No image data loaded.");
+
+        // Extract physical transform parameters with safe defaults
+        const physicalTransform = {
+            ltv1: imageData.ltv1 ?? 0,
+            ltv2: imageData.ltv2 ?? 0,
+            ltm1_1: imageData.ltm1_1 ?? 1,
+            ltm2_2: imageData.ltm2_2 ?? 1
+        };
         
         const fileContent = await serializeDS9Regions(
-            regions, format, imageData.width, imageData.height, pixToWorld, imageData.pixScale
+            regions, format, imageData.width, imageData.height, pixToWorld,
+            imageData.pixScale || null, physicalTransform
         );
 
         const blob = new Blob([fileContent], { type: 'text/plain' });
@@ -412,9 +421,18 @@ function App() {
         const file = e.target.files?.[0];
         if (!file || !imageData) return;
 
+        // Extract physical transform parameters with safe defaults
+        const physicalTransform = {
+            ltv1: imageData.ltv1 ?? 0,
+            ltv2: imageData.ltv2 ?? 0,
+            ltm1_1: imageData.ltm1_1 ?? 1,
+            ltm2_2: imageData.ltm2_2 ?? 1
+        };
+
         const text = await file.text(); 
         const loadedRegions = await parseDS9Regions(
-            text, imageData.width, imageData.height, pixToWorld, worldToPix, imageData.pixScale,
+            text, imageData.width, imageData.height, pixToWorld, worldToPix,
+            imageData.pixScale || null, physicalTransform
         );
         
         setRegions((prev: Region[]) => [...prev, ...loadedRegions]);
