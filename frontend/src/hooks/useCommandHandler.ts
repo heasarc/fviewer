@@ -1,10 +1,34 @@
 // # Copyright 2026, University of Maryland, All Rights Reserved
 
+/**
+ * @fileoverview Command Handler Hook for FViewer.
+ * 
+ * This hook acts as the central router for all commands coming from the Python 
+ * client (via the FastAPI WebSocket). It intercepts JSON payloads, safely validates 
+ * and sanitizes the data, updates the React UI state, and asynchronously sends 
+ * acknowledgments or requested data back through the WebSocket.
+ */
+
 import { useCallback } from 'react';
 import type { Region } from '../utils/regionUtils';
-import {getApiUrl} from './useWebSocket';
-import {parseDS9Regions, serializeDS9Regions} from '../utils/regionUtils';
+import { getApiUrl } from './useWebSocket';
+import { parseDS9Regions, serializeDS9Regions } from '../utils/regionUtils';
 
+/**
+ * Creates a memoized command handler callback.
+ * 
+ * @param processFile - Callback to handle a newly loaded FITS File object.
+ * @param colormap - Current active colormap string.
+ * @param setColormap - State setter for the colormap.
+ * @param stretch - Current active image stretch string.
+ * @param setStretch - State setter for the stretch.
+ * @param regions - Array of currently drawn regions.
+ * @param setRegions - State setter for the regions array.
+ * @param imageData - Current image metadata (width, height, WCS pixScale).
+ * @param pixToWorld - Async function calling the WASM worker to convert Pixels to RA/Dec.
+ * @param worldToPix - Async function calling the WASM worker to convert RA/Dec to Pixels.
+ * @returns An async function `(command, sendReply)` to be bound to the WebSocket listener.
+ */
 export function useCommandHandler(
     processFile: (file: File) => void,
     colormap: string, setColormap: (cmap: string) => void,
@@ -17,34 +41,36 @@ export function useCommandHandler(
   return useCallback(async (command: any, sendReply: (msg: any) => void) => {
     console.log("Received remote command:", command);
 
-    // Helper to send a simple OK
+    // Helper to send a simple status acknowledgment back to the Python client
     const ack = () => sendReply({ message_id: command.message_id, status: 'ok' });
 
-    // Helper to send data
+    // Helper to send a data payload back to the Python client
     const replyData = (data: any) => sendReply({ message_id: command.message_id, ...data });
     
     switch (command.action) {
       case 'load_file':
         try {
+          // Fetch the file through the FastAPI backend to ensure path traversal 
+          // restrictions are enforced by the server.
           const response = await fetch(getApiUrl(`api/file?path=${encodeURIComponent(command.path)}`));
           if (!response.ok) throw new Error("Failed to fetch file");
           
           const blob = await response.blob();
           const filename = command.path.split('/').pop() || 'remote.fits';
           
-          // Create the File object and pass it to your app's logic
+          // Create the File object and pass it to the app's internal Web Worker logic
           const file = new File([blob], filename, { type: 'application/octet-stream' });
           processFile(file);
           ack();
           
         } catch (error) {
           console.error("Error loading remote file:", error);
-          // Safely extract the message
+          // Safely extract the message without leaking internal stack traces
           const errorMessage = error instanceof Error 
             ? error.message 
             : "An unknown network error occurred";
             
-          // Send the error back to release the Python client instantly!
+          // Send the error back to release the Python client instantly (prevents timeouts)
           sendReply({ message_id: command.message_id, error: errorMessage });
         }
         break;
@@ -82,7 +108,7 @@ export function useCommandHandler(
         for (const r of regions) {
           let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
 
-          // Scale dimensions accurately using X/Y axes
+          // Scale dimensions accurately using X/Y axes into WCS degrees
           if (r.type === 'box') {
               w = Math.abs(r.endX - r.startX) * scaleX;
               h = Math.abs(r.endY - r.startY) * scaleY;
@@ -97,6 +123,7 @@ export function useCommandHandler(
               cx = r.startX; cy = r.startY;
           }
 
+          // Await WASM conversion
           const world = await pixToWorld(cx, cy);
           if (!world) continue;
 
@@ -113,13 +140,16 @@ export function useCommandHandler(
       }
       break;
 
-
     case 'clear_regions':
       setRegions([]);
       ack();
       break;
 
     case 'add_region': { 
+      // ==========================================
+      // SECURITY & SANITIZATION BOUNDARY
+      // Do not trust external WebSocket payloads!
+      // ==========================================
 
       const validTypes = ['circle', 'box', 'ellipse', 'annulus'];
       if (!validTypes.includes(command.type)) {
@@ -132,11 +162,12 @@ export function useCommandHandler(
       }
       let { format = 'image' } = command;
 
-      // Validate that color is a valid hex or standard color string to prevent injection
+      // SECURITY: Validate that color is a valid hex or standard color string.
+      // Prevents malicious injection into the SVG `stroke` properties.
       const colorRegex = /^#([0-9A-F]{3}){1,2}$|^[a-zA-Z]+$/i;
       let color = colorRegex.test(command.color) ? command.color : '#00ff00';
       
-      // Ensure coordinates are actual numbers, not NaN or undefined
+      // SECURITY: Ensure coordinates are actual numbers, not NaN, undefined, or exploit payloads
       if (typeof command.x !== 'number' || typeof command.y !== 'number') {
           return sendReply({ message_id: command.message_id, error: "Coordinates must be numbers." });
       }
@@ -147,8 +178,6 @@ export function useCommandHandler(
       }
 
       let { angle = 0 } = command;
-
-
       let { type, isBackground = false } = command;
       let radius = command.radius, width = command.width, height = command.height;
       let rx = command.rx, ry = command.ry, innerR = command.innerR, outerR = command.outerR;
@@ -216,6 +245,7 @@ export function useCommandHandler(
             return sendReply({ message_id: command.message_id, error: "Image data not ready." });
         }
         
+        // Asynchronously pass DS9 text string to parser for WCS validation
         const newRegions = await parseDS9Regions(
             command.content, 
             imageData.width, 
