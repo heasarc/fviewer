@@ -1,5 +1,16 @@
 // # Copyright 2026, University of Maryland, All Rights Reserved
 
+/**
+ * @fileoverview FitsImage Component for FViewer.
+ * 
+ * This component provides a high-performance, hardware-accelerated image viewer.
+ * It renders raw FITS pixel data to an HTML5 Canvas and uses CSS transforms 
+ * (`translate`, `scale`, `rotate`) to handle panning and zooming without 
+ * requiring CPU-intensive re-renders. 
+ * 
+ * It also overlays an SVG layer for drawing and manipulating Regions.
+ */
+
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { applyStretch } from '../utils/stretches';
 import { getColormapLUT } from '../utils/colormaps';
@@ -7,22 +18,33 @@ import type { Region } from '../utils/regionUtils';
 import { RegionShape } from './RegionOverlay';
 import { useRegions } from '../hooks/useRegions';
 
+/**
+ * Props for the FitsImage component.
+ */
 interface FitsImageProps {
+    /** 1D flat typed array containing the raw FITS image data. */
     data: Float32Array | Int32Array | Int16Array | Uint8Array;
+    /** Width of the image in pixels (NAXIS1). */
     width: number;
+    /** Height of the image in pixels (NAXIS2). */
     height: number;
+    /** Whether the viewer is connected to the Python backend server. */
     isConnected: boolean;
+    
+    // WCS callbacks routed to the Web Worker
     checkWcs: () => Promise<boolean>;
     pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>;
     
-    // region-related
+    // Region State Management
     regions: Region[];
     setRegions: React.Dispatch<React.SetStateAction<Region[]>>;
     onSaveRegions: (format: 'image' | 'fk5') => void;
     onLoadRegions: () => void;
     onLoadServerRegions: () => void;
+    /** Callback fired when a region's coordinates change (debounced/hashed). */
     onRegionChange?: (region: Region | null) => void;
 
+    // Visual Controls
     colormap: string;
     setColormap: React.Dispatch<React.SetStateAction<string>>;
     stretch: string;
@@ -31,7 +53,6 @@ interface FitsImageProps {
 
 export type DrawMode = 'pan' | 'circle' | 'box' | 'ellipse' | 'annulus';
 
-
 export const FitsImage: React.FC<FitsImageProps> = ({ 
         data, width, height, isConnected, checkWcs, pixToWorld, regions, setRegions, 
         onSaveRegions, onLoadRegions, onLoadServerRegions, onRegionChange,
@@ -39,7 +60,6 @@ export const FitsImage: React.FC<FitsImageProps> = ({
     }) => {
     const viewportRef = useRef<HTMLDivElement>(null); 
     const canvasRef = useRef<HTMLCanvasElement>(null);
-
 
     // Interactivity & Transform State
     const [zoom, setZoom] = useState<number | null>(1);
@@ -63,14 +83,15 @@ export const FitsImage: React.FC<FitsImageProps> = ({
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, y: 0 });
 
-    // Status Bar & WCS
+    // Status Bar & WCS State
     const [hasWCS, setHasWCS] = useState(false);
     const [hoverInfo, setHoverInfo] = useState({ x: 0, y: 0, val: 0, ra: 'N/A', dec: 'N/A' });
     const isWcsPending = useRef(false);
     
-
+    // Check WCS availability on load
     useEffect(() => { checkWcs().then(setHasWCS).catch(() => setHasWCS(false)); }, [checkWcs]);
 
+    // Fast min/max calculation for scaling the image intensity
     const { min, max } = useMemo(() => {
         let minVal = Infinity; let maxVal = -Infinity;
         for (let i = 0; i < data.length; i++) {
@@ -81,7 +102,12 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         return { min: minVal, max: maxVal };
     }, [data]);
 
-    // 1. Render Base Image
+    /**
+     * Core Render Loop
+     * Iterates over the 1D FITS data array, applies the stretch algorithm,
+     * maps the normalized value to the selected colormap LUT, and paints it
+     * directly into the HTML5 Canvas ImageData.
+     */
     useEffect(() => {
         const ctx = canvasRef.current?.getContext('2d');
         if (!ctx) return;
@@ -91,26 +117,34 @@ export const FitsImage: React.FC<FitsImageProps> = ({
 
         for (let i = 0; i < data.length; i++) {
             const x = i % width;
+            // FITS files are stored bottom-to-top, so we invert Y when rendering
             const y = height - 1 - Math.floor(i / width);
             const idx = (y * width + x) * 4;
+            
             const norm = (data[i] - min) / range;
             const stretched = applyStretch(norm, stretch);
             const colorIdx = Math.max(0, Math.min(255, Math.floor(stretched * 255))) * 3;
 
-            imgData.data[idx] = lut[colorIdx]; imgData.data[idx+1] = lut[colorIdx+1];
-            imgData.data[idx+2] = lut[colorIdx+2]; imgData.data[idx+3] = 255;
+            imgData.data[idx] = lut[colorIdx]; 
+            imgData.data[idx+1] = lut[colorIdx+1];
+            imgData.data[idx+2] = lut[colorIdx+2]; 
+            imgData.data[idx+3] = 255; // Alpha
         }
         ctx.putImageData(imgData, 0, 0);
     }, [data, width, height, colormap, stretch, min, max]);
 
-    // --- Native Wheel Handler (Prevents Page Scroll) ---
+    /**
+     * Native Wheel Handler
+     * Used instead of React's `onWheel` to utilize `{ passive: false }`,
+     * which allows us to `e.preventDefault()` and stop the entire browser 
+     * page from scrolling while zooming.
+     */
     useEffect(() => {
         const viewport = viewportRef.current;
         if (!viewport) return;
         const handleNativeWheel = (e: WheelEvent) => {
             e.preventDefault(); 
             setZoom(prev => {
-                // TypeScript Fix: If zoom is null (hasn't auto-fitted yet), default to 1
                 if (prev === null) return 1; 
                 return Math.max(0.1, Math.min(prev * (e.deltaY < 0 ? 1.1 : 0.9), 50));
             });
@@ -119,16 +153,19 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         return () => viewport.removeEventListener('wheel', handleNativeWheel);
     }, []);
 
-    // --- REGION CALLBACK ---
-    // Ref tracks the last region sent so we don't spam the parent and cause infinite loops
+    /**
+     * REGION CALLBACK & INFINITE LOOP PREVENTION
+     * When regions are dragged, React state updates rapidly. To prevent ping-ponging 
+     * network requests or infinite loops with the parent component, we serialize the 
+     * physical coordinates into a hash. The parent callback is only fired if the hash 
+     * actually changes.
+     */
     const lastSentRegionRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (onRegionChange && !isDragging) {
             const selected = regions.find(r => r.id === selectedRegionId) || null;
             
-            // To prevent infinite loops, serialize the region's position to a quick string
-            // Only send it to the parent if its physical coordinates actually changed!
             const regionHash = selected 
                 ? `${selected.id}-${selected.startX}-${selected.startY}-${selected.endX}-${selected.endY}-${selected.angle}-${selected.innerR}` 
                 : null;
@@ -143,7 +180,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
     // Keyboard listener for Backspace / Delete
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            // Ignore keystrokes if the user is typing inside an input field (like the Angle box)
+            // Ignore keystrokes if the user is typing inside an input field
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
                 return;
             }
@@ -161,7 +198,6 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         if (!viewportRef.current || width === 0 || height === 0) return;
         
         const rect = viewportRef.current.getBoundingClientRect();
-        
         const scaleX = rect.width / width;
         const scaleY = rect.height / height;
         
@@ -172,31 +208,41 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         setPan({ x: 0, y: 0 }); // Center the pan
     }, [width, height]);
 
-    // --- MATHEMATICALLY PURE COORDINATE UN-PROJECTION ---
+    /**
+     * MATHEMATICALLY PURE COORDINATE UN-PROJECTION
+     * 
+     * Because the canvas relies on CSS transforms (translate, scale, rotate) 
+     * for performance, mouse events return coordinates relative to the screen. 
+     * This function manually reverses the affine transformations to map a screen
+     * click back to an exact pixel coordinate on the original FITS image.
+     */
     const getCanvasCoords = (clientX: number, clientY: number) => {
         const viewport = viewportRef.current;
         if (!viewport) return { x: 0, y: 0 };
         
-        // TypeScript Fix: Safely fallback to 1 if zoom hasn't calculated yet
         const currentZoom = zoom ?? 1;
-        
         const rect = viewport.getBoundingClientRect();
+        
+        // 1. Center the coordinates
         let cx = (clientX - rect.left) - rect.width / 2;
         let cy = (clientY - rect.top) - rect.height / 2;
 
-        cx -= pan.x; cy -= pan.y;
-        
-        // Use the safe currentZoom variable here!
+        // 2. Reverse Pan and Zoom
+        cx -= pan.x; 
+        cy -= pan.y;
         cx /= currentZoom; 
         cy /= currentZoom;
         
+        // 3. Reverse Rotation
         const rad = -rotation * (Math.PI / 180);
         const cos = Math.cos(rad); const sin = Math.sin(rad);
         let rx = cx * cos - cy * sin;
         let ry = cx * sin + cy * cos;
 
+        // 4. Reverse Flips
         if (flipX) rx = -rx; if (flipY) ry = -ry;
 
+        // 5. Shift back to Top-Left origin
         return { x: rx + width / 2, y: ry + height / 2 };
     };
 
@@ -206,7 +252,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         setIsDragging(true);
 
         if (drawMode === 'pan') {
-            setSelectedRegionId(null); // Deselect any active region if we click the background
+            setSelectedRegionId(null); // Deselect any active region if clicking background
             dragStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
         } else {
             setSelectedRegionId(null);
@@ -245,7 +291,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
             return; 
         }
 
-        // 4. Handle Status Bar
+        // 4. Handle Status Bar & Async WCS Fetch
         const { x: imgX, y: imgY } = getCanvasCoords(e.clientX, e.clientY);
         const fitsX = Math.floor(imgX) + 1;
         const fitsY = height - Math.floor(imgY);
@@ -286,14 +332,13 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         }
     };
 
-    // Add this simple bridge function near where your mouse handlers are
+    // Bridge function routed to the child Region overlays
     const handleRegionAction = (id: string, type: 'move' | 'rotate' | 'resize' | 'resize-inner', e: React.MouseEvent) => {
         if (drawMode !== 'pan') return;
         setSelectedRegionId(id);
         setDragAction({ id, type }); 
         dragStart.current = getCanvasCoords(e.clientX, e.clientY);
     };
-
 
     const resetView = () => {
         setZoom(1); setPan({ x: 0, y: 0 });
@@ -501,11 +546,9 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                 </div>
 
                 {/* Transform Menu */}
-                {/* Transform Menu */}
                 <div className="dropdown">
                     <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown"><i className="bi bi-arrows-collapse"></i> <span className="ms-1">Transform</span></button>
                     <ul className="dropdown-menu fv-dropdown-menu shadow">
-                        {/* Notice: No <span style={{ width: '16px' }}></span> here! */}
                         <li>
                             <button className="dropdown-item fv-dropdown-item" onClick={() => setFlipX(!flipX)}>
                                 <i className="bi bi-symmetry-vertical"></i> Flip X
