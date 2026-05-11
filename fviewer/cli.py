@@ -13,6 +13,7 @@ def open_browser(url: str):
     """Opens the web browser to the specified URL."""
     webbrowser.open(url)
 
+
 def open_file_on_startup(filepath, host="127.0.0.1", port=8000):
     """Run in a background thread to wait for the UI and load a file"""
     from fviewer.api import FViewer
@@ -23,6 +24,7 @@ def open_file_on_startup(filepath, host="127.0.0.1", port=8000):
         fv.load_file(filepath)
     except Exception as e:
         print(f"Failed to load file on startup: {e}")
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -45,7 +47,7 @@ def main():
     # Schedule the browser to open 1 second from now in a background thread
     if not args.no_browser:
         threading.Timer(1.0, open_browser, args=(url,)).start()
-    
+
     if args.filepath:
         abs_path = os.path.abspath(args.filepath)
         if not os.path.exists(abs_path):
@@ -54,8 +56,8 @@ def main():
         # Start the client commands in a background thread
         # daemon=True ensures this thread doesn't prevent the app from exiting
         threading.Thread(
-            target=open_file_on_startup, 
-            args=(abs_path, args.host, args.port), 
+            target=open_file_on_startup,
+            args=(abs_path, args.host, args.port),
             daemon=True
         ).start()
 
