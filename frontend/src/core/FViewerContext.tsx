@@ -18,7 +18,10 @@ interface CoreContextType {
     setImageData: React.Dispatch<React.SetStateAction<any>>;
     isLoading: boolean;
     setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
-    // We can also lift regions, colormap, etc. here later if plugins need them
+    isPlotterOpen: boolean;
+    setIsPlotterOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    activeRegionPixels: number[] | null;
+    setActiveRegionPixels: React.Dispatch<React.SetStateAction<number[] | null>>;
 }
 
 const FViewerContext = createContext<CoreContextType | null>(null);
@@ -35,6 +38,10 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
     const [imageData, setImageData] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Plotting
+    const [isPlotterOpen, setIsPlotterOpen] = useState(false);
+    const [activeRegionPixels, setActiveRegionPixels] = useState<number[] | null>(null);
+
     const value = {
         fitsWorker,
         fileName, setFileName,
@@ -42,7 +49,9 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
         activeHdu, setActiveHdu,
         tableInfo, setTableInfo,
         imageData, setImageData,
-        isLoading, setIsLoading
+        isLoading, setIsLoading,
+        isPlotterOpen, setIsPlotterOpen,
+        activeRegionPixels, setActiveRegionPixels
     };
 
     return (
