@@ -4,6 +4,7 @@ import { useCore } from './core/FViewerContext';
 import { useWebSocket, getApiUrl } from './hooks/useWebSocket';
 import { useCommandHandler } from './hooks/useCommandHandler';
 import { useCoreCommands } from './hooks/useCoreCommands';
+import { ExtensionSlot } from './core/PluginManager';
 import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
 import type { Region } from './utils/regionUtils';
@@ -525,6 +526,9 @@ function App() {
                                 </ul>
                             </li>
 
+                            {/* PLUGINS CAN ADD NEW MENUS HERE */}
+                            <ExtensionSlot name="menubar:menus" />
+
                             {/* About Menu */}
                             <li className="nav-item dropdown">
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">About</button>
@@ -632,6 +636,8 @@ function App() {
                             ))
                         )}
                     </div>
+                    {/* Sidebar Extension slot for plugins */}
+                    <ExtensionSlot name="sidebar:right" />
                 </div>
 
                 {/* Main Content + Right Plotter Sidebar */}
