@@ -9,7 +9,6 @@ import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
 import type { Region } from './utils/regionUtils';
 import { parseDS9Regions, serializeDS9Regions } from './utils/regionUtils';
-import { FitsHeaderModal } from './components/FitsHeaderModal';
 import { ServerFileModal } from './components/ServerFileModal';
 import fviewerLogo from '/fviewer-logo.svg';
 import { FITS_FORMATS, ALLOWED_EXTS } from './utils/constants';
@@ -26,7 +25,7 @@ function App() {
 
     // Deconstruct the worker methods we need for this file
     const { openFile, moveToHDU, getTableInfo, writeCell, saveFile, readImage, getHduList, 
-          checkWcs, pixToWorld, worldToPix, readHeader, updateKeyword, readTableChunk } = fitsWorker;
+          checkWcs, pixToWorld, worldToPix, readTableChunk } = fitsWorker;
     
     
     // File & HDU State
@@ -39,9 +38,6 @@ function App() {
     
     const [colormap, setColormap] = useState('gray');
     const [stretch, setStretch] = useState('linear');
-
-    const [isHeaderModalOpen, setIsHeaderModalOpen] = useState(false);
-    const [rawHeaderString, setRawHeaderString] = useState('');
 
     const [serverModalMode, setServerModalMode] = useState<'fits' | 'region' | null>(null);
 
@@ -160,9 +156,6 @@ function App() {
                 setImageData(null);
                 setTableInfo(null);
                 setTableData({});
-
-                const headerStr = await readHeader();
-                setRawHeaderString(headerStr);
 
                 if (targetHdu?.type === 'image') {
                     const img = await readImage();
@@ -447,8 +440,8 @@ function App() {
                             <li className="nav-item dropdown">
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">Edit</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
-                                    <li><button className="dropdown-item fv-dropdown-item" onClick={() => setIsHeaderModalOpen(true)} disabled={!activeHdu}><i className="bi bi-card-heading"></i> Edit Header</button></li>
                                     <li><button className="dropdown-item fv-dropdown-item"><i className="bi bi-layout-three-columns"></i> Manage Columns</button></li>
+                                    <ExtensionSlot name="menubar:edit" />
                                 </ul>
                             </li>
 
@@ -633,17 +626,6 @@ function App() {
 
                 </div>
             </div>
-            <FitsHeaderModal 
-                isOpen={isHeaderModalOpen} 
-                onClose={() => setIsHeaderModalOpen(false)} 
-                rawHeader={rawHeaderString} 
-                onUpdateKeyword={async (key, value, isNum, comment) => {
-                    await updateKeyword(key, value, isNum, comment);
-                    // Refresh the header display instantly!
-                    const newHeader = await readHeader();
-                    setRawHeaderString(newHeader);
-                }}
-            />
             <ServerFileModal 
                 isOpen={serverModalMode !== null}
                 mode={serverModalMode}
