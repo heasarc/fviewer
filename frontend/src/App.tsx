@@ -1,8 +1,9 @@
 // # Copyright 2026, University of Maryland, All Rights Reserved
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useFits } from './hooks/useFits';
+import { useCore } from './core/FViewerContext';
 import { useWebSocket, getApiUrl } from './hooks/useWebSocket';
 import { useCommandHandler } from './hooks/useCommandHandler';
+import { useCoreCommands } from './hooks/useCoreCommands';
 import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
 import type { Region } from './utils/regionUtils';
@@ -14,23 +15,25 @@ import fviewerLogo from '/fviewer-logo.svg';
 import { FITS_FORMATS, ALLOWED_EXTS } from './utils/constants';
 
 function App() {
-    // initialize the worker
+
+    // Get everything we need from the Core Context
+    const { 
+        fitsWorker, fileName, setFileName, hduList, setHduList, 
+        activeHdu, setActiveHdu, tableInfo, setTableInfo, 
+        imageData, setImageData, isLoading, setIsLoading 
+    } = useCore();
+
+    // Deconstruct the worker methods we need for this file
     const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile, readImage, getHduList, 
-          checkWcs, pixToWorld, worldToPix, readHeader, updateKeyword, readTableChunk } = useFits();
+          checkWcs, pixToWorld, worldToPix, readHeader, updateKeyword, readTableChunk } = fitsWorker;
     
     
     // File & HDU State
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [fileName, setFileName] = useState("No file loaded");
-    const [hduList, setHduList] = useState<any[]>([]);
-    const [activeHdu, setActiveHdu] = useState<number | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     // Data State
-    const [tableInfo, setTableInfo] = useState<any>(null);
     const [tableData, setTableData] = useState<Record<string, any[]>>({});
-    const [imageData, setImageData] = useState<any>(null);
     const [plotX, setPlotX] = useState<string>('');
     const [plotY, setPlotY] = useState<string>('');
     const [isPlotterOpen, setIsPlotterOpen] = useState(false);
@@ -109,12 +112,18 @@ function App() {
     };
 
     // Handle API commands
-    const handleRemoteCommand = useCommandHandler(
+    // 1. Initialize the generic WebSocket command listener
+    const handleRemoteCommand = useCommandHandler();
+    
+    // 2. Register the Core Commands (passing the state they need)
+    useCoreCommands(
         processFile,
         colormap, setColormap,
         stretch, setStretch,
         regions, setRegions,
-        imageData, pixToWorld, worldToPix
+        imageData, 
+        fitsWorker.pixToWorld, 
+        fitsWorker.worldToPix
     );
     // Listen for commands
     const { clientId, isConnected } = useWebSocket(handleRemoteCommand);
