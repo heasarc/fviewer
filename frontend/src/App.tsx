@@ -9,7 +9,6 @@ import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
 import type { Region } from './utils/regionUtils';
 import { parseDS9Regions, serializeDS9Regions } from './utils/regionUtils';
-import { FitsPlot } from './components/FitsPlot';
 import { FitsHeaderModal } from './components/FitsHeaderModal';
 import { ServerFileModal } from './components/ServerFileModal';
 import fviewerLogo from '/fviewer-logo.svg';
@@ -21,11 +20,12 @@ function App() {
     const { 
         fitsWorker, fileName, setFileName, hduList, setHduList, 
         activeHdu, setActiveHdu, tableInfo, setTableInfo, 
-        imageData, setImageData, isLoading, setIsLoading 
+        imageData, setImageData, isLoading, setIsLoading,
+        setActiveRegionPixels, isPlotterOpen
     } = useCore();
 
     // Deconstruct the worker methods we need for this file
-    const { openFile, moveToHDU, getTableInfo, readColumn, writeCell, saveFile, readImage, getHduList, 
+    const { openFile, moveToHDU, getTableInfo, writeCell, saveFile, readImage, getHduList, 
           checkWcs, pixToWorld, worldToPix, readHeader, updateKeyword, readTableChunk } = fitsWorker;
     
     
@@ -35,24 +35,7 @@ function App() {
 
     // Data State
     const [tableData, setTableData] = useState<Record<string, any[]>>({});
-    const [plotX, setPlotX] = useState<string>('');
-    const [plotY, setPlotY] = useState<string>('');
-    const [isPlotterOpen, setIsPlotterOpen] = useState(false);
     const isPlotterOpenRef = useRef(isPlotterOpen);
-    const [plotterWidth, setPlotterWidth] = useState(450); // Default width
-    const [isResizingPlotter, setIsResizingPlotter] = useState(false);
-    const [plotXErr, setPlotXErr] = useState<string>('');
-    const [plotYErr, setPlotYErr] = useState<string>('');
-    const [plotType, setPlotType] = useState<'scatter' | 'histogram'>('scatter');
-    const [fullPlotData, setFullPlotData] = useState<Record<string, any>>({});
-    const fetchedPlotColumns = useRef<Set<string>>(new Set());
-    const [plotPointSize, setPlotPointSize] = useState<number>(2);
-    const [plotPointColor, setPlotPointColor] = useState<string>('#7ec8e3');
-    const [plotSubsetMode, setPlotSubsetMode] = useState<'all' | 'range' | 'random'>('all');
-    const [plotSubsetStart, setPlotSubsetStart] = useState<number>(0);
-    const [plotSubsetEnd, setPlotSubsetEnd] = useState<number>(10000);
-    const [plotSubsetRandomN, setPlotSubsetRandomN] = useState<number>(10000);
-    const [activeRegionPixels, setActiveRegionPixels] = useState<number[] | null>(null);
     
     const [colormap, setColormap] = useState('gray');
     const [stretch, setStretch] = useState('linear');
@@ -192,11 +175,7 @@ function App() {
                     // DO NOT fetch all columns here anymore!
                     // Just set empty arrays or let VirtualTable trigger the fetch
                     setTableData({}); 
-                    
-                    if (info.numCols >= 2) {
-                        setPlotX(info.columns[0].name);
-                        setPlotY(info.columns[1].name);
-                    }
+
                 }
             } catch (error) {
                 console.error("Failed to load HDU data:", error);
@@ -206,34 +185,6 @@ function App() {
         };
         loadHduData();
     }, [activeHdu]);
-
-    // Fetch full columns ONLY when they are selected AND the plotter is visible
-    useEffect(() => {
-        if (!activeHdu || !tableInfo || !isPlotterOpen) return; 
-
-        const columnsToFetch = [plotX, plotY, plotXErr, plotYErr].filter(Boolean);
-        
-        columnsToFetch.forEach(async (colName) => {
-            // CRITICAL FIX: Use a ref to track what we've ALREADY asked the worker for
-            // This prevents React from spamming the worker with 40MB requests
-            if (!colName || fetchedPlotColumns.current.has(colName)) return; 
-            
-            fetchedPlotColumns.current.add(colName); // Mark as fetching
-
-            const colIndex = tableInfo.columns.findIndex((c: any) => c.name === colName) + 1;
-            if (colIndex > 0) {
-                try {
-                    const result = await readColumn(colIndex);
-                    if (result && result.data) {
-                        setFullPlotData(prev => ({ ...prev, [colName]: result.data }));
-                    }
-                } catch (e) {
-                    console.error(`Failed to load full column ${colName}`, e);
-                    fetchedPlotColumns.current.delete(colName); // Retry later if failed
-                }
-            }
-        });
-    }, [plotX, plotY, plotXErr, plotYErr, activeHdu, tableInfo, readColumn, isPlotterOpen]);
 
     const handleCellEdit = async (colName: string, colNum: number, rowIndex: number, newValue: string) => {
         try {
@@ -272,32 +223,6 @@ function App() {
         }
     };
 
-    // --- PLOTTER RESIZE LOGIC ---
-    useEffect(() => {
-        if (!isResizingPlotter) return;
-
-        const handlePointerMove = (e: PointerEvent) => {
-            // Sidebar is on the right, so its width is (Total Window Width - Mouse X)
-            const newWidth = document.body.clientWidth - e.clientX;
-            
-            // Constrain it so it doesn't crush the main view or disappear entirely
-            if (newWidth > 300 && newWidth < document.body.clientWidth - 300) {
-                setPlotterWidth(newWidth);
-            }
-        };
-
-        const handlePointerUp = () => setIsResizingPlotter(false);
-
-        // Attach to window so fast drags don't drop the lock
-        window.addEventListener('pointermove', handlePointerMove);
-        window.addEventListener('pointerup', handlePointerUp);
-
-        return () => {
-            window.removeEventListener('pointermove', handlePointerMove);
-            window.removeEventListener('pointerup', handlePointerUp);
-        };
-    }, [isResizingPlotter]);
-
     // Handle reading part of table data
     const handleFetchTableData = useCallback(async (startRow: number, endRow: number) => {
         if (!tableInfo) return;
@@ -330,6 +255,15 @@ function App() {
             console.error("Failed to fetch table chunk:", err);
         }
     }, [tableInfo, readTableChunk]);
+
+
+    useEffect(() => {
+        // If the user OPENS the plotter, and there is already an active image and region,
+        // immediately calculate the pixel histogram!
+        if (isPlotterOpen && imageData && regions.length > 0) {
+            handleRegionChange(regions[regions.length - 1]);
+        }
+    }, [isPlotterOpen]);
 
     // --- EXTRACT REGION PIXELS FOR HISTOGRAM ---
     const handleRegionChange = useCallback((region: any | null) => {
@@ -577,21 +511,7 @@ function App() {
                             {isLoading && <div className="spinner-border spinner-border-sm fv-text-primary" role="status"></div>}
                             
                             {/* Plotter Toggle Button */}
-                            <button 
-                                className={`btn menubar-btn border-0 px-2 ${isPlotterOpen ? 'fv-text-primary' : 'fv-text-muted'}`} 
-                                onClick={() => {
-                                    const willOpen = !isPlotterOpen;
-                                    setIsPlotterOpen(willOpen);
-                                    // JIT trigger! If we just opened the plotter and an Image region is selected, run the math now!
-                                    if (willOpen && imageData && regions.length > 0) {
-                                        // Hacky but safe trigger to force the math calculation
-                                        setTimeout(() => handleRegionChange(regions[regions.length - 1]), 0);
-                                    }
-                                }}
-                                title="Toggle Plotter Sidebar"
-                            >
-                                <i className="bi bi-layout-sidebar-reverse fs-5"></i>
-                            </button>
+                            <ExtensionSlot name="menubar:right" />
                         </div>
                     </div>
                 </div>
@@ -708,254 +628,9 @@ function App() {
                         )}
                     </div>
 
-                    {/* --- DRAGGABLE RESIZER HANDLE --- */}
-                    {isPlotterOpen && (
-                        <div 
-                            className="flex-shrink-0"
-                            style={{
-                                width: '5px',
-                                cursor: 'col-resize',
-                                backgroundColor: isResizingPlotter ? 'var(--fv-accent)' : 'transparent', // Highlights cyan when grabbed!
-                                borderLeft: '1px solid var(--fv-border)',
-                                zIndex: 10,
-                                transition: 'background-color 0.2s'
-                            }}
-                            onPointerDown={(e) => {
-                                e.preventDefault(); // Prevent text highlighting while dragging
-                                setIsResizingPlotter(true);
-                            }}
-                            // Hover effect
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--fv-panel-hover)'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = isResizingPlotter ? 'var(--fv-accent)' : 'transparent'}
-                        />
-                    )}
+                    {/* Extension slot for the right workspace */}
+                    <ExtensionSlot name="workspace:right" />
 
-                    {/* Right Sidebar: Global Plotter */}
-                    <div 
-                        className="d-flex flex-column flex-shrink-0" 
-                        style={{ 
-                            width: isPlotterOpen ? `${plotterWidth}px` : '0px', 
-                            maxWidth: '100%', 
-                            backgroundColor: 'var(--fv-panel)', 
-                            // Disable animation WHILE resizing for instant 60fps response
-                            transition: isResizingPlotter ? 'none' : 'width 0.3s ease-in-out',
-                            overflow: 'hidden'
-                        }}
-                    >
-                        {/* Inner container uses dynamic plotterWidth to stay rigid during animation */}
-                        <div style={{ width: `${plotterWidth}px`, minWidth: `${plotterWidth}px` }} className="d-flex flex-column h-100 p-3">
-                            <div className="d-flex align-items-center justify-content-between mb-3 text-white fw-bold border-bottom pb-2" style={{ borderColor: 'var(--fv-border)' }}>
-                                <span><i className="bi bi-graph-up me-2 text-primary"></i> Analysis Plotter</span>
-                                <button className="btn-close btn-close-white" style={{ fontSize: '0.7rem' }} onClick={() => setIsPlotterOpen(false)}></button>
-                            </div>
-
-                            {/* Plot Controls based on active HDU type */}
-                            <div className="flex-grow-1 d-flex flex-column">
-                                {tableInfo ? (
-                                    // TABLE PLOTTING UI
-                                    <>
-                                        <div className="input-group input-group-sm mb-2 shadow-sm">
-                                            <span className="input-group-text border-0 bg-dark text-white"><i className="bi bi-bar-chart"></i></span>
-                                            <select className="form-select border-0 bg-secondary text-white fw-bold" value={plotType} onChange={(e) => setPlotType(e.target.value as 'scatter' | 'histogram')}>
-                                                <option value="scatter">Scatter Plot</option>
-                                                <option value="histogram">1D Histogram</option>
-                                            </select>
-                                        </div>
-
-                                        {/* Axes Selectors (Perfectly aligned 2x2 Grid) */}
-                                        <div className="row g-2 mb-3">
-                                            {/* Left Column: X and ErrX */}
-                                            <div className="col-6">
-                                                <div className="input-group input-group-sm shadow-sm mb-2">
-                                                    <span className="input-group-text border-0 bg-dark text-white justify-content-center" style={{ width: '65px' }}>X</span>
-                                                    <select className="form-select border-0 bg-secondary text-white" value={plotX} onChange={(e) => setPlotX(e.target.value)}>
-                                                        <option value="">-- Select --</option>
-                                                        {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                                                    </select>
-                                                </div>
-                                                <div className="input-group input-group-sm shadow-sm">
-                                                    <span className="input-group-text border-0 bg-dark text-white justify-content-center" style={{ width: '65px' }}><i className="bi bi-plus-minus me-1"></i> ErrX</span>
-                                                    <select className="form-select border-0 bg-secondary text-white" value={plotXErr} onChange={(e) => setPlotXErr(e.target.value)} disabled={plotType === 'histogram'}>
-                                                        <option value="">None</option>
-                                                        {plotType !== 'histogram' && tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                                                    </select>
-                                                </div>
-                                            </div>
-
-                                            {/* Right Column: Y and ErrY */}
-                                            <div className="col-6">
-                                                <div className="input-group input-group-sm shadow-sm mb-2">
-                                                    <span className="input-group-text border-0 bg-dark text-white justify-content-center" style={{ width: '65px' }}>Y</span>
-                                                    <select className="form-select border-0 bg-secondary text-white" value={plotY} onChange={(e) => setPlotY(e.target.value)} disabled={plotType === 'histogram'}>
-                                                        {plotType === 'histogram' ? <option>Counts</option> : (
-                                                            <>
-                                                                <option value="">-- Select --</option>
-                                                                {tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                                                            </>
-                                                        )}
-                                                    </select>
-                                                </div>
-                                                <div className="input-group input-group-sm shadow-sm">
-                                                    <span className="input-group-text border-0 bg-dark text-white justify-content-center" style={{ width: '65px' }}><i className="bi bi-plus-minus me-1"></i> ErrY</span>
-                                                    <select className="form-select border-0 bg-secondary text-white" value={plotYErr} onChange={(e) => setPlotYErr(e.target.value)} disabled={plotType === 'histogram'}>
-                                                        <option value="">None</option>
-                                                        {plotType !== 'histogram' && tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {/* Styling Selectors (Size & Color) */}
-                                        <div className="row g-2 mb-3">
-                                            <div className="col-6">
-                                                <div className="input-group input-group-sm shadow-sm">
-                                                    <span className="input-group-text border-0 bg-dark text-white justify-content-center" style={{ width: '65px' }}>Size</span>
-                                                    <input 
-                                                        type="number" 
-                                                        className="form-control border-0 bg-secondary text-white" 
-                                                        value={plotPointSize} 
-                                                        onChange={(e) => setPlotPointSize(Number(e.target.value))} 
-                                                        min="1" max="10" 
-                                                        disabled={plotType === 'histogram'}
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="col-6">
-                                                <div className="input-group input-group-sm shadow-sm">
-                                                    <span className="input-group-text border-0 bg-dark text-white justify-content-center" style={{ width: '65px' }}>Color</span>
-                                                    <input 
-                                                        type="color" 
-                                                        className="form-control form-control-color border-0 bg-secondary w-10 px-1 py-1" 
-                                                        value={plotPointColor} 
-                                                        onChange={(e) => setPlotPointColor(e.target.value)} 
-                                                        title="Choose point color" 
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Data Subset Selectors */}
-                                        <div className="input-group input-group-sm shadow-sm mb-2">
-                                            <span className="input-group-text border-0 bg-dark text-white justify-content-center" style={{ width: '65px' }}><i className="bi bi-funnel"></i></span>
-                                            <select className="form-select border-0 bg-secondary text-white fw-bold" value={plotSubsetMode} onChange={(e) => setPlotSubsetMode(e.target.value as 'all' | 'range' | 'random')}>
-                                                <option value="all">Plot All Rows</option>
-                                                <option value="range">Row Range</option>
-                                                <option value="random">Random Sample</option>
-                                            </select>
-                                        </div>
-
-                                        {plotSubsetMode === 'range' && (
-                                            <div className="mb-3 p-2 bg-dark rounded border shadow-sm" style={{ borderColor: 'var(--fv-border)' }}>
-                                                
-                                                {/* Start Slider + Input */}
-                                                <div className="d-flex align-items-center mb-2">
-                                                    <span className="text-white me-2 fw-bold" style={{ width: '40px', fontSize: '0.75rem' }}>Start</span>
-                                                    <input 
-                                                        type="range" 
-                                                        className="form-range flex-grow-1" 
-                                                        min="0" 
-                                                        max={tableInfo.numRows - 1} 
-                                                        value={plotSubsetStart} 
-                                                        onChange={(e) => setPlotSubsetStart(Number(e.target.value))} 
-                                                    />
-                                                    <input 
-                                                        type="number" 
-                                                        className="form-control form-control-sm ms-2 bg-secondary text-white border-0 text-end" 
-                                                        style={{ width: '80px', fontSize: '0.75rem' }} 
-                                                        value={plotSubsetStart} 
-                                                        onChange={(e) => setPlotSubsetStart(Number(e.target.value))} 
-                                                        min="0"
-                                                        max={tableInfo.numRows - 1}
-                                                    />
-                                                </div>
-
-                                                {/* End Slider + Input */}
-                                                <div className="d-flex align-items-center">
-                                                    <span className="text-white me-2 fw-bold" style={{ width: '40px', fontSize: '0.75rem' }}>End</span>
-                                                    <input 
-                                                        type="range" 
-                                                        className="form-range flex-grow-1" 
-                                                        min="0" 
-                                                        max={tableInfo.numRows - 1} 
-                                                        value={plotSubsetEnd} 
-                                                        onChange={(e) => setPlotSubsetEnd(Number(e.target.value))} 
-                                                    />
-                                                    <input 
-                                                        type="number" 
-                                                        className="form-control form-control-sm ms-2 bg-secondary text-white border-0 text-end" 
-                                                        style={{ width: '80px', fontSize: '0.75rem' }} 
-                                                        value={plotSubsetEnd} 
-                                                        onChange={(e) => setPlotSubsetEnd(Number(e.target.value))} 
-                                                        min="0"
-                                                        max={tableInfo.numRows - 1}
-                                                    />
-                                                </div>
-
-                                            </div>
-                                        )}
-
-                                        {plotSubsetMode === 'random' && (
-                                            <div className="input-group input-group-sm shadow-sm mb-3">
-                                                <span className="input-group-text border-0 bg-dark text-white justify-content-center" style={{ width: '65px' }}>Size</span>
-                                                <input type="number" className="form-control border-0 bg-secondary text-white" value={plotSubsetRandomN} onChange={(e) => setPlotSubsetRandomN(Number(e.target.value))} min="1" />
-                                            </div>
-                                        )}
-                                        
-                                        <div className="flex-grow-1 bg-dark rounded border d-flex flex-column shadow-sm" style={{ borderColor: 'var(--fv-border)', minHeight: '300px' }}>
-                                            {plotX && (plotType === 'histogram' || plotY) && fullPlotData[plotX] ? (
-                                                <div className="p-2 w-100 h-100">
-                                                    <FitsPlot 
-                                                        xData={fullPlotData[plotX]} 
-                                                        yData={plotType === 'scatter' && plotY ? fullPlotData[plotY] : undefined} 
-                                                        xErrData={plotType === 'scatter' && plotXErr ? fullPlotData[plotXErr] : undefined}
-                                                        yErrData={plotType === 'scatter' && plotYErr ? fullPlotData[plotYErr] : undefined}
-                                                        xLabel={plotX} 
-                                                        yLabel={plotType === 'scatter' ? plotY : 'Counts'} 
-                                                        plotType={plotType}
-                                                        pointSize={plotPointSize}
-                                                        pointColor={plotPointColor}
-                                                        subsetMode={plotSubsetMode}
-                                                        subsetRange={[plotSubsetStart, plotSubsetEnd]}
-                                                        subsetRandomN={plotSubsetRandomN} 
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div className="m-auto text-muted fst-italic">Select columns to plot</div>
-                                            )}
-                                        </div>
-                                    </>
-                                ) : imageData ? (
-                                    // IMAGE PLOTTING UI
-                                    <div className="d-flex flex-column h-100 w-100">
-                                        <div className="alert bg-dark text-white border-secondary shadow-sm mb-3" style={{ fontSize: '0.85rem' }}>
-                                            <i className="bi bi-info-circle text-primary me-2"></i>
-                                            Select a region on the image to view its pixel distribution.
-                                        </div>
-
-                                        <div className="flex-grow-1 bg-dark rounded border d-flex flex-column shadow-sm" style={{ borderColor: 'var(--fv-border)', minHeight: '300px' }}>
-                                            {activeRegionPixels && activeRegionPixels.length > 0 ? (
-                                                <div className="p-2 w-100 h-100">
-                                                    <FitsPlot 
-                                                        xData={activeRegionPixels} 
-                                                        xLabel="Pixel Intensity" 
-                                                        plotType="histogram" 
-                                                        numBins={50}
-                                                        title="Region Histogram"
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div className="m-auto text-center fv-text-muted p-4">
-                                                    <i className="bi bi-bounding-box display-4 d-block mb-3 opacity-50"></i>
-                                                    <p>No region selected.</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="m-auto fv-text-muted fst-italic">No data to plot</div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
             <FitsHeaderModal 
