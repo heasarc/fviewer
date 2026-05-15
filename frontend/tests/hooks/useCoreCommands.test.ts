@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+// tests/hooks/useCoreCommands.test.ts
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { useCommandHandler } from '../../src/hooks/useCommandHandler'; // Adjust path as needed
+import { useCoreCommands } from '../../src/hooks/useCoreCommands'; 
+import { commandRegistry } from '../../src/core/CommandRegistry'; 
 
-describe('useCommandHandler Hook', () => {
+describe('Core Commands Plugin', () => {
     // 1. Setup mock functions (Spies)
     const mockProcessFile = vi.fn();
     const mockSetColormap = vi.fn();
@@ -11,6 +13,8 @@ describe('useCommandHandler Hook', () => {
     const mockPixToWorld = vi.fn();
     const mockWorldToPix = vi.fn();
     const mockSendReply = vi.fn();
+
+    let unmountHook: () => void;
 
     // Reset spies before each test so counts don't bleed over
     beforeEach(() => {
@@ -23,9 +27,15 @@ describe('useCommandHandler Hook', () => {
         } as Response);
     });
 
+    afterEach(() => {
+        // Clean up the registry after each test by unmounting the hook
+        if (unmountHook) unmountHook();
+    });
+
     // Helper to initialize the hook with default mock state
     const setupHook = (regions: any[] = [], colormap = 'gray', stretch = 'linear') => {
-        const { result } = renderHook(() => useCommandHandler(
+        // Render useCoreCommands so it registers its commands to the registry
+        const { unmount } = renderHook(() => useCoreCommands(
             mockProcessFile,
             colormap, mockSetColormap,
             stretch, mockSetStretch,
@@ -34,7 +44,13 @@ describe('useCommandHandler Hook', () => {
             mockPixToWorld,
             mockWorldToPix
         ));
-        return result.current; // This is the handler function
+        
+        unmountHook = unmount;
+
+        // Return the registry's execute function so tests can trigger commands
+        return async (command: any, sendReply: any) => {
+            await commandRegistry.execute(command, sendReply);
+        };
     };
 
     it('should handle set_colormap and send an ACK', async () => {
@@ -45,14 +61,11 @@ describe('useCommandHandler Hook', () => {
             mockSendReply
         );
 
-        // Verify React state was updated
         expect(mockSetColormap).toHaveBeenCalledWith('plasma');
-        // Verify Python client got the OK response
         expect(mockSendReply).toHaveBeenCalledWith({ message_id: 'msg_1', status: 'ok' });
     });
 
     it('should handle get_colormap and return the current React state', async () => {
-        // Initialize hook with 'heat' colormap
         const handler = setupHook([], 'heat');
         
         await handler(
@@ -60,7 +73,6 @@ describe('useCommandHandler Hook', () => {
             mockSendReply
         );
 
-        // Verify Python client got the data
         expect(mockSendReply).toHaveBeenCalledWith({ message_id: 'msg_2', colormap: 'heat' });
     });
 
@@ -72,16 +84,13 @@ describe('useCommandHandler Hook', () => {
             mockSendReply
         );
 
-        // Verify we triggered a fetch to our secure backend
         expect(globalThis.fetch).toHaveBeenCalled();
-        
-        // Verify processFile was called with a constructed File object
         expect(mockProcessFile).toHaveBeenCalled();
+        
         const createdFile = mockProcessFile.mock.calls[0][0];
         expect(createdFile).toBeInstanceOf(File);
         expect(createdFile.name).toBe('my_file.fits');
 
-        // Verify the ACK was sent
         expect(mockSendReply).toHaveBeenCalledWith({ message_id: 'msg_3', status: 'ok' });
     });
 
@@ -93,19 +102,15 @@ describe('useCommandHandler Hook', () => {
             mockSendReply
         );
 
-        console.log("Reply was:", mockSendReply.mock.calls[0][0]);
-
-        // mockSetRegions is called with a callback (prev => [...prev, newRegion])
-        // We need to execute that callback to see what it tried to add
         expect(mockSetRegions).toHaveBeenCalled();
         
         const stateUpdaterFn = mockSetRegions.mock.calls[0][0];
-        const newState = stateUpdaterFn([]); // Provide empty array as 'prev' state
+        const newState = stateUpdaterFn([]); 
         
         expect(newState).toHaveLength(1);
         expect(newState[0].type).toBe('circle');
         expect(newState[0].startX).toBe(50);
-        expect(newState[0].endX).toBe(60); // x + radius
+        expect(newState[0].endX).toBe(60); 
         
         expect(mockSendReply).toHaveBeenCalledWith({ message_id: 'msg_4', status: 'ok' });
     });
@@ -118,10 +123,8 @@ describe('useCommandHandler Hook', () => {
             mockSendReply
         );
 
-        // React state should NOT be updated
         expect(mockSetRegions).not.toHaveBeenCalled();
         
-        // Python client should instantly get an error
         expect(mockSendReply).toHaveBeenCalledWith({ 
             message_id: 'msg_5', 
             error: 'Invalid region type: hacked_type' 
