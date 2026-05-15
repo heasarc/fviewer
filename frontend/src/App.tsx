@@ -64,6 +64,9 @@ function App() {
 
         setFileName(file.name);
         setIsLoading(true);
+
+        // Force the UI to unmount the old Image/Table immediately!
+        setActiveHdu(null);
         
         try {
             let buffer: ArrayBuffer;
@@ -177,7 +180,7 @@ function App() {
             }
         };
         loadHduData();
-    }, [activeHdu]);
+    }, [activeHdu, fileName]);
 
     const handleCellEdit = async (colName: string, colNum: number, rowIndex: number, newValue: string) => {
         try {

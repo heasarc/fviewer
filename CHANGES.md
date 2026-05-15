@@ -1,3 +1,9 @@
+# 0.3.0
+- Introduce the plugin system and move some parts to it.
+- Bug fixes:
+  - Table viewer does not update when opening a new file
+  - Tables with a small number of rows don't immediately show content.
+
 # 0.2.6
 - add more docs
 - Add support for physical units in region files
