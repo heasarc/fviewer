@@ -249,6 +249,15 @@ function App() {
         }
     }, [tableInfo, readTableChunk]);
 
+    // Jump-start the table data fetch when a new table is loaded
+    useEffect(() => {
+        // If we have table info, but tableData is completely empty, fetch the first 100 rows!
+        if (tableInfo && tableInfo.numRows > 0 && Object.keys(tableData).length === 0) {
+            const initialFetchSize = Math.min(100, tableInfo.numRows);
+            handleFetchTableData(0, initialFetchSize);
+        }
+    }, [tableInfo, tableData, handleFetchTableData]);
+
 
     useEffect(() => {
         // If the user OPENS the plotter, and there is already an active image and region,
