@@ -41,7 +41,8 @@ export const FitsImage: React.FC<FitsImageProps> = ({
 
     const { 
         colormap, stretch, isConnected, fitsWorker, regions, setRegions, 
-        setServerModalMode, fileName, setActiveRegionPixels, imageData, isPlotterOpen
+        setServerModalMode, fileName, setActiveRegionPixels, imageData, isPlotterOpen,
+        zoom, setZoom, pan, setPan, flipX, flipY, rotation,
     } = useCore();
 
     const { checkWcs, pixToWorld, worldToPix } = fitsWorker;
@@ -49,13 +50,6 @@ export const FitsImage: React.FC<FitsImageProps> = ({
     const viewportRef = useRef<HTMLDivElement>(null); 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const regionInputRef = useRef<HTMLInputElement>(null);
-
-    // Interactivity & Transform State
-    const [zoom, setZoom] = useState<number | null>(1);
-    const [pan, setPan] = useState({ x: 0, y: 0 });
-    const [flipX, setFlipX] = useState(false);
-    const [flipY, setFlipY] = useState(false);
-    const [rotation, setRotation] = useState(0);
     
     // Region & Drawing State
     const {
@@ -452,11 +446,6 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         dragStart.current = getCanvasCoords(e.clientX, e.clientY);
     };
 
-    const resetView = () => {
-        setZoom(1); setPan({ x: 0, y: 0 });
-        setFlipX(false); setFlipY(false); setRotation(0);
-    };
-
     const selectedRegion = regions.find(r => r.id === selectedRegionId);
 
     return (
@@ -600,69 +589,15 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                         </ul>
                     </div>
                 </div>
-                
-                {/* PLUGINS (Color, Scale, etc) GO HERE */}
+
+                {/* PLUGINS (Color, Scale, Transform, etc) GO HERE */}
                 <ExtensionSlot name="fitsimage:toolbar" />
 
-                {/* Transform Menu */}
-                <div className="dropdown">
-                    <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown"><i className="bi bi-arrows-collapse"></i> <span className="ms-1">Transform</span></button>
-                    <ul className="dropdown-menu fv-dropdown-menu shadow">
-                        <li>
-                            <button className="dropdown-item fv-dropdown-item" onClick={() => setFlipX(!flipX)}>
-                                <i className="bi bi-symmetry-vertical"></i> Flip X
-                            </button>
-                        </li>
-                        <li>
-                            <button className="dropdown-item fv-dropdown-item" onClick={() => setFlipY(!flipY)}>
-                                <i className="bi bi-symmetry-horizontal"></i> Flip Y
-                            </button>
-                        </li>
-                        <li><hr className="dropdown-divider border-secondary my-1" /></li>
-                        <li>
-                            <button className="dropdown-item fv-dropdown-item" onClick={() => setRotation(r => r - 90)}>
-                                <i className="bi bi-arrow-counterclockwise"></i> Rotate CCW (90°)
-                            </button>
-                        </li>
-                        <li>
-                            <button className="dropdown-item fv-dropdown-item" onClick={() => setRotation(r => r + 90)}>
-                                <i className="bi bi-arrow-clockwise"></i> Rotate CW (90°)
-                            </button>
-                        </li>
-                        <li><hr className="dropdown-divider border-secondary my-1" /></li>
-                        <li className="px-3 py-1">
-                            <label className="fv-text-muted mb-1" style={{ fontSize: '0.75rem' }}>Custom Angle (°)</label>
-                            <input type="number" className="form-control form-control-sm border-secondary bg-dark text-white" style={{ appearance: 'textfield' }} value={rotation} onChange={(e) => setRotation(Number(e.target.value) || 0)} step="1"/>
-                        </li>
-                    </ul>
+                {/* RIGHT-ALIGNED PLUGINS (Zoom) GO HERE */}
+                <div className="ms-auto d-flex gap-1 align-items-center">
+                    <ExtensionSlot name="fitsimage:toolbar:right" />
                 </div>
 
-                {/* Zoom Menu */}
-                <div className="ms-auto d-flex gap-1 align-items-center">
-                    <div className="dropdown">
-                        <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown" title="Zoom Menu">
-                            <i className="bi bi-zoom-in"></i> <span className="ms-1">Zoom ({zoom !== null ? Math.round(zoom * 100) : 0}%)</span>
-                        </button>
-                        <ul className="dropdown-menu dropdown-menu-end fv-dropdown-menu shadow">
-                            <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={() => setZoom(z => Math.min(50, (z ?? 1) * 1.2))}>
-                                    <span style={{ width: '16px' }}></span><i className="bi bi-zoom-in"></i> Zoom In
-                                </button>
-                            </li>
-                            <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={() => setZoom(z => Math.max(0.1, (z ?? 1) * 0.8))}>
-                                    <span style={{ width: '16px' }}></span><i className="bi bi-zoom-out"></i> Zoom Out
-                                </button>
-                            </li>
-                            <li><hr className="dropdown-divider border-secondary my-1" /></li>
-                            <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={resetView}>
-                                    <span style={{ width: '16px' }}></span><i className="bi bi-arrow-repeat"></i> Reset View
-                                </button>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
             </div>
 
             {/* Viewport */}
