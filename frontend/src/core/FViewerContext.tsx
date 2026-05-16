@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState } from 'react';
 import type {ReactNode} from 'react';
 import { useFits } from '../hooks/useFits';
+import { FITS_FORMATS, ALLOWED_EXTS } from '../utils/constants';
 
 // Define what our context exposes to the app and plugins
 interface CoreContextType {
@@ -22,6 +23,13 @@ interface CoreContextType {
     setIsPlotterOpen: React.Dispatch<React.SetStateAction<boolean>>;
     activeRegionPixels: number[] | null;
     setActiveRegionPixels: React.Dispatch<React.SetStateAction<number[] | null>>;
+    regions: any[];
+    setRegions: React.Dispatch<React.SetStateAction<any[]>>;
+    processFile: (file: File) => Promise<void>;
+    isConnected: boolean;
+    setIsConnected: React.Dispatch<React.SetStateAction<boolean>>;
+    serverModalMode: 'fits' | 'region' | null;
+    setServerModalMode: React.Dispatch<React.SetStateAction<'fits' | 'region' | null>>;
 }
 
 const FViewerContext = createContext<CoreContextType | null>(null);
@@ -42,6 +50,51 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
     const [isPlotterOpen, setIsPlotterOpen] = useState(false);
     const [activeRegionPixels, setActiveRegionPixels] = useState<number[] | null>(null);
 
+    // Others
+    const [regions, setRegions] = useState<any[]>([]);
+    const [isConnected, setIsConnected] = useState(false);
+    const [serverModalMode, setServerModalMode] = useState<'fits' | 'region' | null>(null);
+
+    // handle the logic of opening a file, from upload or from the API
+    const processFile = async (file: File) => {
+        // You might need to import ALLOWED_EXTS and FITS_FORMATS at the top of this file!
+        const fileName = file.name.toLowerCase();
+        const isValid = ALLOWED_EXTS.some(ext => fileName.endsWith(ext));
+        if (!isValid) {
+            alert(`Please select a valid FITS file. Allowed extensions: ${FITS_FORMATS}`);
+            return;
+        }
+
+        setFileName(file.name);
+        setIsLoading(true);
+        setActiveHdu(null); // Force UI wipe
+        
+        try {
+            let buffer: ArrayBuffer;
+
+            // Intercept and decompress gzip files natively
+            if (file.name.toLowerCase().endsWith('.gz')) {
+                const ds = new DecompressionStream('gzip');
+                const decompressedStream = file.stream().pipeThrough(ds);
+                buffer = await new Response(decompressedStream).arrayBuffer();
+            } else {
+                buffer = await file.arrayBuffer();
+            }
+            
+            await fitsWorker.openFile(new Uint8Array(buffer));
+            const list = await fitsWorker.getHduList();
+            setHduList(list);
+            
+            const firstValid = list.find((h: any) => h.type !== 'empty');
+            setActiveHdu(firstValid ? firstValid.index : 1);
+        } catch (error) {
+            console.error("Failed to load file:", error);
+            alert("Failed to load FITS file.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const value = {
         fitsWorker,
         fileName, setFileName,
@@ -51,7 +104,11 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
         imageData, setImageData,
         isLoading, setIsLoading,
         isPlotterOpen, setIsPlotterOpen,
-        activeRegionPixels, setActiveRegionPixels
+        activeRegionPixels, setActiveRegionPixels,
+        regions, setRegions,
+        isConnected, setIsConnected,
+        processFile,
+        serverModalMode, setServerModalMode,
     };
 
     return (
