@@ -18,6 +18,7 @@ import type { Region } from '../utils/regionUtils';
 import { RegionShape } from './RegionOverlay';
 import { useRegions } from '../hooks/useRegions';
 import { useCore } from '../core/FViewerContext';
+import { parseDS9Regions, serializeDS9Regions } from '../utils/regionUtils';
 import { ExtensionSlot } from '../core/PluginManager';
 
 /**
@@ -30,34 +31,24 @@ interface FitsImageProps {
     width: number;
     /** Height of the image in pixels (NAXIS2). */
     height: number;
-    /** Whether the viewer is connected to the Python backend server. */
-    isConnected: boolean;
-    
-    // WCS callbacks routed to the Web Worker
-    checkWcs: () => Promise<boolean>;
-    pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>;
-    
-    // Region State Management
-    regions: Region[];
-    setRegions: React.Dispatch<React.SetStateAction<Region[]>>;
-    onSaveRegions: (format: 'image' | 'physical' | 'fk5') => void;
-    onLoadRegions: () => void;
-    onLoadServerRegions: () => void;
-    /** Callback fired when a region's coordinates change (debounced/hashed). */
-    onRegionChange?: (region: Region | null) => void;
 }
 
 export type DrawMode = 'pan' | 'circle' | 'box' | 'ellipse' | 'annulus';
 
 export const FitsImage: React.FC<FitsImageProps> = ({ 
-        data, width, height, isConnected, checkWcs, pixToWorld, regions, setRegions, 
-        onSaveRegions, onLoadRegions, onLoadServerRegions, onRegionChange
+        data, width, height
     }) => {
 
-    const { colormap, stretch } = useCore();
+    const { 
+        colormap, stretch, isConnected, fitsWorker, regions, setRegions, 
+        setServerModalMode, fileName, setActiveRegionPixels, imageData, isPlotterOpen
+    } = useCore();
+
+    const { checkWcs, pixToWorld, worldToPix } = fitsWorker;
 
     const viewportRef = useRef<HTMLDivElement>(null); 
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const regionInputRef = useRef<HTMLInputElement>(null);
 
     // Interactivity & Transform State
     const [zoom, setZoom] = useState<number | null>(1);
@@ -100,6 +91,122 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         if (maxVal === minVal) maxVal = minVal + 1;
         return { min: minVal, max: maxVal };
     }, [data]);
+
+    // --- EXTRACT REGION PIXELS FOR HISTOGRAM ---
+    const handleRegionChange = React.useCallback((region: any | null) => {
+        // We no longer need to check isPlotterOpenRef here! 
+        // If they draw a region, we just calculate the pixels. The plotter will use them if it's open.
+        if (!region || !data) {
+            setActiveRegionPixels(null);
+            return;
+        }
+
+        const pixels: number[] = [];
+        let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
+        
+        if (region.type === 'box') {
+            w = Math.abs(region.endX - region.startX);
+            h = Math.abs(region.endY - region.startY);
+            cx = (region.startX + region.endX) / 2;
+            cy = (region.startY + region.endY) / 2;
+        } else if (region.type === 'ellipse') {
+            w = Math.abs(region.endX - region.startX) * 2;
+            h = Math.abs(region.endY - region.startY) * 2;
+            cx = region.startX;
+            cy = region.startY;
+        } else {
+            radius = Math.hypot(region.endX - region.startX, region.endY - region.startY);
+            w = radius * 2; h = radius * 2;
+            cx = region.startX; cy = region.startY;
+        }
+
+        const rad = -(region.angle || 0) * Math.PI / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+
+        const maxR = Math.max(w/2, h/2); 
+        const minX = Math.max(1, Math.floor(cx - maxR));
+        const maxX = Math.min(width, Math.ceil(cx + maxR));
+        const minY = Math.max(1, Math.floor(cy - maxR));
+        const maxY = Math.min(height, Math.ceil(cy + maxR));
+
+        for (let y = minY; y <= maxY; y++) {
+            for (let x = minX; x <= maxX; x++) {
+                
+                const tx = x - cx; const ty = y - cy;
+                const rx = tx * cos - ty * sin;
+                const ry = tx * sin + ty * cos;
+
+                let inside = false;
+                if (region.type === 'box') {
+                    if (Math.abs(rx) <= w/2 && Math.abs(ry) <= h/2) inside = true;
+                } else if (region.type === 'ellipse') {
+                    if ((rx*rx)/Math.pow(w/2, 2) + (ry*ry)/Math.pow(h/2, 2) <= 1) inside = true;
+                } else if (region.type === 'annulus') {
+                    const r2 = rx*rx + ry*ry;
+                    const out2 = Math.pow(radius, 2);
+                    const in2 = Math.pow(region.innerR || radius/2, 2);
+                    if (r2 <= out2 && r2 >= in2) inside = true;
+                } else { 
+                    if (rx*rx + ry*ry <= Math.pow(radius, 2)) inside = true;
+                }
+
+                if (inside) {
+                    const dataIdx = (height - y) * width + (x - 1);
+                    pixels.push(data[dataIdx]);
+                }
+            }
+        }
+        
+        setActiveRegionPixels(pixels);
+    }, [data, width, height, setActiveRegionPixels]);
+
+    // --- REGION SERIALIZATION ---
+    const handleSaveRegions = async (format: 'image' | 'physical' | 'fk5' = 'fk5') => {
+        if (regions.length === 0) return alert("No regions to save.");
+        if (!imageData) return alert("No image data loaded.");
+
+        // Extract exact physical transform parameters
+        const physicalTransform = {
+            ltv1: imageData.ltv1 ?? 0,
+            ltv2: imageData.ltv2 ?? 0,
+            ltm1_1: imageData.ltm1_1 ?? 1,
+            ltm2_2: imageData.ltm2_2 ?? 1
+        };
+        
+        const fileContent = await serializeDS9Regions(
+            regions, format, width, height, pixToWorld,
+            imageData.pixScale || null, physicalTransform
+        );
+
+        const blob = new Blob([fileContent], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${fileName ? fileName.replace(/\.fits$/i, '') : 'fviewer'}.reg`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    };
+
+    const handleLoadRegions = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !imageData) return;
+
+        const physicalTransform = {
+            ltv1: imageData.ltv1 ?? 0,
+            ltv2: imageData.ltv2 ?? 0,
+            ltm1_1: imageData.ltm1_1 ?? 1,
+            ltm2_2: imageData.ltm2_2 ?? 1
+        };
+
+        const text = await file.text(); 
+        const loadedRegions = await parseDS9Regions(
+            text, width, height, pixToWorld, worldToPix,
+            imageData.pixScale || null, physicalTransform
+        );
+        
+        setRegions((prev: Region[]) => [...prev, ...loadedRegions]);
+        if (regionInputRef.current) regionInputRef.current.value = ''; 
+    };
 
     /**
      * Core Render Loop
@@ -162,19 +269,25 @@ export const FitsImage: React.FC<FitsImageProps> = ({
     const lastSentRegionRef = useRef<string | null>(null);
 
     useEffect(() => {
-        if (onRegionChange && !isDragging) {
+        if (!isDragging) {
             const selected = regions.find(r => r.id === selectedRegionId) || null;
-            
-            const regionHash = selected 
-                ? `${selected.id}-${selected.startX}-${selected.startY}-${selected.endX}-${selected.endY}-${selected.angle}-${selected.innerR}` 
-                : null;
+            const regionHash = selected ? `${selected.id}-${selected.startX}-${selected.startY}-${selected.endX}-${selected.endY}-${selected.angle}-${selected.innerR}` : null;
             
             if (regionHash !== lastSentRegionRef.current) {
                 lastSentRegionRef.current = regionHash;
-                onRegionChange(selected);
+                handleRegionChange(selected); // Call the local function!
             }
         }
-    }, [regions, selectedRegionId, isDragging, onRegionChange]);
+    }, [regions, selectedRegionId, isDragging, handleRegionChange]);
+
+    // Jump-start region pixel calculation when the Plotter is opened
+    useEffect(() => {
+        if (isPlotterOpen && data && regions.length > 0) {
+            // Find the active region, or just use the last one drawn
+            const selected = regions.find(r => r.id === selectedRegionId) || regions[regions.length - 1];
+            handleRegionChange(selected);
+        }
+    }, [isPlotterOpen, data, regions, selectedRegionId, handleRegionChange]);
 
     // Keyboard listener for Backspace / Delete
     useEffect(() => {
@@ -348,6 +461,9 @@ export const FitsImage: React.FC<FitsImageProps> = ({
 
     return (
         <div className="d-flex flex-column w-100 h-100 border rounded overflow-hidden" style={{ borderColor: 'var(--fv-border)' }}>
+
+            {/* Hidden Region File Input */}
+            <input type="file" ref={regionInputRef} accept=".reg,.txt" style={{ display: 'none' }} onChange={handleLoadRegions} />
             
             {/* Compact Snapshot-Style Toolbar */}
             <div className="fv-toolbar d-flex flex-wrap gap-2 align-items-center">
@@ -440,14 +556,14 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                             {/* File Actions */}
                             <li><hr className="dropdown-divider border-secondary my-1" /></li>
                             <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={onLoadRegions}>
+                                <button className="dropdown-item fv-dropdown-item" onClick={() => regionInputRef.current?.click()}>
                                     <span style={{ width: '16px' }}></span>
                                     <i className="bi bi-folder2-open"></i> Load Local Regions...
                                 </button>
                             </li>
                             {isConnected && (                                    
                                 <li>
-                                    <button className="dropdown-item fv-dropdown-item" onClick={onLoadServerRegions}>
+                                    <button className="dropdown-item fv-dropdown-item" onClick={() => setServerModalMode('region')}>
                                         <span style={{ width: '16px' }}></span>
                                         <i className="bi bi-cloud-arrow-down"></i> Load Server Regions...
                                     </button>
@@ -473,7 +589,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                                     </select>
                                     <button 
                                         className="btn btn-outline-secondary" 
-                                        onClick={() => onSaveRegions(saveFormat)} 
+                                        onClick={() => handleSaveRegions(saveFormat)} 
                                         disabled={regions.length === 0 || (saveFormat === 'fk5' && !hasWCS)}
                                         title="Download .reg file"
                                     >

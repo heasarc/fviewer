@@ -7,8 +7,6 @@ import { useCoreCommands } from './hooks/useCoreCommands';
 import { ExtensionSlot } from './core/PluginManager';
 import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
-import type { Region } from './utils/regionUtils';
-import { parseDS9Regions, serializeDS9Regions } from './utils/regionUtils';
 import fviewerLogo from '/fviewer-logo.svg';
 import { FITS_FORMATS } from './utils/constants';
 
@@ -19,13 +17,11 @@ function App() {
         fitsWorker, fileName, hduList, 
         activeHdu, setActiveHdu, tableInfo, setTableInfo, 
         imageData, setImageData, isLoading, setIsLoading,
-        setActiveRegionPixels, isPlotterOpen,
-        processFile, regions, setRegions, setIsConnected, setServerModalMode
+        isPlotterOpen, processFile, regions, setRegions, setIsConnected
     } = useCore();
 
     // Deconstruct the worker methods we need for this file
-    const { moveToHDU, getTableInfo, writeCell, saveFile, readImage, 
-          checkWcs, pixToWorld, worldToPix, readTableChunk } = fitsWorker;
+    const { moveToHDU, getTableInfo, writeCell, saveFile, readImage, readTableChunk } = fitsWorker;
     
     
     // File & HDU State
@@ -35,8 +31,6 @@ function App() {
     // Data State
     const [tableData, setTableData] = useState<Record<string, any[]>>({});
     const isPlotterOpenRef = useRef(isPlotterOpen);
-
-    const regionInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -186,140 +180,12 @@ function App() {
         }
     }, [tableInfo, tableData, handleFetchTableData]);
 
-
-    useEffect(() => {
-        // If the user OPENS the plotter, and there is already an active image and region,
-        // immediately calculate the pixel histogram!
-        if (isPlotterOpen && imageData && regions.length > 0) {
-            handleRegionChange(regions[regions.length - 1]);
-        }
-    }, [isPlotterOpen]);
-
-    // --- EXTRACT REGION PIXELS FOR HISTOGRAM ---
-    const handleRegionChange = useCallback((region: any | null) => {
-        // 1. SHORT CIRCUIT: If no region, no image data, or the plotter is CLOSED, do absolutely nothing!
-        if (!region || !imageData || !isPlotterOpenRef.current) {
-            setActiveRegionPixels(null);
-            return;
-        }
-
-        const { data, width, height } = imageData;
-        const pixels: number[] = [];
-        
-        let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
-        
-        if (region.type === 'box') {
-            w = Math.abs(region.endX - region.startX);
-            h = Math.abs(region.endY - region.startY);
-            cx = (region.startX + region.endX) / 2;
-            cy = (region.startY + region.endY) / 2;
-        } else if (region.type === 'ellipse') {
-            w = Math.abs(region.endX - region.startX) * 2;
-            h = Math.abs(region.endY - region.startY) * 2;
-            cx = region.startX;
-            cy = region.startY;
-        } else {
-            radius = Math.hypot(region.endX - region.startX, region.endY - region.startY);
-            w = radius * 2; h = radius * 2;
-            cx = region.startX; cy = region.startY;
-        }
-
-        const rad = -(region.angle || 0) * Math.PI / 180;
-        const cos = Math.cos(rad);
-        const sin = Math.sin(rad);
-
-        const maxR = Math.max(w/2, h/2); 
-        const minX = Math.max(1, Math.floor(cx - maxR));
-        const maxX = Math.min(width, Math.ceil(cx + maxR));
-        const minY = Math.max(1, Math.floor(cy - maxR));
-        const maxY = Math.min(height, Math.ceil(cy + maxR));
-
-        for (let y = minY; y <= maxY; y++) {
-            for (let x = minX; x <= maxX; x++) {
-                
-                const tx = x - cx; const ty = y - cy;
-                const rx = tx * cos - ty * sin;
-                const ry = tx * sin + ty * cos;
-
-                let inside = false;
-                if (region.type === 'box') {
-                    if (Math.abs(rx) <= w/2 && Math.abs(ry) <= h/2) inside = true;
-                } else if (region.type === 'ellipse') {
-                    if ((rx*rx)/Math.pow(w/2, 2) + (ry*ry)/Math.pow(h/2, 2) <= 1) inside = true;
-                } else if (region.type === 'annulus') {
-                    const r2 = rx*rx + ry*ry;
-                    const out2 = Math.pow(radius, 2);
-                    const in2 = Math.pow(region.innerR || radius/2, 2);
-                    if (r2 <= out2 && r2 >= in2) inside = true;
-                } else { 
-                    if (rx*rx + ry*ry <= Math.pow(radius, 2)) inside = true;
-                }
-
-                if (inside) {
-                    const dataIdx = (height - y) * width + (x - 1);
-                    pixels.push(data[dataIdx]);
-                }
-            }
-        }
-        
-        setActiveRegionPixels(pixels);
-    }, [imageData]);
-
-    // --- REGION SERIALIZATION (.reg) ---
-    const handleSaveRegions = async (format: 'image' | 'physical' | 'fk5' = 'fk5') => {
-        if (regions.length === 0) return alert("No regions to save.");
-        if (!imageData) return alert("No image data loaded.");
-
-        // Extract physical transform parameters with safe defaults
-        const physicalTransform = {
-            ltv1: imageData.ltv1 ?? 0,
-            ltv2: imageData.ltv2 ?? 0,
-            ltm1_1: imageData.ltm1_1 ?? 1,
-            ltm2_2: imageData.ltm2_2 ?? 1
-        };
-        
-        const fileContent = await serializeDS9Regions(
-            regions, format, imageData.width, imageData.height, pixToWorld,
-            imageData.pixScale || null, physicalTransform
-        );
-
-        const blob = new Blob([fileContent], { type: 'text/plain' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${fileName ? fileName.replace(/\.fits$/i, '') : 'fviewer'}.reg`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-    };
-
-    const handleLoadRegions = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !imageData) return;
-
-        // Extract physical transform parameters with safe defaults
-        const physicalTransform = {
-            ltv1: imageData.ltv1 ?? 0,
-            ltv2: imageData.ltv2 ?? 0,
-            ltm1_1: imageData.ltm1_1 ?? 1,
-            ltm2_2: imageData.ltm2_2 ?? 1
-        };
-
-        const text = await file.text(); 
-        const loadedRegions = await parseDS9Regions(
-            text, imageData.width, imageData.height, pixToWorld, worldToPix,
-            imageData.pixScale || null, physicalTransform
-        );
-        
-        setRegions((prev: Region[]) => [...prev, ...loadedRegions]);
-        if (regionInputRef.current) regionInputRef.current.value = ''; 
-    };
-
     return (
         // 1. App Layout: Full height, flex column, hide overflow
         <div className="vh-100 d-flex flex-column overflow-hidden" style={{ backgroundColor: 'var(--fv-bg)', color: 'var(--fv-text)' }}>
             
             {/* Hidden File Input */}
             <input type="file" ref={fileInputRef} accept={FITS_FORMATS} style={{ display: 'none' }} onChange={handleFileUpload} />
-            <input type="file" ref={regionInputRef} accept=".reg,.txt" style={{ display: 'none' }} onChange={handleLoadRegions} />
 
             {/* 2. Top Menubar */}
             <nav className="navbar navbar-expand-md navbar-dark flex-shrink-0 border-bottom px-3 py-0" style={{ minHeight: '36px', backgroundColor: '#13151f', borderColor: 'var(--fv-border)' }}>
@@ -516,14 +382,6 @@ function App() {
                                             <div className="flex-grow-1 position-relative d-flex flex-column" style={{ minHeight: 0 }}>
                                                 <FitsImage 
                                                     data={imageData.data} width={imageData.width} height={imageData.height} 
-                                                    isConnected={isConnected}
-                                                    checkWcs={checkWcs} pixToWorld={pixToWorld}
-                                                    regions={regions}
-                                                    setRegions={setRegions}
-                                                    onSaveRegions={handleSaveRegions}
-                                                    onLoadRegions={() => regionInputRef.current?.click()}
-                                                    onLoadServerRegions={() => setServerModalMode('region')}
-                                                    onRegionChange={handleRegionChange}
                                                 />
                                             </div>
                                         </div>
