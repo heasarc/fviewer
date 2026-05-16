@@ -1,7 +1,7 @@
 // # Copyright 2026, University of Maryland, All Rights Reserved
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useCore } from './core/FViewerContext';
-import { useWebSocket, getApiUrl } from './hooks/useWebSocket';
+import { useWebSocket } from './hooks/useWebSocket';
 import { useCommandHandler } from './hooks/useCommandHandler';
 import { useCoreCommands } from './hooks/useCoreCommands';
 import { ExtensionSlot } from './core/PluginManager';
@@ -9,22 +9,22 @@ import { VirtualTable } from './components/VirtualTable';
 import { FitsImage } from './components/FitsImage';
 import type { Region } from './utils/regionUtils';
 import { parseDS9Regions, serializeDS9Regions } from './utils/regionUtils';
-import { ServerFileModal } from './components/ServerFileModal';
 import fviewerLogo from '/fviewer-logo.svg';
-import { FITS_FORMATS, ALLOWED_EXTS } from './utils/constants';
+import { FITS_FORMATS } from './utils/constants';
 
 function App() {
 
     // Get everything we need from the Core Context
     const { 
-        fitsWorker, fileName, setFileName, hduList, setHduList, 
+        fitsWorker, fileName, hduList, 
         activeHdu, setActiveHdu, tableInfo, setTableInfo, 
         imageData, setImageData, isLoading, setIsLoading,
-        setActiveRegionPixels, isPlotterOpen
+        setActiveRegionPixels, isPlotterOpen,
+        processFile, regions, setRegions, setIsConnected, setServerModalMode
     } = useCore();
 
     // Deconstruct the worker methods we need for this file
-    const { openFile, moveToHDU, getTableInfo, writeCell, saveFile, readImage, getHduList, 
+    const { moveToHDU, getTableInfo, writeCell, saveFile, readImage, 
           checkWcs, pixToWorld, worldToPix, readTableChunk } = fitsWorker;
     
     
@@ -39,9 +39,6 @@ function App() {
     const [colormap, setColormap] = useState('gray');
     const [stretch, setStretch] = useState('linear');
 
-    const [serverModalMode, setServerModalMode] = useState<'fits' | 'region' | null>(null);
-
-    const [regions, setRegions] = useState<Region[]>([]);
     const regionInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,47 +48,6 @@ function App() {
         await processFile(file);
         
         if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-
-    // handle the logic of opening a file, from upload or from the API
-    const processFile = async (file: File) => {
-        const fileName = file.name.toLowerCase();
-        const isValid = ALLOWED_EXTS.some(ext => fileName.endsWith(ext));
-        if (!isValid) {
-            alert(`Please select a valid FITS file. Allowed extensions: ${FITS_FORMATS}`);
-            return;
-        }
-
-        setFileName(file.name);
-        setIsLoading(true);
-
-        // Force the UI to unmount the old Image/Table immediately!
-        setActiveHdu(null);
-        
-        try {
-            let buffer: ArrayBuffer;
-            
-            // Intercept and decompress gzip files natively
-            if (file.name.toLowerCase().endsWith('.gz')) {
-                const ds = new DecompressionStream('gzip');
-                const decompressedStream = file.stream().pipeThrough(ds);
-                buffer = await new Response(decompressedStream).arrayBuffer();
-            } else {
-                buffer = await file.arrayBuffer();
-            }
-            
-            await openFile(new Uint8Array(buffer));
-            const list = await getHduList();
-            setHduList(list);
-            
-            const firstValid = list.find((h: any) => h.type !== 'empty');
-            setActiveHdu(firstValid ? firstValid.index : 1);
-        } catch (error) {
-            console.error("Failed to load file:", error);
-            alert("Failed to load FITS file.");
-        } finally {
-            setIsLoading(false);
-        }
     };
 
     // Handle API commands
@@ -111,36 +67,10 @@ function App() {
     // Listen for commands
     const { clientId, isConnected } = useWebSocket(handleRemoteCommand);
 
-    // Server File listing
-    const handleServerFileSelect = async (serverPath: string) => {
-        try {
-            setIsLoading(true);
-            const response = await fetch(getApiUrl(`api/file?path=${encodeURIComponent(serverPath)}`));
-            if (!response.ok) throw new Error("Failed to fetch file");
-            
-            // Route based on the mode
-            if (serverModalMode === 'region' || serverPath.endsWith('.reg')) {
-                if (!imageData) throw new Error("No image data available for region coordinate conversion.");
-                const text = await response.text();
-                const newRegions = await parseDS9Regions(
-                    text, imageData.width, imageData.height, 
-                    pixToWorld, worldToPix, imageData.pixScale || null
-                );
-                setRegions((prev: Region[]) => [...prev, ...newRegions]);
-            } else {
-                const blob = await response.blob();
-                const filename = serverPath.split('/').pop() || 'remote.fits';
-                const file = new File([blob], filename, { type: 'application/octet-stream' });
-                await processFile(file);
-            }
-        } catch (error) {
-            console.error("Error loading server file:", error);
-            alert("Failed to load file from server.");
-        } finally {
-            setIsLoading(false);
-            setServerModalMode(null); // Close the modal
-        }
-    };
+    // Sync it to context so the plugin knows!
+    useEffect(() => {
+        setIsConnected(isConnected);
+    }, [isConnected, setIsConnected]);
 
     // keep the plot panel refs in sync
     useEffect(() => {
@@ -440,9 +370,7 @@ function App() {
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">File</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
                                     <li><button className="dropdown-item fv-dropdown-item" onClick={() => fileInputRef.current?.click()}><i className="bi bi-folder2-open"></i> Open Local File...</button></li>
-                                    {isConnected && (
-                                        <li><button className="dropdown-item fv-dropdown-item" onClick={() => setServerModalMode('fits')}><i className="bi bi-plug-fill"></i> Open From Server...</button></li>
-                                    )}
+                                    <ExtensionSlot name="menubar:file" />
                                     <li><hr className="dropdown-divider border-secondary my-1" /></li>
                                     <li><button className="dropdown-item fv-dropdown-item" onClick={handleSave} disabled={hduList.length === 0 || isLoading}><i className="bi bi-save"></i> Save Edited FITS</button></li>
                                 </ul>
@@ -638,12 +566,6 @@ function App() {
 
                 </div>
             </div>
-            <ServerFileModal 
-                isOpen={serverModalMode !== null}
-                mode={serverModalMode}
-                onClose={() => setServerModalMode(null)} 
-                onFileSelect={handleServerFileSelect}
-            />
         </div>
     );
 }

@@ -11,9 +11,11 @@ import App from './App.tsx'
 // Plugins
 import { initPlotterPlugin } from './plugins/PlotterPlugin';
 import { initHeaderEditorPlugin } from './plugins/HeaderEditorPlugin';
+import { initServerFilePlugin } from './plugins/ServerFilePlugin';
 
 initPlotterPlugin();
 initHeaderEditorPlugin();
+initServerFilePlugin();
 
 createRoot(document.getElementById('root') as HTMLElement).render(
     <React.StrictMode>
