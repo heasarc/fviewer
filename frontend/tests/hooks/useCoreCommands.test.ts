@@ -7,8 +7,6 @@ import { commandRegistry } from '../../src/core/CommandRegistry';
 describe('Core Commands Plugin', () => {
     // 1. Setup mock functions (Spies)
     const mockProcessFile = vi.fn();
-    const mockSetColormap = vi.fn();
-    const mockSetStretch = vi.fn();
     const mockSetRegions = vi.fn();
     const mockPixToWorld = vi.fn();
     const mockWorldToPix = vi.fn();
@@ -32,14 +30,13 @@ describe('Core Commands Plugin', () => {
         if (unmountHook) unmountHook();
     });
 
-    // Helper to initialize the hook with default mock state
-    const setupHook = (regions: any[] = [], colormap = 'gray', stretch = 'linear') => {
+    // Helper to initialize the hook with default mock state matching the new signature
+    const setupHook = (regions: any[] = []) => {
         // Render useCoreCommands so it registers its commands to the registry
         const { unmount } = renderHook(() => useCoreCommands(
             mockProcessFile,
-            colormap, mockSetColormap,
-            stretch, mockSetStretch,
-            regions, mockSetRegions,
+            regions, 
+            mockSetRegions,
             { width: 100, height: 100, pixScale: { scaleX: 1, scaleY: 1 } }, // Mock imageData
             mockPixToWorld,
             mockWorldToPix
@@ -52,29 +49,6 @@ describe('Core Commands Plugin', () => {
             await commandRegistry.execute(command, sendReply);
         };
     };
-
-    it('should handle set_colormap and send an ACK', async () => {
-        const handler = setupHook();
-        
-        await handler(
-            { action: 'set_colormap', cmap: 'plasma', message_id: 'msg_1' }, 
-            mockSendReply
-        );
-
-        expect(mockSetColormap).toHaveBeenCalledWith('plasma');
-        expect(mockSendReply).toHaveBeenCalledWith({ message_id: 'msg_1', status: 'ok' });
-    });
-
-    it('should handle get_colormap and return the current React state', async () => {
-        const handler = setupHook([], 'heat');
-        
-        await handler(
-            { action: 'get_colormap', message_id: 'msg_2' }, 
-            mockSendReply
-        );
-
-        expect(mockSendReply).toHaveBeenCalledWith({ message_id: 'msg_2', colormap: 'heat' });
-    });
 
     it('should securely handle load_file and create a File object', async () => {
         const handler = setupHook();
