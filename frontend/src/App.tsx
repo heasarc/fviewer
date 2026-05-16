@@ -35,9 +35,6 @@ function App() {
     // Data State
     const [tableData, setTableData] = useState<Record<string, any[]>>({});
     const isPlotterOpenRef = useRef(isPlotterOpen);
-    
-    const [colormap, setColormap] = useState('gray');
-    const [stretch, setStretch] = useState('linear');
 
     const regionInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,8 +54,6 @@ function App() {
     // 2. Register the Core Commands (passing the state they need)
     useCoreCommands(
         processFile,
-        colormap, setColormap,
-        stretch, setStretch,
         regions, setRegions,
         imageData, 
         fitsWorker.pixToWorld, 
@@ -529,10 +524,6 @@ function App() {
                                                     onLoadRegions={() => regionInputRef.current?.click()}
                                                     onLoadServerRegions={() => setServerModalMode('region')}
                                                     onRegionChange={handleRegionChange}
-                                                    colormap={colormap}
-                                                    setColormap={setColormap}
-                                                    stretch={stretch}
-                                                    setStretch={setStretch}
                                                 />
                                             </div>
                                         </div>

@@ -7,8 +7,6 @@ import type { Region } from '../utils/regionUtils';
 
 export function useCoreCommands(
     processFile: (file: File) => void,
-    colormap: string, setColormap: (cmap: string) => void,
-    stretch: string, setStretch: (cmap: string) => void,
     regions: any[], setRegions: (updater: any) => void,
     imageData: any,
     pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>,
@@ -34,24 +32,6 @@ export function useCoreCommands(
             const filename = command.path.split('/').pop() || 'remote.fits';
             const file = new File([blob], filename, { type: 'application/octet-stream' });
             processFile(file);
-            ack(command, sendReply);
-        });
-
-        commandRegistry.register('set_colormap', async (command, sendReply) => {
-            if (command.cmap) setColormap(command.cmap);
-            ack(command, sendReply);
-        });
-
-        commandRegistry.register('get_colormap', async (command, sendReply) => {
-            replyData(command, sendReply, { colormap });
-        });
-
-        commandRegistry.register('get_stretch', async (command, sendReply) => {
-            replyData(command, sendReply, { stretch });
-        });
-
-        commandRegistry.register('set_stretch', async (command, sendReply) => {
-            if (command.stretch) setStretch(command.stretch);
             ack(command, sendReply);
         });
 
@@ -306,10 +286,6 @@ export function useCoreCommands(
         // Cleanup function: remove core commands if this component unmounts
         return () => {
             commandRegistry.unregister('load_file');
-            commandRegistry.unregister('set_colormap');
-            commandRegistry.unregister('get_colormap');
-            commandRegistry.unregister('get_stretch');
-            commandRegistry.unregister('set_stretch');
             commandRegistry.unregister('clear_regions');
             commandRegistry.unregister('get_regions');
             commandRegistry.unregister('set_region');
@@ -318,5 +294,5 @@ export function useCoreCommands(
             commandRegistry.unregister('get_regions_string');
             
         };
-    }, [processFile, colormap, setColormap, stretch, setStretch, regions, setRegions, imageData, pixToWorld, worldToPix]);
+    }, [processFile, regions, setRegions, imageData, pixToWorld, worldToPix]);
 }
