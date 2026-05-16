@@ -17,6 +17,8 @@ import { getColormapLUT } from '../utils/colormaps';
 import type { Region } from '../utils/regionUtils';
 import { RegionShape } from './RegionOverlay';
 import { useRegions } from '../hooks/useRegions';
+import { useCore } from '../core/FViewerContext';
+import { ExtensionSlot } from '../core/PluginManager';
 
 /**
  * Props for the FitsImage component.
@@ -43,21 +45,17 @@ interface FitsImageProps {
     onLoadServerRegions: () => void;
     /** Callback fired when a region's coordinates change (debounced/hashed). */
     onRegionChange?: (region: Region | null) => void;
-
-    // Visual Controls
-    colormap: string;
-    setColormap: React.Dispatch<React.SetStateAction<string>>;
-    stretch: string;
-    setStretch: React.Dispatch<React.SetStateAction<string>>;
 }
 
 export type DrawMode = 'pan' | 'circle' | 'box' | 'ellipse' | 'annulus';
 
 export const FitsImage: React.FC<FitsImageProps> = ({ 
         data, width, height, isConnected, checkWcs, pixToWorld, regions, setRegions, 
-        onSaveRegions, onLoadRegions, onLoadServerRegions, onRegionChange,
-        colormap, setColormap, stretch, setStretch
+        onSaveRegions, onLoadRegions, onLoadServerRegions, onRegionChange
     }) => {
+
+    const { colormap, stretch } = useCore();
+
     const viewportRef = useRef<HTMLDivElement>(null); 
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -487,71 +485,8 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                     </div>
                 </div>
                 
-                {/* Color Menu */}
-                <div className="dropdown">
-                    <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown" title="Colormap">
-                        <i className="bi bi-palette"></i> <span className="ms-1">Color</span>
-                    </button>
-                    <ul className="dropdown-menu fv-dropdown-menu shadow">
-                        <li>
-                            <button className="dropdown-item fv-dropdown-item" onClick={() => setColormap('gray')}>
-                                <span style={{ width: '16px' }}>{colormap === 'gray' && <i className="bi bi-check2"></i>}</span>
-                                Grayscale
-                            </button>
-                        </li>
-                        <li>
-                            <button className="dropdown-item fv-dropdown-item" onClick={() => setColormap('heat')}>
-                                <span style={{ width: '16px' }}>{colormap === 'heat' && <i className="bi bi-check2"></i>}</span>
-                                Heat
-                            </button>
-                        </li>
-                        <li>
-                            <button className="dropdown-item fv-dropdown-item" onClick={() => setColormap('cool')}>
-                                <span style={{ width: '16px' }}>{colormap === 'cool' && <i className="bi bi-check2"></i>}</span>
-                                Cool
-                            </button>
-                        </li>
-                        <li>
-                            <button className="dropdown-item fv-dropdown-item" onClick={() => setColormap('plasma')}>
-                                <span style={{ width: '16px' }}>{colormap === 'plasma' && <i className="bi bi-check2"></i>}</span>
-                                Plasma
-                            </button>
-                        </li>
-                    </ul>
-                </div>
-
-                {/* Scale Menu */}
-                <div className="dropdown">
-                    <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown" title="Scale / Stretch">
-                        <i className="bi bi-graph-up"></i> <span className="ms-1">Scale</span>
-                    </button>
-                    <ul className="dropdown-menu fv-dropdown-menu shadow">
-                        <li>
-                            <button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('linear')}>
-                                <span style={{ width: '16px' }}>{stretch === 'linear' && <i className="bi bi-check2"></i>}</span>
-                                Linear
-                            </button>
-                        </li>
-                        <li>
-                            <button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('log')}>
-                                <span style={{ width: '16px' }}>{stretch === 'log' && <i className="bi bi-check2"></i>}</span>
-                                Log
-                            </button>
-                        </li>
-                        <li>
-                            <button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('sqrt')}>
-                                <span style={{ width: '16px' }}>{stretch === 'sqrt' && <i className="bi bi-check2"></i>}</span>
-                                Square Root
-                            </button>
-                        </li>
-                        <li>
-                            <button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('asinh')}>
-                                <span style={{ width: '16px' }}>{stretch === 'asinh' && <i className="bi bi-check2"></i>}</span>
-                                ASINH
-                            </button>
-                        </li>
-                    </ul>
-                </div>
+                {/* PLUGINS (Color, Scale, etc) GO HERE */}
+                <ExtensionSlot name="fitsimage:toolbar" />
 
                 {/* Transform Menu */}
                 <div className="dropdown">

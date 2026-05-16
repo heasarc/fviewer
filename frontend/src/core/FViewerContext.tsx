@@ -26,10 +26,16 @@ interface CoreContextType {
     regions: any[];
     setRegions: React.Dispatch<React.SetStateAction<any[]>>;
     processFile: (file: File) => Promise<void>;
+    // server
     isConnected: boolean;
     setIsConnected: React.Dispatch<React.SetStateAction<boolean>>;
     serverModalMode: 'fits' | 'region' | null;
     setServerModalMode: React.Dispatch<React.SetStateAction<'fits' | 'region' | null>>;
+    // image control
+    colormap: string;
+    setColormap: React.Dispatch<React.SetStateAction<string>>;
+    stretch: string;
+    setStretch: React.Dispatch<React.SetStateAction<string>>;
 }
 
 const FViewerContext = createContext<CoreContextType | null>(null);
@@ -50,10 +56,14 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
     const [isPlotterOpen, setIsPlotterOpen] = useState(false);
     const [activeRegionPixels, setActiveRegionPixels] = useState<number[] | null>(null);
 
-    // Others
+    // Server
     const [regions, setRegions] = useState<any[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [serverModalMode, setServerModalMode] = useState<'fits' | 'region' | null>(null);
+
+    // Image control
+    const [colormap, setColormap] = useState('gray');
+    const [stretch, setStretch] = useState('linear');
 
     // handle the logic of opening a file, from upload or from the API
     const processFile = async (file: File) => {
@@ -109,6 +119,8 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
         isConnected, setIsConnected,
         processFile,
         serverModalMode, setServerModalMode,
+        colormap, setColormap,
+        stretch, setStretch,
     };
 
     return (

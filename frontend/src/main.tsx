@@ -12,10 +12,12 @@ import App from './App.tsx'
 import { initPlotterPlugin } from './plugins/PlotterPlugin';
 import { initHeaderEditorPlugin } from './plugins/HeaderEditorPlugin';
 import { initServerFilePlugin } from './plugins/ServerFilePlugin';
+import { initImageControlPlugin } from './plugins/ImageControlPlugin';
 
 initPlotterPlugin();
 initHeaderEditorPlugin();
 initServerFilePlugin();
+initImageControlPlugin();
 
 createRoot(document.getElementById('root') as HTMLElement).render(
     <React.StrictMode>
