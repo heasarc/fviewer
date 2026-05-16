@@ -36,6 +36,16 @@ interface CoreContextType {
     setColormap: React.Dispatch<React.SetStateAction<string>>;
     stretch: string;
     setStretch: React.Dispatch<React.SetStateAction<string>>;
+    zoom: number | null;
+    setZoom: React.Dispatch<React.SetStateAction<number | null>>;
+    pan: { x: number, y: number };
+    setPan: React.Dispatch<React.SetStateAction<{ x: number, y: number }>>;
+    flipX: boolean;
+    setFlipX: React.Dispatch<React.SetStateAction<boolean>>;
+    flipY: boolean;
+    setFlipY: React.Dispatch<React.SetStateAction<boolean>>;
+    rotation: number;
+    setRotation: React.Dispatch<React.SetStateAction<number>>;
 }
 
 const FViewerContext = createContext<CoreContextType | null>(null);
@@ -64,6 +74,11 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
     // Image control
     const [colormap, setColormap] = useState('gray');
     const [stretch, setStretch] = useState('linear');
+    const [zoom, setZoom] = useState<number | null>(1);
+    const [pan, setPan] = useState({ x: 0, y: 0 });
+    const [flipX, setFlipX] = useState(false);
+    const [flipY, setFlipY] = useState(false);
+    const [rotation, setRotation] = useState(0);
 
     // handle the logic of opening a file, from upload or from the API
     const processFile = async (file: File) => {
@@ -121,6 +136,11 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
         serverModalMode, setServerModalMode,
         colormap, setColormap,
         stretch, setStretch,
+        zoom, setZoom,
+        pan, setPan,
+        flipX, setFlipX,
+        flipY, setFlipY,
+        rotation, setRotation,
     };
 
     return (

@@ -13,11 +13,15 @@ import { initPlotterPlugin } from './plugins/PlotterPlugin';
 import { initHeaderEditorPlugin } from './plugins/HeaderEditorPlugin';
 import { initServerFilePlugin } from './plugins/ServerFilePlugin';
 import { initImageControlPlugin } from './plugins/ImageControlPlugin';
+import { initTransformPlugin } from './plugins/TransformPlugin';
+import { initZoomPlugin } from './plugins/ZoomPlugin';
 
 initPlotterPlugin();
 initHeaderEditorPlugin();
 initServerFilePlugin();
 initImageControlPlugin();
+initTransformPlugin();
+initZoomPlugin();
 
 createRoot(document.getElementById('root') as HTMLElement).render(
     <React.StrictMode>
