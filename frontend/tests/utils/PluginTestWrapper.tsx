@@ -94,6 +94,6 @@ export const renderPluginSlot = (
     return { 
         ...rendered, 
         contextValue, 
-        executeCommand: (cmd: any) => commandRegistry.execute(cmd, vi.fn()) 
+        executeCommand: (cmd: any, sendReplyMock: any) => commandRegistry.execute(cmd, sendReplyMock) 
     };
 };
