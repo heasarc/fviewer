@@ -20,25 +20,22 @@ import asyncio
 import os
 import re
 import uuid
-from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket
 from fastapi import WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+# Import the File System Plugin Router
+from .server_plugins.file_system import router as file_system_router
 
 # If running standalone, this defaults to "" (empty string)
 # If running in Jupyter, this becomes "/fviewer"
 ROOT_PATH = os.getenv("FVIEWER_ROOT_PATH", "")
 
-# Workspace root folder so the server browser does not go wandering
-WORKSPACE_ROOT = Path(os.getenv("FVIEWER_WORKSPACE", Path.cwd())).resolve()
-
-app = FastAPI(title="FViewer API", root_path=ROOT_PATH)
+# Where the static files are
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-
 
 # Define the URLs that are allowed to talk to this API
 ORIGINS = [os.getenv("FVIEWER_ORIGIN", "")]
@@ -46,6 +43,10 @@ ORIGINS = [os.getenv("FVIEWER_ORIGIN", "")]
 # Regex to allow ANY port on localhost or 127.0.0.1
 # Matches: http://localhost:8123, http://127.0.0.1:40593, etc.
 LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$"
+
+
+app = FastAPI(title="FViewer API", root_path=ROOT_PATH)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,32 +57,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-def get_secure_path(user_path: str) -> Path:
-    """
-    Validates that the requested path is safely within the WORKSPACE_ROOT.
-
-    This prevents Directory Traversal (Path Traversal) attacks by resolving
-    all symlinks and `..` up-level references and ensuring the final
-    absolute path remains inside the designated workspace.
-
-    Args:
-        user_path (str): The relative path requested by the user.
-
-    Returns:
-        Path: The resolved, absolute, and verified safe pathlib.Path object.
-
-    Raises:
-        HTTPException: 403 error if path traversal is detected.
-    """
-    target_path = (WORKSPACE_ROOT / user_path).resolve()
-
-    if not target_path.is_relative_to(WORKSPACE_ROOT):
-        raise HTTPException(
-            status_code=403, detail="Path traversal detected. Access denied."
-        )
-
-    return target_path
+# Mount the Plugin Routers
+app.include_router(file_system_router)
 
 
 def verify_token(authorization: str = Header(None)):
@@ -247,79 +224,6 @@ async def receive_command(command: dict, client_id: str):
 def get_clients():
     """Returns a list of connected browser client IDs."""
     return {"clients": list(manager.active_connections.keys())}
-
-
-@app.get("/api/file")
-async def serve_local_file(path: str):
-    """Securely streams a local file from the backend to the React frontend."""
-    secure_path = get_secure_path(path)
-
-    if not secure_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found.")
-
-    return FileResponse(secure_path)
-
-
-@app.get("/api/fs/list")
-def list_directory(path: str = "."):
-    """
-    Returns the contents of a directory on the server for the UI File Browser.
-    Restricts visibility to allowed astronomical file extensions.
-    """
-    try:
-        secure_path = get_secure_path(path)
-    except HTTPException:
-        raise HTTPException(status_code=403, detail="Permission denied")
-
-    if not secure_path.is_dir():
-        raise HTTPException(status_code=404, detail="Directory not found")
-
-    EXTENSIONS = [
-        ".fits", ".fit", ".arf", ".rmf", ".rsp", ".pha", ".img", ".reg"
-    ]
-    EXTENSIONS = tuple(
-        f"{ex}{extra}" for ex in EXTENSIONS for extra in ["", ".gz"]
-    )
-
-    items = []
-    try:
-        # Add a "Go Up" option if not at the root
-        if secure_path != WORKSPACE_ROOT:
-            items.append(
-                {
-                    "name": "..",
-                    "path": str(
-                        secure_path.parent.relative_to(WORKSPACE_ROOT)
-                    ),
-                    "is_dir": True,
-                }
-            )
-
-        for entry in secure_path.iterdir():
-            if entry.name.startswith("."):
-                continue
-
-            is_dir = entry.is_dir()
-
-            if not is_dir and not entry.name.lower().endswith(EXTENSIONS):
-                continue
-
-            items.append(
-                {
-                    "name": entry.name,
-                    "path": str(entry.relative_to(WORKSPACE_ROOT)),
-                    "is_dir": is_dir,
-                }
-            )
-
-        items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
-
-        return {
-            "current_path": str(secure_path.relative_to(WORKSPACE_ROOT)),
-            "items": items,
-        }
-    except PermissionError:
-        raise HTTPException(status_code=403, detail="Permission denied")
 
 
 @app.get("/api/health")
