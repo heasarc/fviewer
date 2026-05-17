@@ -61,6 +61,9 @@ interface CoreContextType {
     setDragAction: (action: any | null) => void;
     deleteSelectedRegion: () => void;
     handleRegionDrag: (x: number, y: number, dx: number, dy: number) => void;
+    // left sidebar
+    isSidebarOpen: boolean;
+    setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
 
 }
 
@@ -95,6 +98,9 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
     const [flipX, setFlipX] = useState(false);
     const [flipY, setFlipY] = useState(false);
     const [rotation, setRotation] = useState(0);
+
+    // left sidebar
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     // More about regions
     const {
@@ -170,7 +176,8 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
         rotation, setRotation,
         drawMode, setDrawMode, draftRegion, setDraftRegion,
         selectedRegionId, setSelectedRegionId, hoveredRegionId, setHoveredRegionId,
-        dragAction, setDragAction, deleteSelectedRegion, handleRegionDrag
+        dragAction, setDragAction, deleteSelectedRegion, handleRegionDrag,
+        isSidebarOpen, setIsSidebarOpen,
     };
 
     return (
