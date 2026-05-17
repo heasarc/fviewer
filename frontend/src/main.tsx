@@ -16,6 +16,7 @@ import { initImageControlPlugin } from './plugins/ImageControlPlugin';
 import { initTransformPlugin } from './plugins/TransformPlugin';
 import { initZoomPlugin } from './plugins/ZoomPlugin';
 import { initRegionToolbarPlugin } from './plugins/RegionToolbarPlugin';
+import { initHDUExplorerPlugin } from './plugins/HDUExplorerPlugin';
 
 initPlotterPlugin();
 initHeaderEditorPlugin();
@@ -24,6 +25,7 @@ initImageControlPlugin();
 initTransformPlugin();
 initZoomPlugin();
 initRegionToolbarPlugin();
+initHDUExplorerPlugin();
 
 createRoot(document.getElementById('root') as HTMLElement).render(
     <React.StrictMode>
