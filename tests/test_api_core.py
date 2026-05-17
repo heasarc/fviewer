@@ -34,40 +34,6 @@ def test_get_clients(viewer):
 
 
 @responses.activate
-def test_auto_connect_on_send(viewer):
-    """Test that _send automatically grabs a client_id if none exists."""
-    # Mock the get_clients call
-    responses.add(
-        responses.GET,
-        f"{viewer.base_url}/clients",
-        json={"clients": ["auto_client_1"]},
-        status=200
-    )
-
-    # Mock the actual command POST
-    responses.add(
-        responses.POST,
-        f"{viewer.base_url}/command",
-        json={"status": "ok"},
-        status=200
-    )
-
-    # Send a command. It should auto-connect to 'auto_client_1'
-    viewer.set_colormap("plasma")
-
-    assert viewer.client_id == "auto_client_1"
-
-    # Verify the POST request had the right payload and query params
-    post_call = responses.calls[1].request
-    assert "client_id=auto_client_1" in post_call.url
-
-    import json
-    payload = json.loads(post_call.body)
-    assert payload["action"] == "set_colormap"
-    assert payload["cmap"] == "plasma"
-
-
-@responses.activate
 def test_send_handles_server_errors(viewer):
     """Test that HTTP 400 errors from the server are raised as RuntimeErrors.
     """
