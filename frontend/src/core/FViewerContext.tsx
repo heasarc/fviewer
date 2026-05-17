@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useState } from 'react';
 import type {ReactNode} from 'react';
 import { useFits } from '../hooks/useFits';
+import { useRegions } from '../hooks/useRegions';
+import type { DrawMode } from '../utils/regionUtils';
 import { FITS_FORMATS, ALLOWED_EXTS } from '../utils/constants';
 
 // Define what our context exposes to the app and plugins
@@ -46,6 +48,20 @@ interface CoreContextType {
     setFlipY: React.Dispatch<React.SetStateAction<boolean>>;
     rotation: number;
     setRotation: React.Dispatch<React.SetStateAction<number>>;
+    // Region control
+    drawMode: DrawMode;
+    setDrawMode: (mode: any) => void;
+    draftRegion: any | null;
+    setDraftRegion: (region: any | null) => void;
+    selectedRegionId: string | null;
+    setSelectedRegionId: (id: string | null) => void;
+    hoveredRegionId: string | null;
+    setHoveredRegionId: (id: string | null) => void;
+    dragAction: any | null;
+    setDragAction: (action: any | null) => void;
+    deleteSelectedRegion: () => void;
+    handleRegionDrag: (x: number, y: number, dx: number, dy: number) => void;
+
 }
 
 const FViewerContext = createContext<CoreContextType | null>(null);
@@ -79,6 +95,17 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
     const [flipX, setFlipX] = useState(false);
     const [flipY, setFlipY] = useState(false);
     const [rotation, setRotation] = useState(0);
+
+    // More about regions
+    const {
+        drawMode, setDrawMode,
+        draftRegion, setDraftRegion,
+        selectedRegionId, setSelectedRegionId,
+        hoveredRegionId, setHoveredRegionId,
+        dragAction, setDragAction,
+        deleteSelectedRegion,
+        handleRegionDrag
+    } = useRegions(setRegions);
 
     // handle the logic of opening a file, from upload or from the API
     const processFile = async (file: File) => {
@@ -141,6 +168,9 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
         flipX, setFlipX,
         flipY, setFlipY,
         rotation, setRotation,
+        drawMode, setDrawMode, draftRegion, setDraftRegion,
+        selectedRegionId, setSelectedRegionId, hoveredRegionId, setHoveredRegionId,
+        dragAction, setDragAction, deleteSelectedRegion, handleRegionDrag
     };
 
     return (
