@@ -67,7 +67,7 @@ interface CoreContextType {
 
 }
 
-const FViewerContext = createContext<CoreContextType | null>(null);
+export const FViewerContext = createContext<CoreContextType | null>(null);
 
 export const FViewerProvider = ({ children }: { children: ReactNode }) => {
     // 1. Initialize the Web Worker
