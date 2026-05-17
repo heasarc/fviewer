@@ -23,6 +23,8 @@ export interface PhysicalTransform {
     ltm2_2: number;
 }
 
+export type DrawMode = 'pan' | 'circle' | 'box' | 'ellipse' | 'annulus';
+
 const DEFAULT_PHYSICAL_TRANSFORM: PhysicalTransform = { ltv1: 0, ltv2: 0, ltm1_1: 1, ltm2_2: 1 };
 
 // Helper to safely parse DS9 strings, handling sexagesimal and unit suffixes

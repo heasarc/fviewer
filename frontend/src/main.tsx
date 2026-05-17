@@ -15,6 +15,7 @@ import { initServerFilePlugin } from './plugins/ServerFilePlugin';
 import { initImageControlPlugin } from './plugins/ImageControlPlugin';
 import { initTransformPlugin } from './plugins/TransformPlugin';
 import { initZoomPlugin } from './plugins/ZoomPlugin';
+import { initRegionToolbarPlugin } from './plugins/RegionToolbarPlugin';
 
 initPlotterPlugin();
 initHeaderEditorPlugin();
@@ -22,6 +23,7 @@ initServerFilePlugin();
 initImageControlPlugin();
 initTransformPlugin();
 initZoomPlugin();
+initRegionToolbarPlugin();
 
 createRoot(document.getElementById('root') as HTMLElement).render(
     <React.StrictMode>

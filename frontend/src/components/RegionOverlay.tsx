@@ -1,8 +1,7 @@
 // # Copyright 2026, University of Maryland, All Rights Reserved
 
 import React from 'react';
-import type { Region } from '../utils/regionUtils';
-import type { DrawMode } from './FitsImage';
+import type { Region, DrawMode } from '../utils/regionUtils';
 
 interface RegionShapeProps {
     region: Region;

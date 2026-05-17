@@ -14,11 +14,8 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { applyStretch } from '../utils/stretches';
 import { getColormapLUT } from '../utils/colormaps';
-import type { Region } from '../utils/regionUtils';
 import { RegionShape } from './RegionOverlay';
-import { useRegions } from '../hooks/useRegions';
 import { useCore } from '../core/FViewerContext';
-import { parseDS9Regions, serializeDS9Regions } from '../utils/regionUtils';
 import { ExtensionSlot } from '../core/PluginManager';
 
 /**
@@ -40,29 +37,19 @@ export const FitsImage: React.FC<FitsImageProps> = ({
     }) => {
 
     const { 
-        colormap, stretch, isConnected, fitsWorker, regions, setRegions, 
-        setServerModalMode, fileName, setActiveRegionPixels, imageData, isPlotterOpen,
+        colormap, stretch, fitsWorker, regions, setRegions, 
+        setActiveRegionPixels, isPlotterOpen,
         zoom, setZoom, pan, setPan, flipX, flipY, rotation,
+        drawMode, setDrawMode, draftRegion, setDraftRegion,
+        selectedRegionId, setSelectedRegionId, hoveredRegionId, setHoveredRegionId,
+        dragAction, setDragAction, deleteSelectedRegion, handleRegionDrag
     } = useCore();
 
-    const { checkWcs, pixToWorld, worldToPix } = fitsWorker;
+    const { checkWcs, pixToWorld } = fitsWorker;
 
     const viewportRef = useRef<HTMLDivElement>(null); 
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const regionInputRef = useRef<HTMLInputElement>(null);
-    
-    // Region & Drawing State
-    const {
-        drawMode, setDrawMode,
-        draftRegion, setDraftRegion,
-        selectedRegionId, setSelectedRegionId,
-        hoveredRegionId, setHoveredRegionId,
-        dragAction, setDragAction,
-        deleteSelectedRegion,
-        handleRegionDrag
-    } = useRegions(setRegions);
-    const [saveFormat, setSaveFormat] = useState<'image' | 'physical' | 'fk5'>('image');
-        
+            
     // Tracks if we are moving the whole shape or just resizing the corner
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, y: 0 });
@@ -154,53 +141,6 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         
         setActiveRegionPixels(pixels);
     }, [data, width, height, setActiveRegionPixels]);
-
-    // --- REGION SERIALIZATION ---
-    const handleSaveRegions = async (format: 'image' | 'physical' | 'fk5' = 'fk5') => {
-        if (regions.length === 0) return alert("No regions to save.");
-        if (!imageData) return alert("No image data loaded.");
-
-        // Extract exact physical transform parameters
-        const physicalTransform = {
-            ltv1: imageData.ltv1 ?? 0,
-            ltv2: imageData.ltv2 ?? 0,
-            ltm1_1: imageData.ltm1_1 ?? 1,
-            ltm2_2: imageData.ltm2_2 ?? 1
-        };
-        
-        const fileContent = await serializeDS9Regions(
-            regions, format, width, height, pixToWorld,
-            imageData.pixScale || null, physicalTransform
-        );
-
-        const blob = new Blob([fileContent], { type: 'text/plain' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${fileName ? fileName.replace(/\.fits$/i, '') : 'fviewer'}.reg`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-    };
-
-    const handleLoadRegions = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !imageData) return;
-
-        const physicalTransform = {
-            ltv1: imageData.ltv1 ?? 0,
-            ltv2: imageData.ltv2 ?? 0,
-            ltm1_1: imageData.ltm1_1 ?? 1,
-            ltm2_2: imageData.ltm2_2 ?? 1
-        };
-
-        const text = await file.text(); 
-        const loadedRegions = await parseDS9Regions(
-            text, width, height, pixToWorld, worldToPix,
-            imageData.pixScale || null, physicalTransform
-        );
-        
-        setRegions((prev: Region[]) => [...prev, ...loadedRegions]);
-        if (regionInputRef.current) regionInputRef.current.value = ''; 
-    };
 
     /**
      * Core Render Loop
@@ -446,149 +386,14 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         dragStart.current = getCanvasCoords(e.clientX, e.clientY);
     };
 
-    const selectedRegion = regions.find(r => r.id === selectedRegionId);
-
     return (
         <div className="d-flex flex-column w-100 h-100 border rounded overflow-hidden" style={{ borderColor: 'var(--fv-border)' }}>
-
-            {/* Hidden Region File Input */}
-            <input type="file" ref={regionInputRef} accept=".reg,.txt" style={{ display: 'none' }} onChange={handleLoadRegions} />
             
             {/* Compact Snapshot-Style Toolbar */}
             <div className="fv-toolbar d-flex flex-wrap gap-2 align-items-center">
                 
-                {/* Regions Menu */}
-                <div className="d-flex gap-1 me-2 align-items-center">
-                    <div className="dropdown">
-                        <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown" title="Regions Menu">
-                            <i className="bi bi-bounding-box"></i> <span className="ms-1">Regions</span>
-                        </button>
-                        <ul className="dropdown-menu fv-dropdown-menu shadow">
-                            {/* Drawing Tools */}
-                            <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={() => setDrawMode('pan')}>
-                                    <span style={{ width: '16px' }}>{drawMode === 'pan' && <i className="bi bi-check2"></i>}</span>
-                                    <i className="bi bi-arrows-move"></i> Pointer / Pan
-                                </button>
-                            </li>
-                            <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={() => setDrawMode('circle')}>
-                                    <span style={{ width: '16px' }}>{drawMode === 'circle' && <i className="bi bi-check2"></i>}</span>
-                                    <i className="bi bi-circle"></i> Circle
-                                </button>
-                            </li>
-                            <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={() => setDrawMode('box')}>
-                                    <span style={{ width: '16px' }}>{drawMode === 'box' && <i className="bi bi-check2"></i>}</span>
-                                    <i className="bi bi-square"></i> Box
-                                </button>
-                            </li>
-                            <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={() => setDrawMode('ellipse')}>
-                                    <span style={{ width: '16px' }}>{drawMode === 'ellipse' && <i className="bi bi-check2"></i>}</span>
-                                    <span style={{ transform: 'scaleY(0.7)', display: 'inline-block' }}><i className="bi bi-circle"></i></span> Ellipse
-                                </button>
-                            </li>
-                            <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={() => setDrawMode('annulus')}>
-                                    <span style={{ width: '16px' }}>{drawMode === 'annulus' && <i className="bi bi-check2"></i>}</span>
-                                    <i className="bi bi-bullseye"></i> Annulus
-                                </button>
-                            </li>
-
-                            {/* Region Properties */}
-                            <li><hr className="dropdown-divider border-secondary my-1" /></li>
-                            <li>
-                                <button 
-                                    className="dropdown-item fv-dropdown-item" 
-                                    onClick={() => {
-                                        if (selectedRegionId) {
-                                            setRegions(prev => prev.map(r => 
-                                                r.id === selectedRegionId ? { ...r, isBackground: !r.isBackground } : r
-                                            ));
-                                        }
-                                    }} 
-                                    disabled={!selectedRegionId}
-                                >
-                                    <span style={{ width: '16px' }}>
-                                        {selectedRegion?.isBackground && <i className="bi bi-check2"></i>}
-                                    </span>
-                                    <i className="bi bi-dash-circle-dotted"></i> Set as Background
-                                </button>
-                            </li>
-
-                            {/* Separator */}
-                            <li><hr className="dropdown-divider border-secondary my-1" /></li>
-
-                            {/* Deletion Actions */}
-                            <li>
-                                <button 
-                                    className={`dropdown-item fv-dropdown-item ${selectedRegionId ? 'text-warning' : ''}`} 
-                                    onClick={deleteSelectedRegion} 
-                                    disabled={!selectedRegionId}
-                                >
-                                    <span style={{ width: '16px' }}></span>
-                                    <i className="bi bi-eraser"></i> Delete Selected (Del)
-                                </button>
-                            </li>
-                            <li>
-                                <button 
-                                    className={`dropdown-item fv-dropdown-item ${regions.length > 0 ? 'text-danger' : ''}`} 
-                                    onClick={() => { setRegions([]); setSelectedRegionId(null); }} 
-                                    disabled={regions.length === 0}
-                                >
-                                    <span style={{ width: '16px' }}></span>
-                                    <i className="bi bi-trash"></i> Clear All Regions
-                                </button>
-                            </li>
-                            
-                            {/* File Actions */}
-                            <li><hr className="dropdown-divider border-secondary my-1" /></li>
-                            <li>
-                                <button className="dropdown-item fv-dropdown-item" onClick={() => regionInputRef.current?.click()}>
-                                    <span style={{ width: '16px' }}></span>
-                                    <i className="bi bi-folder2-open"></i> Load Local Regions...
-                                </button>
-                            </li>
-                            {isConnected && (                                    
-                                <li>
-                                    <button className="dropdown-item fv-dropdown-item" onClick={() => setServerModalMode('region')}>
-                                        <span style={{ width: '16px' }}></span>
-                                        <i className="bi bi-cloud-arrow-down"></i> Load Server Regions...
-                                    </button>
-                                </li>
-                            )}
-                            
-                            <li><hr className="dropdown-divider border-secondary my-1" /></li>
-                            
-                            {/* COMPACT SAVE UI */}
-                            <li className="px-3 py-1">
-                                <label className="fv-text-muted mb-1" style={{ fontSize: '0.75rem' }}>Save Regions</label>
-                                <div className="input-group input-group-sm">
-                                    <select 
-                                        className="form-select border-secondary bg-dark text-white" 
-                                        value={saveFormat}
-                                        onChange={(e) => setSaveFormat(e.target.value as any)}
-                                        style={{ boxShadow: 'none' }}
-                                        disabled={regions.length === 0}
-                                    >
-                                        <option value="image" title="Current image pixel coordinates">Image</option>
-                                        <option value="physical" title="Original unbinned/uncropped coordinates">Physical</option>
-                                        <option value="fk5" disabled={!hasWCS} title="World Coordinate System (RA/Dec)">FK5</option>
-                                    </select>
-                                    <button 
-                                        className="btn btn-outline-secondary" 
-                                        onClick={() => handleSaveRegions(saveFormat)} 
-                                        disabled={regions.length === 0 || (saveFormat === 'fk5' && !hasWCS)}
-                                        title="Download .reg file"
-                                    >
-                                        <i className="bi bi-download"></i> Save
-                                    </button>
-                                </div>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
+                {/* PLUGINS (Regions, Draw Tools) GO HERE */}
+                <ExtensionSlot name="fitsimage:toolbar:left" />
 
                 {/* PLUGINS (Color, Scale, Transform, etc) GO HERE */}
                 <ExtensionSlot name="fitsimage:toolbar" />
