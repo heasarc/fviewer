@@ -201,14 +201,25 @@ self.onmessage = async (e: MessageEvent) => {
                     // Call the WASM method directly for the specific chunk
                     const rawChunkResult = activeFile.readColumn(i, startRow, numRowsToRead);
                     
-                    if (rawChunkResult && rawChunkResult.data && ArrayBuffer.isView(rawChunkResult.data)) {
-                        // Slice it immediately to copy it out of the WASM heap safely
-                        const chunkCopy = (rawChunkResult.data as any).slice();
-                        chunkData[colInfo.name] = chunkCopy;
-                        transferables.push(chunkCopy.buffer);
-                    } else if (Array.isArray(rawChunkResult?.data)) {
-                        // Standard JS Array (e.g. for String columns)
+                    if (rawChunkResult && rawChunkResult.data) {
                         chunkData[colInfo.name] = rawChunkResult.data;
+                        
+                        // 1. Is it a standard flat TypedArray? (Scalar column)
+                        if (ArrayBuffer.isView(rawChunkResult.data)) {
+                            transferables.push((rawChunkResult.data as any).buffer);
+                        } 
+                        // 2. Is it a JS Array? (Strings or Vectors)
+                        else if (Array.isArray(rawChunkResult.data) && rawChunkResult.data.length > 0) {
+                            // If the first element is a TypedArray, it's a Vector/VLA column
+                            if (ArrayBuffer.isView(rawChunkResult.data[0])) {
+                                // Because of how subarray() works, ALL rows in this column share the EXACT SAME underlying ArrayBuffer!
+                                const sharedBuffer = (rawChunkResult.data[0] as any).buffer;
+                                if (!transferables.includes(sharedBuffer)) {
+                                    transferables.push(sharedBuffer);
+                                }
+                            }
+                            // If it's strings, postMessage handles it normally, no transferables needed
+                        }
                     } else {
                         chunkData[colInfo.name] = new Array(numRowsToRead).fill('Unsupported');
                     }
@@ -221,9 +232,14 @@ self.onmessage = async (e: MessageEvent) => {
 
             case 'WRITE_CELL': {
                 if (!activeFile) throw new Error("No file opened");
-                // payload: { colNum (1-indexed), rowNum (1-indexed), value }
-                const { colNum, rowNum, value } = payload;
-                const status = activeFile.writeCell(colNum, rowNum, value);
+                
+                // Extract optional arrayIndex (0-based from React UI)
+                const { colNum, rowNum, value, arrayIndex } = payload;
+                
+                // cfitsio is 1-indexed. If arrayIndex is provided, add 1. Otherwise, default to 1.
+                const firstElem = arrayIndex !== undefined ? arrayIndex + 1 : 1;
+                
+                const status = activeFile.writeCell(colNum, rowNum, value, firstElem);
                 
                 if (status !== 0) throw new Error(`Write failed with status ${status}`);
                 self.postMessage({ id, success: true, data: { status } });
