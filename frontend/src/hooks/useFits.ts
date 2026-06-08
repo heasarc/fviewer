@@ -59,8 +59,8 @@ export function useFits() {
     const readTableChunk = useCallback((startRow: number, endRow: number) => {
         return sendCommand('READ_TABLE_CHUNK', { startRow, endRow });
     }, [sendCommand]);
-    const writeCell = useCallback((colNum: number, rowNum: number, value: number) => {
-        return sendCommand('WRITE_CELL', { colNum, rowNum, value });
+    const writeCell = useCallback((colNum: number, rowNum: number, value: number, arrayIndex?: number) => {
+        return sendCommand('WRITE_CELL', { colNum, rowNum, value, arrayIndex });
     }, [sendCommand]);
     const saveFile = useCallback(() => sendCommand('SAVE_FILE'), [sendCommand]);
     const readImage = useCallback(() => sendCommand('READ_IMAGE'), [sendCommand]);
