@@ -39,6 +39,11 @@ interface VirtualTableProps {
      * Requests a specific chunk (e.g., rows 500 to 600) from the Web Worker.
      */
     onFetchData?: (startRow: number, endRow: number) => void;
+    /** 
+     * Callback fired when a user clicks a vector/VLA cell.
+     * Passes the column name, row index, and the actual TypedArray data.
+     */
+    onVectorClick?: (colName: string, rowIndex: number, vectorData: any) => void;
 }
 
 export const VirtualTable: React.FC<VirtualTableProps> = ({
@@ -47,7 +52,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
     dataMap,
     rowHeight = 32,
     onCellEdit,
-    onFetchData
+    onFetchData,
+    onVectorClick
 }) => {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [scrollTop, setScrollTop] = useState(0);
@@ -216,10 +222,12 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                                 style={{ 
                                     width: getColWidth(colIdx),
                                     borderColor: 'rgba(255,255,255,0.05)', 
-                                    cursor: (isArray || isMissing) ? 'default' : 'cell',
+                                    // Change cursor to pointer for arrays
+                                    cursor: isMissing ? 'default' : isArray ? 'pointer' : 'cell',
                                     color: (val === null || isMissing) ? '#666' : 'inherit'
                                 }}
-                                onDoubleClick={() => !isMissing && handleDoubleClick(i, col.name, val)}
+                                // Ensure double-click editing only fires for scalars
+                                onDoubleClick={() => !isMissing && !isArray && handleDoubleClick(i, col.name, val)}
                                 title={isEditing ? '' : displayVal}
                             >
                                 {isEditing ? (
@@ -233,6 +241,24 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                                         onBlur={() => setEditingCell(null)}
                                         autoFocus
                                     />
+                                ) : isArray ? (
+                                    // Render Vector/VLA button
+                                    <button
+                                        className="btn btn-sm w-100 h-100 border-0 font-monospace d-flex align-items-center justify-content-center p-0 m-0 text-truncate"
+                                        style={{ 
+                                            backgroundColor: 'transparent', 
+                                            color: 'var(--fv-accent)',
+                                            fontSize: '0.70rem'
+                                        }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (onVectorClick) onVectorClick(col.name, i, val);
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--fv-panel-hover)'}
+                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                        📊 [{val.length}]
+                                    </button>
                                 ) : (
                                     <span className="text-truncate w-100 text-end font-monospace" style={{fontSize: '0.75rem'}}>
                                         {displayVal}
