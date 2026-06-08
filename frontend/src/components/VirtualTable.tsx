@@ -257,7 +257,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--fv-panel-hover)'}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                     >
-                                        📊 [{val.length}]
+                                        <i className="bi bi-list-ol me-1"></i> [{val.length}]
                                     </button>
                                 ) : (
                                     <span className="text-truncate w-100 text-end font-monospace" style={{fontSize: '0.75rem'}}>
