@@ -45,6 +45,7 @@ The FastAPI server is divided using `APIRouter`.
 3.  **`<VirtualTable />`:** A lazy-loading, intersection-observer-based virtual grid for large binary tables.
     - A custom, zero-dependency virtualized grid for 100,000+ row binary tables with double-click editing.
     - Uses an Intersection-Observer style lazy-loading approach (onFetchData). As the user scrolls, it debounces requests to the worker for missing 100-row chunks, ensuring infinite scrolling uses minimal RAM.
+    - Vector & VLA Support: Cells containing multi-dimensional binary arrays (Fixed Vectors, Variable-Length Arrays, and Bit Arrays) render an interactive button instead of text. Clicking it opens <VectorModal />, a high-performance, purely DOM-virtualized popup that allows instant scrolling through massive arrays without freezing the UI. Users can double-click specific array elements in the modal to edit them.
 5. **`FitsPlot.tsx`:** 
     - 2D Scatter Plots and 1D Histograms linked to drawn regions.
     - Uses flat, typed index arrays (Uint32Array) for in-place sorting and preparation to avoid Garbage Collection crashes on massive datasets.
@@ -57,6 +58,7 @@ The FastAPI server is divided using `APIRouter`.
     - Implements a JS `tableCache` to isolate data from the WASM heap (`typed_memory_view`).
     - Uses `.slice()` to clone ArrayBuffers instantly, protecting against C++ memory corruption (`clearDataVectors()`).
     - Exposes two endpoints: `READ_TABLE_CHUNK` (for VirtualTable) and `READ_COLUMN` (for Plotter). Both return data using zero-copy Transferable Objects for 0ms main-thread transfer.
+    - `READ_TABLE_CHUNK` detects whether columns are Scalars (flat TypedArray), Vectors/VLAs (Array of TypedArrays), or Strings. For 2D Vector arrays, it identifies the shared underlying `ArrayBuffer` and uses zero-copy Transferable Objects for 0ms UI transfer times. `WRITE_CELL` accepts an optional arrayIndex payload, allowing the UI to instruct the underlying WASM layer to overwrite a single, specific element inside a vector row rather than updating the entire array.
 7. **Regions**
    * `useRegions.ts` (Hook): Manages local drawing modes (pan, circle, box, ellipse, annulus), drafts, and the mathematical calculations for dragging, resizing, and rotating shapes on the canvas.
    * `RegionOverlay.tsx`: A stateless SVG component overlay sitting on top of the canvas. Renders shapes, hit-detection areas, and interactive drag handles. Visually distinguishes background regions with dashed outlines.
