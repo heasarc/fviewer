@@ -1,3 +1,6 @@
+# 0.3.1
+- Add support for vector columns.
+
 # 0.3.0
 - Introduce the plugin system and move some parts to it.
 - Bug fixes:
