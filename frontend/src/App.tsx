@@ -6,6 +6,7 @@ import { useCommandHandler } from './hooks/useCommandHandler';
 import { useCoreCommands } from './hooks/useCoreCommands';
 import { ExtensionSlot } from './core/PluginManager';
 import { VirtualTable } from './components/VirtualTable';
+import { VectorModal } from './components/VectorModal';
 import { FitsImage } from './components/FitsImage';
 import fviewerLogo from '/fviewer-logo.svg';
 import { FITS_FORMATS } from './utils/constants';
@@ -30,6 +31,13 @@ function App() {
     // Data State
     const [tableData, setTableData] = useState<Record<string, any[]>>({});
     const isPlotterOpenRef = useRef(isPlotterOpen);
+
+    // State for the Vector Modal
+    const [selectedVector, setSelectedVector] = useState<{
+        colName: string;
+        rowIndex: number;
+        data: any;
+    } | null>(null);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -114,6 +122,26 @@ function App() {
             });
         } catch (error) {
             console.error("Failed to write cell:", error);
+        }
+    };
+
+    const handleVectorEdit = async (arrayIndex: number, newValue: string) => {
+        if (!selectedVector || !tableInfo) return;
+        try {
+            const numericValue = Number(newValue);
+            if (isNaN(numericValue)) return alert("Only numeric edits are supported.");
+            
+            // Find the 1-indexed column number
+            const colNum = tableInfo.columns.findIndex((c: any) => c.name === selectedVector.colName) + 1;
+            
+            // Call the worker with the 4th argument (arrayIndex)
+            await writeCell(colNum, selectedVector.rowIndex + 1, numericValue, arrayIndex);
+            
+            // Note: The VectorModal already optimistically updates its local TypedArray view, 
+            // so we don't need to manually update tableData here to see the change!
+        } catch (error) {
+            console.error("Failed to write vector element:", error);
+            alert("Failed to save edit.");
         }
     };
 
@@ -252,7 +280,7 @@ function App() {
                             <li className="nav-item dropdown">
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">About</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
-                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.3.0</span></li>
+                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.3.1</span></li>
                                 </ul>
                             </li>
 
@@ -337,8 +365,19 @@ function App() {
                                                 dataMap={tableData} 
                                                 onCellEdit={handleCellEdit} 
                                                 onFetchData={handleFetchTableData}
+                                                onVectorClick={(colName, rowIndex, data) => setSelectedVector({ colName, rowIndex, data })}
                                             />
                                         </div>
+                                        {/* Render the Modal if a vector is selected */}
+                                        {selectedVector && (
+                                            <VectorModal
+                                                colName={selectedVector.colName}
+                                                rowIndex={selectedVector.rowIndex}
+                                                data={selectedVector.data}
+                                                onClose={() => setSelectedVector(null)}
+                                                onEditElement={handleVectorEdit}
+                                            />
+                                        )}
                                     </div>
                                 )}
                             </div>
