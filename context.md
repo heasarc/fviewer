@@ -82,6 +82,6 @@ The FastAPI server is divided using `APIRouter`.
 
 
 ### Current Task
-Understanding this architecture, I would like to do the following:
-**[INSERT YOUR NEXT GOAL HERE - e.g., Add commands to extract 2D image pixel arrays back to Python, or Implement multi-tab session management]**
-Do not make any assumption about the code. I can provide snippets when needed. If not sure ask. When making code suggestions, ensure the current behaviour is maintained unless we are explicitely changing it.
+Understanding this architecture, I would like to *** Add what is needed ***.
+
+Do not make any assumption about the code. I can provide snippets when needed. If not sure ask. When making code suggestions, ensure the current behavior is maintained unless we are explicitly changing it. Do not rush into suggesting code, let's make sure you get the full context and I understand the changes first.
