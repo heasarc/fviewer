@@ -39,7 +39,14 @@ const MobileHDUMenu = () => {
                                 document.getElementById('topMenubar')?.classList.remove('show'); 
                             }}
                         >
-                            <span className="text-truncate" style={{ maxWidth: '150px' }}>{hdu.extname}</span>
+                            <span className="text-truncate" style={{ maxWidth: '150px' }}>
+                                {hdu.extname}
+                                {hdu.type === 'image' && hdu.naxes?.length > 0 && (
+                                    <span className="ms-1 fv-text-muted" style={{ fontSize: '0.75rem' }}>
+                                        ({hdu.naxes.join('x')})
+                                    </span>
+                                )}    
+                            </span>
                             <span className="badge border border-secondary text-secondary bg-dark ms-2" style={{ fontSize: '0.6rem' }}>{hdu.type.toUpperCase()}</span>
                         </button>
                     </li>
@@ -81,6 +88,11 @@ const HDUSidebarPanel = () => {
                         >
                             <span className="text-truncate" style={{ maxWidth: '140px', fontSize: '0.85rem' }} title={hdu.extname}>
                                 {hdu.extname}
+                                {hdu.type === 'image' && hdu.naxes?.length > 0 && (
+                                    <span className="ms-1 fv-text-muted" style={{ fontSize: '0.75rem' }}>
+                                        ({hdu.naxes.join('x')})
+                                    </span>
+                                )}
                             </span>
                             <span className="badge border border-secondary text-secondary bg-dark" style={{ fontSize: '0.65rem', fontWeight: 'normal' }}>
                                 {hdu.type.toUpperCase()}
