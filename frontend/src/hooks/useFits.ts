@@ -63,7 +63,7 @@ export function useFits() {
         return sendCommand('WRITE_CELL', { colNum, rowNum, value, arrayIndex });
     }, [sendCommand]);
     const saveFile = useCallback(() => sendCommand('SAVE_FILE'), [sendCommand]);
-    const readImage = useCallback(() => sendCommand('READ_IMAGE'), [sendCommand]);
+    const readImage = useCallback((sliceIndices?: number[]) => sendCommand('READ_IMAGE', {sliceIndices}), [sendCommand]);
     const checkWcs = useCallback(() => sendCommand('CHECK_WCS'), [sendCommand]);
     const pixToWorld = useCallback((x: number, y: number) => sendCommand('PIX_TO_WORLD', { x, y }), [sendCommand]);
     const worldToPix = useCallback((ra: number, dec: number) => sendCommand('WORLD_TO_PIX', { ra, dec }), [sendCommand]);

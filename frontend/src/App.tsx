@@ -18,7 +18,8 @@ function App() {
         fitsWorker, fileName, hduList, 
         activeHdu, tableInfo, setTableInfo, 
         imageData, setImageData, isLoading, setIsLoading,
-        isPlotterOpen, processFile, regions, setRegions, setIsConnected
+        isPlotterOpen, processFile, regions, setRegions, setIsConnected,
+        setCurrentSlice
     } = useCore();
 
     // Deconstruct the worker methods we need for this file
@@ -87,7 +88,17 @@ function App() {
                 setTableData({});
 
                 if (targetHdu?.type === 'image') {
-                    const img = await readImage();
+                    // --- Handle Slicing ---
+                    // If it's a cube (e.g. naxes = [1024, 1024, 50]), create [1]
+                    // If 4D (e.g. [1024, 1024, 50, 4]), create [1, 1]
+                    const defaultSlice = targetHdu.naxes && targetHdu.naxes.length > 2 
+                        ? Array(targetHdu.naxes.length - 2).fill(1) 
+                        : [];
+                    
+                    setCurrentSlice(defaultSlice);
+
+                    // Pass the slice to the worker!
+                    const img = await readImage(defaultSlice);
                     setImageData(img);
                 } 
                 else if (targetHdu?.type === 'table') {
@@ -280,7 +291,7 @@ function App() {
                             <li className="nav-item dropdown">
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">About</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
-                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.3.1</span></li>
+                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.3.2</span></li>
                                 </ul>
                             </li>
 

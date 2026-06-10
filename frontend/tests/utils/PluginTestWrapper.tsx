@@ -58,6 +58,10 @@ export const createMockContext = (overrides = {}) => {
         
         // Sidebar
         isSidebarOpen: true, setIsSidebarOpen: vi.fn(),
+
+        // cube slider
+        currentSlice: [],
+        setCurrentSlice: vi.fn(),
         
         ...overrides,
     };

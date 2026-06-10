@@ -19,6 +19,10 @@ interface CoreContextType {
     setTableInfo: React.Dispatch<React.SetStateAction<any>>;
     imageData: any;
     setImageData: React.Dispatch<React.SetStateAction<any>>;
+    // multi-dim images
+    currentSlice: number[];
+    setCurrentSlice: React.Dispatch<React.SetStateAction<number[]>>;
+    //
     isLoading: boolean;
     setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
     isPlotterOpen: boolean;
@@ -80,6 +84,9 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
     const [tableInfo, setTableInfo] = useState<any>(null);
     const [imageData, setImageData] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
+
+    // multi-dim images
+    const [currentSlice, setCurrentSlice] = useState<number[]>([]);
 
     // Plotting
     const [isPlotterOpen, setIsPlotterOpen] = useState(false);
@@ -160,6 +167,7 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
         activeHdu, setActiveHdu,
         tableInfo, setTableInfo,
         imageData, setImageData,
+        currentSlice, setCurrentSlice,
         isLoading, setIsLoading,
         isPlotterOpen, setIsPlotterOpen,
         activeRegionPixels, setActiveRegionPixels,
