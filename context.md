@@ -19,7 +19,7 @@ The React frontend avoids monolithic components (like a giant `App.tsx` or a mas
 *   **`CommandRegistry` (WebSocket Routing):** A decoupled registry. Instead of a hardcoded switch statement, plugins register their own Python API listeners: `commandRegistry.register('set_colormap', handler)`.
 *   **`PluginManager` (UI Extension Slots):** `App.tsx` acts only as a structural layout shell containing `<ExtensionSlot name="..." />` components. Plugins inject their UI (buttons, menus, sidebars) directly into these slots (e.g., `menubar:edit`, `fitsimage:toolbar`, `workspace:right`).
 
-*Existing Core Plugins:* `PlotterPlugin` (Right Sidebar), `HDUExplorerPlugin` (Left Sidebar), `HeaderEditorPlugin`, `ServerFilePlugin`, `ImageControlPlugin`, `RegionToolbarPlugin`, `TransformPlugin`, and `ZoomPlugin`.
+*Existing Core Plugins:* `PlotterPlugin` (Right Sidebar), `HDUExplorerPlugin` (Left Sidebar), `HeaderEditorPlugin`, `ServerFilePlugin`, `ImageControlPlugin`, `RegionToolbarPlugin`, `TransformPlugin`, `DataCubePlugin`, and `ZoomPlugin`.
 
 #### 2. Python Client Architecture (`api.py`)
 The Python API uses the **Mixin Pattern** to maintain a flat, Jupyter-friendly namespace while keeping the source code perfectly modular and Flake8-compliant.
@@ -35,10 +35,10 @@ The FastAPI server is divided using `APIRouter`.
 #### Core Frontend Components (The "Shell")
 1.  **`App.tsx`:** A 100vh flexbox shell. Renders:
     - **Top Menubar:** Contains dropdowns (File, Edit, View) and a toggle for the Plotter.
-    - **Left Sidebar:** A scrollable list of HDUs in the loaded FITS file.
+    - **Left Sidebar:** A scrollable list of HDUs in the loaded FITS file (pases data cube dimesntions along extension name).
     - **Center Workspace:** Displays either `<FitsImage />` or `<VirtualTable />` depending on the selected HDU.
     - **Right Sidebar (Collapsible):** Contains a dynamic Plotter UI.
-2.  **`<FitsImage />`:** The core rendering engine. Paints TypedArrays to an HTML5 Canvas using JS colormap LUTs. Handles CSS-based panning/zooming. Exposes its own internal extension slots for its toolbar.
+2.  **`<FitsImage />`:** The core rendering engine. Paints TypedArrays to an HTML5 Canvas using JS colormap LUTs. Handles CSS-based panning/zooming. Exposes its own internal extension slots for its toolbar. The `DataCubePlugin` injects a dropdown with UI sliders to navigate multidimentional data planes.
     * Renders FITS pixels to a bottom `<canvas>` using custom stretches (Linear, Log, Sqrt, ASINH) and procedural colormaps (Gray, Heat, Cool, Plasma).
     * Panning, zooming, flipping, and rotating are handled via hardware-accelerated CSS `transform` on the canvas wrapper.
     * Real-time WCS (RA/Dec) tracking is displayed in a bottom status bar.
@@ -57,6 +57,7 @@ The FastAPI server is divided using `APIRouter`.
 6. **Web Worker (`fits.worker.ts`):**
     - Implements a JS `tableCache` to isolate data from the WASM heap (`typed_memory_view`).
     - Uses `.slice()` to clone ArrayBuffers instantly, protecting against C++ memory corruption (`clearDataVectors()`).
+    - Data Cube Extraction: When `GET_HDU_LIST` runs, it dynamically parses all `NAXISn` keywords. For 3D/4D cubes, the `READ_IMAGE` action accepts `sliceIndices` to construct precise fpixel and lpixel arrays. By passing these directly to `wasm-cfitsio`'s subsetting bindings, the worker extracts only a single 2D plane at a time, keeping transfer times near 0ms and completely eliminating WASM memory crashes on massive files.
     - Exposes two endpoints: `READ_TABLE_CHUNK` (for VirtualTable) and `READ_COLUMN` (for Plotter). Both return data using zero-copy Transferable Objects for 0ms main-thread transfer.
     - `READ_TABLE_CHUNK` detects whether columns are Scalars (flat TypedArray), Vectors/VLAs (Array of TypedArrays), or Strings. For 2D Vector arrays, it identifies the shared underlying `ArrayBuffer` and uses zero-copy Transferable Objects for 0ms UI transfer times. `WRITE_CELL` accepts an optional arrayIndex payload, allowing the UI to instruct the underlying WASM layer to overwrite a single, specific element inside a vector row rather than updating the entire array.
 7. **Regions**
