@@ -17,6 +17,7 @@ import { initTransformPlugin } from './plugins/TransformPlugin';
 import { initZoomPlugin } from './plugins/ZoomPlugin';
 import { initRegionToolbarPlugin } from './plugins/RegionToolbarPlugin';
 import { initHDUExplorerPlugin } from './plugins/HDUExplorerPlugin';
+import { initDataCubePlugin } from './plugins/DataCubePlugin';
 
 initPlotterPlugin();
 initHeaderEditorPlugin();
@@ -26,6 +27,7 @@ initTransformPlugin();
 initZoomPlugin();
 initRegionToolbarPlugin();
 initHDUExplorerPlugin();
+initDataCubePlugin();
 
 createRoot(document.getElementById('root') as HTMLElement).render(
     <React.StrictMode>

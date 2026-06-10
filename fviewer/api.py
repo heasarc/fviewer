@@ -8,9 +8,10 @@ import requests
 
 from .plugins.image_control import ImageControlMixin
 from .plugins.regions import RegionsMixin
+from .plugins.datacube import DataCubeMixin
 
 
-class FViewer(ImageControlMixin, RegionsMixin):
+class FViewer(ImageControlMixin, RegionsMixin, DataCubeMixin):
     """
     A Python client to control the FViewer browser-based application.
 

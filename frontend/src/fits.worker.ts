@@ -116,6 +116,8 @@ self.onmessage = async (e: MessageEvent) => {
                     const naxis = parseInt(activeFile.readKeyword("NAXIS") || "0", 10);
                     
                     let type = 'unknown';
+                    const naxes: number[] = []; // <-- Array to hold dimension sizes
+
                     if (i === 1) {
                         type = naxis > 0 ? 'image' : 'empty'; // Primary HDU is an image, but might be 0 pixels
                     } else if (xtension === 'IMAGE') {
@@ -124,7 +126,15 @@ self.onmessage = async (e: MessageEvent) => {
                         type = 'table';
                     }
 
-                    hduList.push({ index: i, type, extname, naxis });
+                    // --- If it's an image, grab all axis sizes ---
+                    if (type === 'image' && naxis > 0) {
+                        for (let j = 1; j <= naxis; j++) {
+                            const dimSize = parseInt(activeFile.readKeyword(`NAXIS${j}`) || "0", 10);
+                            naxes.push(dimSize);
+                        }
+                    }
+
+                    hduList.push({ index: i, type, extname, naxes });
                 }
                 
                 self.postMessage({ id, success: true, data: hduList });
@@ -263,15 +273,44 @@ self.onmessage = async (e: MessageEvent) => {
             case 'READ_IMAGE': {
                 if (!activeFile) throw new Error("No file opened");
                 
-                const imageResult = activeFile.readImage();
+                // Extract optional slice payload
+                const { sliceIndices = [] } = payload || {};
+
+                const naxis1 = parseInt(activeFile.readKeyword("NAXIS1") || "0", 10);
+                const naxis2 = parseInt(activeFile.readKeyword("NAXIS2") || "0", 10);
+                const naxis = parseInt(activeFile.readKeyword("NAXIS") || "0", 10);
+
+                let fpixel = null;
+                let lpixel = null;
+                let inc = null;
+
+                // If we have a Data Cube (3D, 4D, etc.)
+                if (naxis > 2) {
+                    fpixel = Array(naxis).fill(1);
+                    lpixel = Array(naxis).fill(1);
+                    inc = Array(naxis).fill(1);
+
+                    // X and Y bounds (full width and height)
+                    lpixel[0] = naxis1;
+                    lpixel[1] = naxis2;
+
+                    // Apply slice indices for Z, W, etc.
+                    // cfitsio dimensions are 1-indexed (X=0, Y=1, Z=2, etc.)
+                    for (let i = 2; i < naxis; i++) {
+                        const sliceVal = sliceIndices[i - 2] !== undefined ? sliceIndices[i - 2] : 1;
+                        fpixel[i] = sliceVal;
+                        lpixel[i] = sliceVal;
+                    }
+                }
+
+                // Pass the arrays to the wrapper!
+                const imageResult = activeFile.readImage(fpixel, lpixel, inc);
                 if (!imageResult) throw new Error("Current HDU is not an image");
                 
-                const width = parseInt(activeFile.readKeyword("NAXIS1") || "0", 10);
-                const height = parseInt(activeFile.readKeyword("NAXIS2") || "0", 10);
+                const width = naxis1;
+                const height = naxis2;
 
                 // Extract Physical Coordinate Transformation keywords
-                // LTV = Linear Transformation Vector (Offset)
-                // LTM = Linear Transformation Matrix (Scale/Binning)
                 const ltv1 = parseFloat(activeFile.readKeyword("LTV1") || "0");
                 const ltv2 = parseFloat(activeFile.readKeyword("LTV2") || "0");
                 const ltm1_1 = parseFloat(activeFile.readKeyword("LTM1_1") || "1");
@@ -279,7 +318,6 @@ self.onmessage = async (e: MessageEvent) => {
 
                 const transferables = imageResult.data?.buffer ? [imageResult.data.buffer] : [];
 
-                // Send massive image array directly to main thread without copying
                 (self as any).postMessage({ 
                     id, 
                     success: true, 
