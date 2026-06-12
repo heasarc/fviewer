@@ -5,6 +5,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 import requests
+from urllib.parse import urljoin
 
 from .plugins.image_control import ImageControlMixin
 from .plugins.regions import RegionsMixin
@@ -28,8 +29,8 @@ class FViewer(ImageControlMixin, RegionsMixin, DataCubeMixin):
 
     def __init__(
         self,
-        host: str = "127.0.0.1",
-        port: int = 8000,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
         base_url: Optional[str] = None,
         client_id: Optional[str] = None,
     ):
@@ -37,14 +38,25 @@ class FViewer(ImageControlMixin, RegionsMixin, DataCubeMixin):
         Initializes the FViewer client connection.
 
         Args:
-            host (str): The hostname for the FViewer server.
-            port (int): The port for the FViewer server.
+            host (str, optional): The hostname for the FViewer server.
+            port (int, optional): The port for the FViewer server.
             base_url (str, optional): A direct URL to the API (useful for
                                       remote JupyterLab environments).
             client_id (str, optional): Target a specific connected browser tab.
         """
         if base_url is not None:
             self.base_url = base_url
+        elif host is None or port is None:
+            # check environment variables in case we are inside jupyterlab
+            url = os.environ.get('JUPYTER_SERVER_URL')
+            if url is None:
+                url = os.environ.get('JUPYTERHUB_SERVICE_URL')
+                if url is None:
+                    raise ValueError(
+                        'Unable to figure out the url. '
+                        'No base_url, or (host, port) are passed.'
+                    )
+            self.base_url = urljoin(url, 'fviewer/api')
         else:
             self.base_url = f"http://{host}:{port}/api"
 

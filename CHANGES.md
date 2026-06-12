@@ -1,5 +1,6 @@
 # 0.3.2
 - Add support for reading and displaying multidimentional images.
+- Add support for automatically detecting API url inside jupyterlab.
 
 # 0.3.1
 - Add support for vector columns.
