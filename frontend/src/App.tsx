@@ -15,7 +15,8 @@ function App() {
 
     // Get everything we need from the Core Context
     const { 
-        fitsWorker, fileName, hduList, 
+        fitsWorker, voWorker, activeDataType,
+        fileName, hduList, 
         activeHdu, tableInfo, setTableInfo, 
         imageData, setImageData, isLoading, setIsLoading,
         isPlotterOpen, processFile, regions, setRegions, setIsConnected,
@@ -23,7 +24,7 @@ function App() {
     } = useCore();
 
     // Deconstruct the worker methods we need for this file
-    const { moveToHDU, getTableInfo, writeCell, saveFile, readImage, readTableChunk } = fitsWorker;
+    const { moveToHDU, getTableInfo, writeCell, saveFile, readImage } = fitsWorker;
     
     
     // File & HDU State
@@ -75,6 +76,8 @@ function App() {
     }, [isPlotterOpen]);
 
     useEffect(() => {
+        // If we are looking at a VOTable, the worker already extracted the tableInfo!
+        if (activeDataType === 'votable') return;
         if (!activeHdu) return;
 
         const loadHduData = async () => {
@@ -117,9 +120,12 @@ function App() {
             }
         };
         loadHduData();
-    }, [activeHdu, fileName]);
+    }, [activeHdu, fileName, activeDataType]);
 
     const handleCellEdit = async (colName: string, colNum: number, rowIndex: number, newValue: string) => {
+        // Silently ignore edits working with votables
+        if (activeDataType === 'votable') return; 
+
         try {
             const numericValue = Number(newValue);
             if (isNaN(numericValue)) return alert("Only numeric edits are supported.");
@@ -137,6 +143,9 @@ function App() {
     };
 
     const handleVectorEdit = async (arrayIndex: number, newValue: string) => {
+        // Silently ignore edits working with votables
+        if (activeDataType === 'votable') return; 
+
         if (!selectedVector || !tableInfo) return;
         try {
             const numericValue = Number(newValue);
@@ -183,7 +192,9 @@ function App() {
         try {
             // Ask the worker for just this slice of data
             // Expecting the worker to return an object like: { COL1: Float32Array, COL2: Int32Array }
-            const chunk = await readTableChunk(startRow, endRow);
+            // Route to the correct worker!
+            const worker = activeDataType === 'fits' ? fitsWorker : voWorker;
+            const chunk = await worker.readTableChunk(startRow, endRow);
             
             setTableData(prevData => {
                 const newData = { ...prevData };
@@ -207,7 +218,7 @@ function App() {
         } catch (err) {
             console.error("Failed to fetch table chunk:", err);
         }
-    }, [tableInfo, readTableChunk]);
+    }, [tableInfo, activeDataType, fitsWorker, voWorker]);
 
     // Jump-start the table data fetch when a new table is loaded
     useEffect(() => {
@@ -291,7 +302,7 @@ function App() {
                             <li className="nav-item dropdown">
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">About</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
-                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.3.2</span></li>
+                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.3.3</span></li>
                                 </ul>
                             </li>
 
@@ -333,7 +344,7 @@ function App() {
                     
                     {/* Center: Image or Table Viewer */}
                     <div className="flex-grow-1 overflow-auto p-3 d-flex flex-column">
-                        {activeHdu && (
+                        {(activeHdu !== null || activeDataType === 'votable') && (
                             <div className="fade-in d-flex flex-column flex-grow-1 gap-3">
                                 
                                 {hduList.find(h => h.index === activeHdu)?.type === 'empty' && (
@@ -377,6 +388,7 @@ function App() {
                                                 onCellEdit={handleCellEdit} 
                                                 onFetchData={handleFetchTableData}
                                                 onVectorClick={(colName, rowIndex, data) => setSelectedVector({ colName, rowIndex, data })}
+                                                isReadOnly={activeDataType === 'votable'}
                                             />
                                         </div>
                                         {/* Render the Modal if a vector is selected */}

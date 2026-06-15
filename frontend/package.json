@@ -1,7 +1,7 @@
 {
   "name": "fviewer",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "scripts": {
     "dev": "python sync-version.py && vite",
@@ -15,6 +15,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "uplot": "^1.6.32",
+    "votable-wasm": "file:../../cds-votable-rust/crates/wasm/pkg",
     "wasm-cfitsio": "file:../../wasm-cfitsio/wasm-cfitsio-0.0.9.tgz"
   },
   "devDependencies": {

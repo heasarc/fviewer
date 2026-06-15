@@ -44,6 +44,10 @@ interface VirtualTableProps {
      * Passes the column name, row index, and the actual TypedArray data.
      */
     onVectorClick?: (colName: string, rowIndex: number, vectorData: any) => void;
+    /**
+     * If true, disables double-click editing and changes the mouse cursor.
+     */
+    isReadOnly?: boolean;
 }
 
 export const VirtualTable: React.FC<VirtualTableProps> = ({
@@ -53,7 +57,8 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
     rowHeight = 32,
     onCellEdit,
     onFetchData,
-    onVectorClick
+    onVectorClick,
+    isReadOnly = false
 }) => {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [scrollTop, setScrollTop] = useState(0);
@@ -131,6 +136,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
 
     // --- Handlers ---
     const handleDoubleClick = (row: number, colName: string, currentValue: any) => {
+        if (isReadOnly) return;
         // Prevent editing vector/array columns for now
         if (currentValue?.length !== undefined && typeof currentValue !== 'string') return;
         setEditingCell({ row, colName });
@@ -223,7 +229,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                                     width: getColWidth(colIdx),
                                     borderColor: 'rgba(255,255,255,0.05)', 
                                     // Change cursor to pointer for arrays
-                                    cursor: isMissing ? 'default' : isArray ? 'pointer' : 'cell',
+                                    cursor: isMissing ? 'default' : isArray ? 'pointer' : (isReadOnly ? 'default' : 'cell'),
                                     color: (val === null || isMissing) ? '#666' : 'inherit'
                                 }}
                                 // Ensure double-click editing only fires for scalars

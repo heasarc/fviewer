@@ -10,6 +10,9 @@ import { pluginManager } from '../../src/core/PluginManager';
 /**
  * Creates a mock FViewerContext fulfilling the exact CoreContextType interface.
  */
+/**
+ * Creates a mock FViewerContext fulfilling the exact CoreContextType interface.
+ */
 export const createMockContext = (overrides = {}) => {
     return {
         // Dummy Worker (Mocking all potential useFits returns)
@@ -20,8 +23,16 @@ export const createMockContext = (overrides = {}) => {
             checkWcs: vi.fn().mockResolvedValue(true), 
             pixToWorld: vi.fn(), worldToPix: vi.fn(),
         } as any,
+
+        // Dummy VOTable Worker
+        voWorker: {
+            loadVOTableString: vi.fn(), 
+            readTableChunk: vi.fn(), 
+            readColumn: vi.fn()
+        } as any,
         
         // App State
+        activeDataType: 'fits' as 'fits' | 'votable', setActiveDataType: vi.fn(), // <--- NEW
         fileName: 'data/test_im.fits', setFileName: vi.fn(),
         hduList: [], setHduList: vi.fn(),
         activeHdu: null, setActiveHdu: vi.fn(),

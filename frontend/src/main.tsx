@@ -18,6 +18,7 @@ import { initZoomPlugin } from './plugins/ZoomPlugin';
 import { initRegionToolbarPlugin } from './plugins/RegionToolbarPlugin';
 import { initHDUExplorerPlugin } from './plugins/HDUExplorerPlugin';
 import { initDataCubePlugin } from './plugins/DataCubePlugin';
+import { initTAPQueryPlugin } from './plugins/TAPQueryPlugin';
 
 initPlotterPlugin();
 initHeaderEditorPlugin();
@@ -28,6 +29,7 @@ initZoomPlugin();
 initRegionToolbarPlugin();
 initHDUExplorerPlugin();
 initDataCubePlugin();
+initTAPQueryPlugin();
 
 createRoot(document.getElementById('root') as HTMLElement).render(
     <React.StrictMode>
