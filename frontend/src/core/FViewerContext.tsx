@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState } from 'react';
 import type {ReactNode} from 'react';
 import { useFits } from '../hooks/useFits';
+import { useVOTable } from '../hooks/useVOTable';
 import { useRegions } from '../hooks/useRegions';
 import type { DrawMode } from '../utils/regionUtils';
 import { FITS_FORMATS, ALLOWED_EXTS } from '../utils/constants';
@@ -9,6 +10,7 @@ import { FITS_FORMATS, ALLOWED_EXTS } from '../utils/constants';
 // Define what our context exposes to the app and plugins
 interface CoreContextType {
     fitsWorker: ReturnType<typeof useFits>;
+    voWorker: ReturnType<typeof useVOTable>;
     fileName: string;
     setFileName: React.Dispatch<React.SetStateAction<string>>;
     hduList: any[];
@@ -68,7 +70,9 @@ interface CoreContextType {
     // left sidebar
     isSidebarOpen: boolean;
     setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
-
+    // table type
+    activeDataType: 'fits' | 'votable';
+    setActiveDataType: React.Dispatch<React.SetStateAction<'fits' | 'votable'>>; 
 }
 
 export const FViewerContext = createContext<CoreContextType | null>(null);
@@ -76,8 +80,10 @@ export const FViewerContext = createContext<CoreContextType | null>(null);
 export const FViewerProvider = ({ children }: { children: ReactNode }) => {
     // 1. Initialize the Web Worker
     const fitsWorker = useFits();
+    const voWorker = useVOTable();
 
     // 2. Lift the core state here
+    const [activeDataType, setActiveDataType] = useState<'fits' | 'votable'>('fits');
     const [fileName, setFileName] = useState("No file loaded");
     const [hduList, setHduList] = useState<any[]>([]);
     const [activeHdu, setActiveHdu] = useState<number | null>(null);
@@ -161,7 +167,8 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const value = {
-        fitsWorker,
+        fitsWorker, voWorker,
+        activeDataType, setActiveDataType,
         fileName, setFileName,
         hduList, setHduList,
         activeHdu, setActiveHdu,
