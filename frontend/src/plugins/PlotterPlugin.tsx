@@ -20,7 +20,11 @@ const PlotterToggleButton = () => {
 
 // --- 2. The Main Sidebar (Goes in the Workspace) ---
 const PlotterSidebar = () => {
-    const { isPlotterOpen, setIsPlotterOpen, activeHdu, tableInfo, fitsWorker, activeRegionPixels, imageData } = useCore();
+    const { 
+        isPlotterOpen, setIsPlotterOpen, activeHdu, activeDataType,
+        tableInfo, fitsWorker, voWorker,
+            activeRegionPixels, imageData 
+    } = useCore();
     
     // Move all the plotter-specific state here!
     const [plotterWidth, setPlotterWidth] = useState(450);
@@ -42,7 +46,8 @@ const PlotterSidebar = () => {
 
     // Fetch full columns ONLY when they are selected AND the plotter is visible
     useEffect(() => {
-        if (!activeHdu || !tableInfo || !isPlotterOpen) return; 
+        // Protect the render: Must have a FITS HDU OR a VOTable
+        if ((!activeHdu && activeDataType !== 'votable') || !tableInfo || !isPlotterOpen) return; 
 
         const columnsToFetch = [plotX, plotY, plotXErr, plotYErr].filter(Boolean);
         
@@ -53,7 +58,11 @@ const PlotterSidebar = () => {
             const colIndex = tableInfo.columns.findIndex((c: any) => c.name === colName) + 1;
             if (colIndex > 0) {
                 try {
-                    const result = await fitsWorker.readColumn(colIndex);
+                    // Route to the correct worker!
+                    const worker = activeDataType === 'fits' ? fitsWorker : voWorker;
+                    // Note: voWorker accepts an optional second argument (colName) 
+                    // fitsWorker just ignores it!
+                    const result = await worker.readColumn(colIndex, colName);
                     if (result && result.data) {
                         setFullPlotData(prev => ({ ...prev, [colName]: result.data }));
                     }
@@ -62,7 +71,8 @@ const PlotterSidebar = () => {
                 }
             }
         });
-    }, [plotX, plotY, plotXErr, plotYErr, activeHdu, tableInfo, fitsWorker, isPlotterOpen]);
+    }, [plotX, plotY, plotXErr, plotYErr, activeHdu, activeDataType, 
+        tableInfo, fitsWorker, voWorker, isPlotterOpen]);
 
     // Resize Logic
     useEffect(() => {
