@@ -1,3 +1,6 @@
+# 0.3.3
+- Add support for querying catalogs and displaying their results on an image.
+
 # 0.3.2
 - Add support for reading and displaying multidimentional images.
 - Add support for automatically detecting API url inside jupyterlab.
