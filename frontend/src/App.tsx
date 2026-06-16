@@ -41,6 +41,58 @@ function App() {
         data: any;
     } | null>(null);
 
+    // State for the Bottom Drawer (Table) visibility and height
+    const [isTableDrawerOpen, setIsTableDrawerOpen] = useState(true);
+    const [tableHeight, setTableHeight] = useState(300); // Default 300px height
+    const isDraggingRef = useRef(false);
+
+    // Native Drag-to-Resize Handlers
+    const startDrag = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        isDraggingRef.current = true;
+        document.body.style.cursor = 'row-resize'; // Change cursor for whole body while dragging
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', stopDrag);
+    }, []);
+
+    const onDrag = useCallback((e: MouseEvent) => {
+        if (!isDraggingRef.current) return;
+        // e.movementY is negative when dragging up, positive when down.
+        // Since the table is at the bottom, dragging UP increases its height.
+        setTableHeight((prevHeight) => {
+            const newHeight = prevHeight - e.movementY;
+            // Constrain between 100px (min) and window height - 150px (max)
+            return Math.max(100, Math.min(newHeight, window.innerHeight - 150));
+        });
+    }, []);
+
+    const stopDrag = useCallback(() => {
+        isDraggingRef.current = false;
+        document.body.style.cursor = ''; // Reset cursor
+        document.removeEventListener('mousemove', onDrag);
+        document.removeEventListener('mouseup', stopDrag);
+    }, [onDrag]);
+
+    const handleClearCatalog = (e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent the click from toggling the drawer collapse
+        
+        // 1. Clear table data and metadata
+        setTableInfo(null);
+        setTableData({});
+        setSelectedCatalogRow(null);
+        
+        // 2. Remove catalog regions from the image overlay
+        // NOTE: You might need to adjust this filter depending on how your Region 
+        // interface is defined. I am assuming catalog regions have a specific property 
+        // like `isCatalog` or `type === 'catalog'`.
+        setRegions((prevRegions: any[]) => 
+            prevRegions.filter(region => !region.isCatalog) // Adjust this condition if needed!
+        );
+        
+        // Optional: If activeDataType was strictly 'votable', you might want to 
+        // switch it back to 'fits' or handle that context shift if necessary.
+    };
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -353,12 +405,12 @@ function App() {
                                     </div>
                                 )}
 
-                                {/* NEW: Wrap Image and Table in a flex-row so they sit side-by-side */}
-                                <div className="d-flex flex-row flex-grow-1 gap-3 overflow-hidden">
+                                {/* Center Workspace: flex-column for Bottom Drawer layout */}
+                                <div className="d-flex flex-column flex-grow-1 gap-2 overflow-hidden">
                                     
-                                    {/* Image Viewer */}
+                                    {/* Image Viewer (Top) */}
                                     {imageData && imageData.width > 0 && (
-                                        <div className="d-flex flex-column shadow-sm h-100" style={{ flex: 1, minWidth: 0 }}>
+                                        <div className="d-flex flex-column shadow-sm" style={{ flex: 1, minHeight: 0 }}>
                                             <div className="fv-panel-box d-flex flex-column w-100 h-100 border-0">
                                                 <div className="fv-panel-header">
                                                     <span><i className="bi bi-image me-2"></i> Image Display</span>
@@ -372,28 +424,77 @@ function App() {
                                         </div>
                                     )}
 
-                                    {/* Table Viewer */}
+                                    {/* DRAGGABLE RESIZER */}
+                                    {imageData && tableInfo && isTableDrawerOpen && (
+                                        <div 
+                                            onMouseDown={startDrag}
+                                            className="w-100 rounded"
+                                            style={{ 
+                                                height: '6px', 
+                                                cursor: 'row-resize', 
+                                                backgroundColor: 'var(--fv-border)',
+                                                opacity: 0.8,
+                                                transition: 'opacity 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                                            onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
+                                        />
+                                    )}
+
+                                    {/* Table Viewer (Bottom Drawer) */}
                                     {tableInfo && (
-                                        <div className="fv-panel-box d-flex flex-column shadow-sm h-100 border-0" style={{ flex: 1, minWidth: 0 }}>
-                                            <div className="fv-panel-header">
-                                                <span><i className="bi bi-table me-2"></i> Binary Table</span>
-                                                <span className="badge bg-secondary">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
+                                        <div 
+                                            className="fv-panel-box d-flex flex-column shadow-sm border-0" 
+                                            style={{ 
+                                                flex: 'none', 
+                                                height: isTableDrawerOpen ? `${tableHeight}px` : 'auto',
+                                                minHeight: isTableDrawerOpen ? `${tableHeight}px` : 'auto',
+                                            }}
+                                        >
+                                            <div 
+                                                className="fv-panel-header d-flex justify-content-between align-items-center"
+                                                style={{ cursor: 'pointer' }}
+                                                onClick={() => setIsTableDrawerOpen(!isTableDrawerOpen)}
+                                                title={isTableDrawerOpen ? "Collapse Table" : "Expand Table"}
+                                            >
+                                                <div>
+                                                    <i className={`bi ${isTableDrawerOpen ? 'bi-chevron-down' : 'bi-chevron-right'} me-2`}></i>
+                                                    <span><i className="bi bi-table me-2"></i> Binary Table</span>
+                                                    <span className="badge bg-secondary ms-2">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
+                                                </div>
+                                                
+                                                {/* NEW: Clear Catalog Button */}
+                                                <button 
+                                                    className="btn btn-sm btn-link text-white p-0 m-0 border-0" 
+                                                    onClick={handleClearCatalog}
+                                                    title="Close Table and Clear Overlays"
+                                                    style={{ opacity: 0.7 }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.opacity = '0.7'}
+                                                >
+                                                    <i className="bi bi-x-lg"></i>
+                                                </button>
                                             </div>
-                                            <div className="flex-grow-1 overflow-hidden position-relative">
-                                                <VirtualTable 
-                                                    numRows={tableInfo.numRows} 
-                                                    columns={tableInfo.columns} 
-                                                    dataMap={tableData} 
-                                                    onCellEdit={handleCellEdit} 
-                                                    onFetchData={handleFetchTableData}
-                                                    onVectorClick={(colName, rowIndex, data) => setSelectedVector({ colName, rowIndex, data })}
-                                                    isReadOnly={activeDataType === 'votable'}
-                                                    selectedRow={selectedCatalogRow}
-                                                    onRowClick={(idx) => setSelectedCatalogRow(idx)}
-                                                />
-                                            </div>
+                                            
+                                            {/* Only render the table body if the drawer is open */}
+                                            {isTableDrawerOpen && (
+                                                <div className="flex-grow-1 overflow-hidden position-relative">
+                                                    <VirtualTable 
+                                                        numRows={tableInfo.numRows} 
+                                                        columns={tableInfo.columns} 
+                                                        dataMap={tableData} 
+                                                        onCellEdit={handleCellEdit} 
+                                                        onFetchData={handleFetchTableData}
+                                                        onVectorClick={(colName, rowIndex, data) => setSelectedVector({ colName, rowIndex, data })}
+                                                        isReadOnly={activeDataType === 'votable'}
+                                                        selectedRow={selectedCatalogRow}
+                                                        onRowClick={(idx) => setSelectedCatalogRow(idx)}
+                                                    />
+                                                </div>
+                                            )}
+                                            
                                             {/* Render the Modal if a vector is selected */}
-                                            {selectedVector && (
+                                            {selectedVector && isTableDrawerOpen && (
                                                 <VectorModal
                                                     colName={selectedVector.colName}
                                                     rowIndex={selectedVector.rowIndex}
