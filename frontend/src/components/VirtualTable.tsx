@@ -48,6 +48,9 @@ interface VirtualTableProps {
      * If true, disables double-click editing and changes the mouse cursor.
      */
     isReadOnly?: boolean;
+    // Selected rows
+    selectedRow?: number | null;
+    onRowClick?: (rowIndex: number) => void;
 }
 
 export const VirtualTable: React.FC<VirtualTableProps> = ({
@@ -58,7 +61,9 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
     onCellEdit,
     onFetchData,
     onVectorClick,
-    isReadOnly = false
+    isReadOnly = false,
+    selectedRow = null,
+    onRowClick = null
 }) => {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [scrollTop, setScrollTop] = useState(0);
@@ -134,6 +139,27 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
         }
     }, [startIndex, endIndex, columns, dataMap, numRows, onFetchData]);
 
+    // Auto-scroll when selection changes from outside (e.g., clicking the Image overlay)
+    useEffect(() => {
+        if (selectedRow === undefined || selectedRow === null || !scrollContainerRef.current) return;
+        
+        const container = scrollContainerRef.current;
+        const targetScrollTop = selectedRow * rowHeight;
+        const currentScrollTop = container.scrollTop;
+        const containerHeight = container.clientHeight;
+
+        // If the row is above the current viewport
+        if (targetScrollTop < currentScrollTop) {
+            // Scroll up so it is at the top
+            container.scrollTop = targetScrollTop - (rowHeight * 2); // 2 row buffer
+        } 
+        // If the row is below the current viewport
+        else if (targetScrollTop + rowHeight > currentScrollTop + containerHeight) {
+            // Scroll down so it is in the middle of the screen
+            container.scrollTop = targetScrollTop - (containerHeight / 2) + (rowHeight / 2);
+        }
+    }, [selectedRow, rowHeight]);
+
     // --- Handlers ---
     const handleDoubleClick = (row: number, colName: string, currentValue: any) => {
         if (isReadOnly) return;
@@ -182,16 +208,23 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
     const visibleRows = useMemo(() => {
         const rows = [];
         for (let i = startIndex; i <= endIndex; i++) {
+            const isSelected = selectedRow === i; // <--- Check selection
             rows.push(
                 <div 
                     key={i} 
                     role="row"
                     className="d-flex position-absolute start-0 border-bottom"
+                    onClick={() => onRowClick && onRowClick(i)} // <--- Make row clickable
                     style={{ 
                         top: i * rowHeight, width: totalWidth, height: rowHeight,
-                        backgroundColor: i % 2 === 0 ? 'var(--fv-bg)' : 'var(--fv-panel)',
-                        borderColor: 'rgba(255,255,255,0.05)',
-                        fontSize: '0.85rem'
+                        // Tint the background green if selected
+                        backgroundColor: isSelected ? 'rgba(0, 255, 0, 0.15)' : (i % 2 === 0 ? 'var(--fv-bg)' : 'var(--fv-panel)'),
+                        // Add a thick green border to the left edge if selected
+                        borderLeft: isSelected ? '4px solid #00ff00' : '4px solid transparent', 
+                        borderColor: isSelected ? '#00ff00' : 'rgba(255,255,255,0.05)',
+                        fontSize: '0.85rem',
+                        cursor: onRowClick ? 'pointer' : 'default',
+                        transition: 'background-color 0.1s'
                     }}
                 >
                     {/* Sticky Row Number (Stays visible when scrolling right) */}
@@ -200,7 +233,9 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                         className="d-flex align-items-center justify-content-end px-2 fw-bold border-end flex-shrink-0" 
                         style={{ 
                             width: rowNumWidth, position: 'sticky', left: 0, zIndex: 2, 
-                            backgroundColor: 'var(--fv-panel-hover)', color: 'var(--fv-text)'
+                            // Make it transparent so the green tint shows through when selected
+                            backgroundColor: isSelected ? 'transparent' : 'var(--fv-panel-hover)', 
+                            color: isSelected ? '#00ff00' : 'var(--fv-text)'
                         }}
                     >
                         {i + 1}
@@ -277,7 +312,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
             );
         }
         return rows;
-    }, [startIndex, endIndex, columns, dataMap, rowHeight, totalWidth, editingCell, editValue]);
+    }, [startIndex, endIndex, columns, dataMap, rowHeight, totalWidth, editingCell, editValue, selectedRow]);
 
     return (
         <div className="w-100 h-100">

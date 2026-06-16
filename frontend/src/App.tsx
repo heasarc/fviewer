@@ -20,7 +20,7 @@ function App() {
         activeHdu, tableInfo, setTableInfo, 
         imageData, setImageData, isLoading, setIsLoading,
         isPlotterOpen, processFile, regions, setRegions, setIsConnected,
-        setCurrentSlice
+        setCurrentSlice, selectedCatalogRow, setSelectedCatalogRow
     } = useCore();
 
     // Deconstruct the worker methods we need for this file
@@ -343,9 +343,9 @@ function App() {
                 <div className="d-flex flex-row flex-grow-1 overflow-hidden" style={{ backgroundColor: 'var(--fv-bg)' }}>
                     
                     {/* Center: Image or Table Viewer */}
-                    <div className="flex-grow-1 overflow-auto p-3 d-flex flex-column">
+                    <div className="flex-grow-1 overflow-hidden p-3 d-flex flex-column">
                         {(activeHdu !== null || activeDataType === 'votable') && (
-                            <div className="fade-in d-flex flex-column flex-grow-1 gap-3">
+                            <div className="fade-in d-flex flex-column flex-grow-1 gap-3 overflow-hidden">
                                 
                                 {hduList.find(h => h.index === activeHdu)?.type === 'empty' && (
                                     <div className="alert border bg-dark text-white d-flex align-items-center" style={{ borderColor: 'var(--fv-border)' }}>
@@ -353,56 +353,59 @@ function App() {
                                     </div>
                                 )}
 
-                                {/* Image Viewer */}
-                                {imageData && imageData.width > 0 && (
-                                    <div className="d-flex justify-content-center w-100 mb-3">
-                                        <div 
-                                            className="fv-panel-box d-flex flex-column w-100 shadow-sm" 
-                                            // Added maxHeight: '70vh' so it shrinks vertically on small screens!
-                                            style={{ maxWidth: '800px', height: '650px', maxHeight: '90vh' }} 
-                                        >
-                                            <div className="fv-panel-header">
-                                                <span><i className="bi bi-image me-2"></i> Image Display</span>
+                                {/* NEW: Wrap Image and Table in a flex-row so they sit side-by-side */}
+                                <div className="d-flex flex-row flex-grow-1 gap-3 overflow-hidden">
+                                    
+                                    {/* Image Viewer */}
+                                    {imageData && imageData.width > 0 && (
+                                        <div className="d-flex flex-column shadow-sm h-100" style={{ flex: 1, minWidth: 0 }}>
+                                            <div className="fv-panel-box d-flex flex-column w-100 h-100 border-0">
+                                                <div className="fv-panel-header">
+                                                    <span><i className="bi bi-image me-2"></i> Image Display</span>
+                                                </div>
+                                                <div className="flex-grow-1 position-relative d-flex flex-column" style={{ minHeight: 0 }}>
+                                                    <FitsImage 
+                                                        data={imageData.data} width={imageData.width} height={imageData.height} 
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="flex-grow-1 position-relative d-flex flex-column" style={{ minHeight: 0 }}>
-                                                <FitsImage 
-                                                    data={imageData.data} width={imageData.width} height={imageData.height} 
+                                        </div>
+                                    )}
+
+                                    {/* Table Viewer */}
+                                    {tableInfo && (
+                                        <div className="fv-panel-box d-flex flex-column shadow-sm h-100 border-0" style={{ flex: 1, minWidth: 0 }}>
+                                            <div className="fv-panel-header">
+                                                <span><i className="bi bi-table me-2"></i> Binary Table</span>
+                                                <span className="badge bg-secondary">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
+                                            </div>
+                                            <div className="flex-grow-1 overflow-hidden position-relative">
+                                                <VirtualTable 
+                                                    numRows={tableInfo.numRows} 
+                                                    columns={tableInfo.columns} 
+                                                    dataMap={tableData} 
+                                                    onCellEdit={handleCellEdit} 
+                                                    onFetchData={handleFetchTableData}
+                                                    onVectorClick={(colName, rowIndex, data) => setSelectedVector({ colName, rowIndex, data })}
+                                                    isReadOnly={activeDataType === 'votable'}
+                                                    selectedRow={selectedCatalogRow}
+                                                    onRowClick={(idx) => setSelectedCatalogRow(idx)}
                                                 />
                                             </div>
+                                            {/* Render the Modal if a vector is selected */}
+                                            {selectedVector && (
+                                                <VectorModal
+                                                    colName={selectedVector.colName}
+                                                    rowIndex={selectedVector.rowIndex}
+                                                    data={selectedVector.data}
+                                                    onClose={() => setSelectedVector(null)}
+                                                    onEditElement={handleVectorEdit}
+                                                />
+                                            )}
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
 
-                                {/* Table Viewer */}
-                                {tableInfo && (
-                                    <div className="fv-panel-box d-flex flex-column flex-grow-1 shadow-sm">
-                                        <div className="fv-panel-header">
-                                            <span><i className="bi bi-table me-2"></i> Binary Table</span>
-                                            <span className="badge bg-secondary">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
-                                        </div>
-                                        <div className="flex-grow-1 overflow-hidden" style={{ minHeight: '400px' }}>
-                                            <VirtualTable 
-                                                numRows={tableInfo.numRows} 
-                                                columns={tableInfo.columns} 
-                                                dataMap={tableData} 
-                                                onCellEdit={handleCellEdit} 
-                                                onFetchData={handleFetchTableData}
-                                                onVectorClick={(colName, rowIndex, data) => setSelectedVector({ colName, rowIndex, data })}
-                                                isReadOnly={activeDataType === 'votable'}
-                                            />
-                                        </div>
-                                        {/* Render the Modal if a vector is selected */}
-                                        {selectedVector && (
-                                            <VectorModal
-                                                colName={selectedVector.colName}
-                                                rowIndex={selectedVector.rowIndex}
-                                                data={selectedVector.data}
-                                                onClose={() => setSelectedVector(null)}
-                                                onEditElement={handleVectorEdit}
-                                            />
-                                        )}
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>

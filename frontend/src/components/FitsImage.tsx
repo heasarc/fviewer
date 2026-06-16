@@ -37,12 +37,14 @@ export const FitsImage: React.FC<FitsImageProps> = ({
     }) => {
 
     const { 
-        colormap, stretch, fitsWorker, regions, setRegions, 
+        colormap, stretch, fitsWorker, voWorker, regions, setRegions,
+        activeDataType, tableInfo,
         setActiveRegionPixels, isPlotterOpen,
         zoom, setZoom, pan, setPan, flipX, flipY, rotation,
         drawMode, setDrawMode, draftRegion, setDraftRegion,
         selectedRegionId, setSelectedRegionId, hoveredRegionId, setHoveredRegionId,
-        dragAction, setDragAction, deleteSelectedRegion, handleRegionDrag
+        dragAction, setDragAction, deleteSelectedRegion, handleRegionDrag,
+        selectedCatalogRow, setSelectedCatalogRow
     } = useCore();
 
     const { checkWcs, pixToWorld } = fitsWorker;
@@ -58,6 +60,9 @@ export const FitsImage: React.FC<FitsImageProps> = ({
     const [hasWCS, setHasWCS] = useState(false);
     const [hoverInfo, setHoverInfo] = useState({ x: 0, y: 0, val: 0, ra: 'N/A', dec: 'N/A' });
     const isWcsPending = useRef(false);
+
+    // --- CATALOG OVERLAY STATE ---
+    const [catalogPoints, setCatalogPoints] = useState<{x: number, y: number, rowIndex: number}[]>([]);
     
     // Check WCS availability on load
     useEffect(() => { checkWcs().then(setHasWCS).catch(() => setHasWCS(false)); }, [checkWcs]);
@@ -254,6 +259,67 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         setPan({ x: 0, y: 0 }); // Center the pan
     }, [width, height]);
 
+    /*
+    detects when a catalog is loaded, finds the RA and Dec columns, asks the VOTable
+    worker for the full arrays, and maps them to pixels.
+    */
+    useEffect(() => {
+        // Only run if we have an image, WCS, and a catalog is actively loaded
+        if (activeDataType !== 'votable' || !tableInfo || !hasWCS) {
+            setCatalogPoints([]);
+            return;
+        }
+
+        const mapCatalogToPixels = async () => {
+            try {
+                // 1. Find the RA and Dec columns (case insensitive)
+                const raColIdx = tableInfo.columns.findIndex((c: any) => c.name.toLowerCase() === 'ra');
+                const decColIdx = tableInfo.columns.findIndex((c: any) => c.name.toLowerCase() === 'dec');
+                
+                if (raColIdx < 0 || decColIdx < 0) return;
+
+                // 2. Fetch the flat TypedArrays from the Rust WASM cache
+                const raRes = await voWorker.readColumn(raColIdx + 1, tableInfo.columns[raColIdx].name);
+                const decRes = await voWorker.readColumn(decColIdx + 1, tableInfo.columns[decColIdx].name);
+                
+                const raData = raRes.data;
+                const decData = decRes.data;
+                
+                // Limit to 2000 points to prevent flooding the Web Worker message queue
+                // (For massive catalogs, a bulk WORLD_TO_PIX WASM function should be added later)
+                const totalPoints = Math.min(raData.length, decData.length, 2000);
+                const points: {x: number, y: number, rowIndex: number}[] = [];
+
+                for (let i = 0; i < totalPoints; i++) {
+                    const ra = raData[i];
+                    const dec = decData[i];
+                    
+                    // Ignore NaN/Nulls
+                    if (isNaN(ra) || isNaN(dec)) continue;
+
+                    // WAIT: You destructured pixToWorld, but we need worldToPix!
+                    // Let's use fitsWorker.worldToPix directly
+                    const pxCoords = await fitsWorker.worldToPix(ra, dec);
+                    
+                    if (pxCoords && !isNaN(pxCoords.x) && !isNaN(pxCoords.y)) {
+                        // FITS standard is 1-indexed, bottom-left origin. 
+                        // Canvas/SVG is 0-indexed, top-left origin.
+                        points.push({ 
+                            x: pxCoords.x - 1, 
+                            y: height - pxCoords.y,
+                            rowIndex: i
+                        });
+                    }
+                }
+                setCatalogPoints(points);
+            } catch (err) {
+                console.error("Failed to map catalog overlay:", err);
+            }
+        };
+
+        mapCatalogToPixels();
+    }, [activeDataType, tableInfo, hasWCS, voWorker, fitsWorker, height]);
+
     /**
      * MATHEMATICALLY PURE COORDINATE UN-PROJECTION
      * 
@@ -423,6 +489,29 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                         <canvas ref={canvasRef} width={width} height={height} style={{ imageRendering: 'pixelated', display: 'block', width: '100%', height: '100%' }} />
         
                         <svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible', pointerEvents: 'none' }}>
+                            {/* --- CATALOG OVERLAY --- */}
+                            {catalogPoints.map((pt) => {
+                                const isSelected = selectedCatalogRow === pt.rowIndex;
+                                return (
+                                    <circle 
+                                        key={`cat-${pt.rowIndex}`} 
+                                        cx={pt.x} 
+                                        cy={pt.y} 
+                                        r={isSelected ? 8 / (zoom || 1) : 5 / (zoom || 1)} 
+                                        stroke={isSelected ? "#00ff00" : "#ffaa00"} 
+                                        fill={isSelected ? "rgba(0,255,0,0.3)" : "none"} 
+                                        strokeWidth={isSelected ? 3 / (zoom || 1) : 1.5 / (zoom || 1)} 
+                                        opacity={0.8}
+                                        style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // Don't trigger a pan/region draw
+                                            setSelectedCatalogRow(pt.rowIndex);
+                                        }}
+                                    />
+                                );
+                            })}
+
+                            {/* --- USER DRAWN REGIONS --- */}
                             {regions.map(r => (
                                 <RegionShape 
                                     key={r.id} region={r} zoom={zoom} drawMode={drawMode}
