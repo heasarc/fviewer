@@ -7,19 +7,21 @@ We have successfully transitioned from a static client-side MVP to a hybrid Pyth
 * **Frontend:** React 18, TypeScript, Vite. 
 * **Styling:** Bootstrap 5 (CSS & Icons only), with a custom `theme.css` file providing a dark, compact "Desktop IDE" aesthetic. (using CSS variables like `--fv-bg`, `--fv-panel`, and the Lato font). We strictly minimize dependencies.
 * **Plotting:** `uPlot` (chosen for ultra-fast canvas rendering).
-* **Processing Backend:** Custom WebAssembly (`cfitsio`/`wcslib`) inside a background Web Worker (`useFits.ts`) to prevent UI freezing. The worker pases TypedArrays back to the React hooks. It also exposes asynchronous pixToWorld and worldToPix functions for WCS coordinate transforms.
-* **Server/Backend:** `FastAPI` (Python) serving the Vite build, securely streaming local FITS files, and managing WebSocket connections.
+* **Processing Backend:** 
+  * Custom WebAssembly (`cfitsio`/`wcslib`) inside a background Web Worker (`fits.worker.ts`).  The worker pases TypedArrays back to the React hooks. It also exposes asynchronous pixToWorld and worldToPix functions for WCS coordinate transforms.
+  * Rust WASM (`cds-votable-rust`) inside a parallel Web Worker (`vo.worker.ts`) for high-performance remote catalog parsing.
+* **Server/Backend:** `FastAPI` (Python) serving the Vite build, securely streaming local files, managing WebSockets, and proxying HTTP requests to bypass CORS.
 * **Python Client:** A synchronous Python class (`FViewer` in `api.py`) allowing users to control the UI and extract data from Jupyter notebooks.
 * **Packaging:** `hatchling` via `pyproject.toml`. A custom script `sync-version.py` is called along with `npm run dev` or `npm run build` hooks that automatically syncs the Python version to `package.json`.
 
 
 #### 1. Frontend Plugin Architecture (React/TS)
 The React frontend avoids monolithic components (like a giant `App.tsx` or a massive `switch` statement for WebSockets). It relies on three core pillars:
-*   **`FViewerContext` (State):** A global React Context containing all lifted state (`activeHdu`, `imageData`, `regions`, UI toggles) and the Web Worker instance. Plugins access this via the `useCore()` hook.
+*   **`FViewerContext` (State):** A global React Context containing all lifted state and routing flags (`activeDataType: 'fits' | 'votable'`, `activeHdu`, `imageData`, `regions`, `selectedCatalogRow`), plus the instances of both Web Workers (`fitsWorker` and `voWorker`). UI components dynamically query the correct worker based on the `activeDataType`. Plugins access this via the `useCore()` hook.
 *   **`CommandRegistry` (WebSocket Routing):** A decoupled registry. Instead of a hardcoded switch statement, plugins register their own Python API listeners: `commandRegistry.register('set_colormap', handler)`.
 *   **`PluginManager` (UI Extension Slots):** `App.tsx` acts only as a structural layout shell containing `<ExtensionSlot name="..." />` components. Plugins inject their UI (buttons, menus, sidebars) directly into these slots (e.g., `menubar:edit`, `fitsimage:toolbar`, `workspace:right`).
 
-*Existing Core Plugins:* `PlotterPlugin` (Right Sidebar), `HDUExplorerPlugin` (Left Sidebar), `HeaderEditorPlugin`, `ServerFilePlugin`, `ImageControlPlugin`, `RegionToolbarPlugin`, `TransformPlugin`, `DataCubePlugin`, and `ZoomPlugin`.
+*Existing Core Plugins:* `PlotterPlugin`, `HDUExplorerPlugin`, `HeaderEditorPlugin`, `ServerFilePlugin`, `ImageControlPlugin`, `RegionToolbarPlugin`, `TransformPlugin`, `DataCubePlugin`, `ZoomPlugin`, and `TAPQueryPlugin` (Adds a "Catalogs" menu with manual ADQL search and context-aware spatial overlay queries like HEASARC Chandra/XMM).
 
 #### 2. Python Client Architecture (`api.py`)
 The Python API uses the **Mixin Pattern** to maintain a flat, Jupyter-friendly namespace while keeping the source code perfectly modular and Flake8-compliant.
@@ -30,44 +32,40 @@ The Python API uses the **Mixin Pattern** to maintain a flat, Jupyter-friendly n
 #### 3. FastAPI Backend Architecture (`server.py`)
 The FastAPI server is divided using `APIRouter`.
 *   **Core Server:** Handles the `/ws` WebSocket endpoint, CORS regex matching, JWT Authentication, and static file mounting. Uses an `asyncio.Future` pattern (`send_and_wait`) to bridge synchronous Python requests to asynchronous React WebSocket replies.
-*   **Server Plugins (`fviewer/server_plugins/`):** Specific backend logic (like the `file_system.py` endpoint for secure local directory browsing) is extracted into an `APIRouter` and mounted in the main app via `app.include_router()`.
+*  **Server Plugins (`fviewer/server_plugins/`):** Specific backend logic extracted into routers, such as `file_system.py` (secure local directory browsing) and `tap_proxy.py` (uses a synchronous `requests` call running in a background thread to safely tunnel TAP queries and bypass browser CORS without blocking async WebSockets).
 
 #### Core Frontend Components (The "Shell")
 1.  **`App.tsx`:** A 100vh flexbox shell. Renders:
-    - **Top Menubar:** Contains dropdowns (File, Edit, View) and a toggle for the Plotter.
-    - **Left Sidebar:** A scrollable list of HDUs in the loaded FITS file (pases data cube dimesntions along extension name).
-    - **Center Workspace:** Displays either `<FitsImage />` or `<VirtualTable />` depending on the selected HDU.
-    - **Right Sidebar (Collapsible):** Contains a dynamic Plotter UI.
+    - **Top Menubar:** Contains dropdowns (File, Edit, View, Catalogs) and right-aligned toggles fpr the Plotter.
+    - **Left Sidebar:** A scrollable list of HDUs.
+    - **Center Workspace:** Dynamically renders `<FitsImage />`, `<VirtualTable />`, or a responsive side-by-side split screen (`flex-row`) if both an Image and a Catalog are actively loaded.
+    - **Right Sidebar:** Collapsible dynamic Plotter UI.
 2.  **`<FitsImage />`:** The core rendering engine. Paints TypedArrays to an HTML5 Canvas using JS colormap LUTs. Handles CSS-based panning/zooming. Exposes its own internal extension slots for its toolbar. The `DataCubePlugin` injects a dropdown with UI sliders to navigate multidimentional data planes.
     * Renders FITS pixels to a bottom `<canvas>` using custom stretches (Linear, Log, Sqrt, ASINH) and procedural colormaps (Gray, Heat, Cool, Plasma).
     * Panning, zooming, flipping, and rotating are handled via hardware-accelerated CSS `transform` on the canvas wrapper.
     * Real-time WCS (RA/Dec) tracking is displayed in a bottom status bar.
-3.  **`<VirtualTable />`:** A lazy-loading, intersection-observer-based virtual grid for large binary tables.
-    - A custom, zero-dependency virtualized grid for 100,000+ row binary tables with double-click editing.
-    - Uses an Intersection-Observer style lazy-loading approach (onFetchData). As the user scrolls, it debounces requests to the worker for missing 100-row chunks, ensuring infinite scrolling uses minimal RAM.
+    * Renders an SVG overlay for Region drawing/dragging and dynamic Catalog Overlay points (`<circle>`). Catalog points are bidirectionally linked to the VirtualTable; clicking a circle updates the `selectedCatalogRow` state.
+3.  **`<VirtualTable />`:** A custom, zero-dependency lazy-loading virtualized grid for massive binary tables (100,000+ rows). 
+    - Routes missing data requests (`onFetchData`) to either the FITS or VOTable worker.
+    - Supports `isReadOnly` mode (disabling edits for catalogs).
+    - Implements bidirectional linking (`selectedRow` prop): instantly auto-scrolls to center the viewport on the selected row and highlights it with a green border/tint when clicked on the `<FitsImage />`.
     - Vector & VLA Support: Cells containing multi-dimensional binary arrays (Fixed Vectors, Variable-Length Arrays, and Bit Arrays) render an interactive button instead of text. Clicking it opens <VectorModal />, a high-performance, purely DOM-virtualized popup that allows instant scrolling through massive arrays without freezing the UI. Users can double-click specific array elements in the modal to edit them.
-5. **`FitsPlot.tsx`:** 
-    - 2D Scatter Plots and 1D Histograms linked to drawn regions.
-    - Uses flat, typed index arrays (Uint32Array) for in-place sorting and preparation to avoid Garbage Collection crashes on massive datasets.
-    - Accepts pointSize, pointColor, and supports Data Subsetting (subsetMode: 'all', 'range', 'random'). Random subsetting uses Reservoir Sampling.
-4.  **`<FitsPlot />`:** 2D scatter and 1D histograms using `uPlot`.
+4.  **`<FitsPlot />`:** 2D scatter and 1D histograms using `uPlot`. Dynamically fetches full columns via zero-copy from the active worker (`fits` or `vo`). Supports random subsetting via Reservoir Sampling.
 5. **State Management**: Manages two separate data pools to prevent UI freezing:
     - tableData: Holds tiny 100-row chunks for the VirtualTable.
     - fullPlotData: Holds full-length columns for the Plotter (fetched eagerly via Transferable Objects only when the plotter panel is open, tracked via fetchedPlotColumns ref to prevent request spam).
-6. **Web Worker (`fits.worker.ts`):**
-    - Implements a JS `tableCache` to isolate data from the WASM heap (`typed_memory_view`).
-    - Uses `.slice()` to clone ArrayBuffers instantly, protecting against C++ memory corruption (`clearDataVectors()`).
-    - Data Cube Extraction: When `GET_HDU_LIST` runs, it dynamically parses all `NAXISn` keywords. For 3D/4D cubes, the `READ_IMAGE` action accepts `sliceIndices` to construct precise fpixel and lpixel arrays. By passing these directly to `wasm-cfitsio`'s subsetting bindings, the worker extracts only a single 2D plane at a time, keeping transfer times near 0ms and completely eliminating WASM memory crashes on massive files.
-    - Exposes two endpoints: `READ_TABLE_CHUNK` (for VirtualTable) and `READ_COLUMN` (for Plotter). Both return data using zero-copy Transferable Objects for 0ms main-thread transfer.
-    - `READ_TABLE_CHUNK` detects whether columns are Scalars (flat TypedArray), Vectors/VLAs (Array of TypedArrays), or Strings. For 2D Vector arrays, it identifies the shared underlying `ArrayBuffer` and uses zero-copy Transferable Objects for 0ms UI transfer times. `WRITE_CELL` accepts an optional arrayIndex payload, allowing the UI to instruct the underlying WASM layer to overwrite a single, specific element inside a vector row rather than updating the entire array.
-7. **Regions**
+6. **Web Workers:**
+    - **`fits.worker.ts`:** Wraps C++ WASM (`cfitsio`). Handles `READ_TABLE_CHUNK` and `READ_COLUMN` by returning zero-copy Transferable Objects (ArrayBuffers) to the main thread for 0ms transfer times. Extracts multidimensional data cubes via bindings.
+    - **`vo.worker.ts`:** Wraps Rust WASM (`cds-votable-rust`). Parses ADQL XML payloads. Transposes the heavily nested Serde-generated JSON into flat columnar `TypedArrays` and actively garbage collects the JSON objects to save RAM. Perfectly mimics the `Transferable` message payload contract of the FITS worker so the React frontend requires zero code changes to display VOTables.
+
+7. **Regions:**
    * `useRegions.ts` (Hook): Manages local drawing modes (pan, circle, box, ellipse, annulus), drafts, and the mathematical calculations for dragging, resizing, and rotating shapes on the canvas.
    * `RegionOverlay.tsx`: A stateless SVG component overlay sitting on top of the canvas. Renders shapes, hit-detection areas, and interactive drag handles. Visually distinguishes background regions with dashed outlines.
    * `regionUtils.ts` (Parser/Serializer): compliant with standard DS9 region format. Handles async conversion of WCS coordinates (fk5 RA/Dec) to/from pixel coordinates (image) using useFits methods. Safely parses sexagesimal formats and unit suffixes, and preserves properties like color and # background.
    * Regions can be saved/loaded to DS9-style `.reg` text files.
 
 #### Testing Strategy
-*   **Frontend & WASM (Vitest + Playwright):** Runs in "Browser Mode" to natively test Web Workers and WASM zero-copy memory chunking, avoiding Node.js/Emscripten polyfill conflicts. React hooks are tested for correct state updates and input sanitization.
+*   **Frontend & WASM (Vitest + Playwright):** Runs in "Browser Mode" to natively test Web Workers and WASM initializations. Uses a custom `PluginTestWrapper` that creates a mock `FViewerContext` with dummy workers (`fitsWorker`, `voWorker`) and data states to test isolated plugin rendering.
 *   **FastAPI Backend (Pytest + HTTPX):** Validates security (e.g., path traversal prevention). Asynchronous WebSocket routing and `send_and_wait` Futures are tested using pure `asyncio` to avoid FastAPI `TestClient` deadlocks.
 *   **Python Client (Pytest + Responses):** Mocks REST calls to validate JSON payload formatting, dynamic session connection logic, and authentication token injection. Modular tests (`test_plugin_regions.py`) mocking the REST/WebSocket responses to ensure correct JSON payloads are generated.
 *   **End-to-End (Pytest-Playwright):** Starts a live `uvicorn` server and headless Chromium browser. Validates the complete bidirectional loop: Python API sends a command -> WebSocket routes it -> React/WASM processes it -> Playwright asserts the actual DOM/canvas updates.
