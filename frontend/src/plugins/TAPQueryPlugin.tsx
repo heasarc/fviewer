@@ -65,51 +65,61 @@ const TAPQueryMenu = () => {
     };
 
     // Context-Aware spatial query builder
+    // Context-Aware spatial query builder
     const handleContextQuery = async (tableName: string, label: string) => {
         if (!imageData) return;
         setIsFetching(true);
         
         try {
-            // 1. Get pixel scale (assume degrees/pixel)
-            let pxToDeg = 1 / 3600; // Default to 1 arcsec if WCS fails
-            try {
-                const scale = await fitsWorker.getPixScale();
-                if (scale && scale.length > 0) pxToDeg = Math.abs(scale[0]);
-            } catch (e) { console.warn("No WCS Scale found, using default"); }
-
             let shapeAdql = "";
             const activeRegion = regions.find(r => r.id === selectedRegionId);
 
             if (activeRegion) {
-                // REGION SELECTED -> Query specific area
-                let cx = 0, cy = 0;
                 if (activeRegion.type === 'box') {
-                    cx = (activeRegion.startX + activeRegion.endX) / 2;
-                    cy = (activeRegion.startY + activeRegion.endY) / 2;
-                    const w = Math.abs(activeRegion.endX - activeRegion.startX) * pxToDeg;
-                    const h = Math.abs(activeRegion.endY - activeRegion.startY) * pxToDeg;
-                    const wcs = await fitsWorker.pixToWorld(cx, cy);
-                    shapeAdql = `BOX('ICRS', ${wcs.ra}, ${wcs.dec}, ${w}, ${h})`;
+                    // 1. Exact Polygon for Box Regions (handles rotation perfectly)
+                    const tl = await fitsWorker.pixToWorld(activeRegion.startX, activeRegion.startY);
+                    const tr = await fitsWorker.pixToWorld(activeRegion.endX, activeRegion.startY);
+                    const br = await fitsWorker.pixToWorld(activeRegion.endX, activeRegion.endY);
+                    const bl = await fitsWorker.pixToWorld(activeRegion.startX, activeRegion.endY);
+                    
+                    shapeAdql = `POLYGON('ICRS', ${tl.ra}, ${tl.dec}, ${tr.ra}, ${tr.dec}, ${br.ra}, ${br.dec}, ${bl.ra}, ${bl.dec})`;
                 } else {
-                    // Circle, Ellipse, Annulus -> Default to Circle
-                    cx = activeRegion.startX; cy = activeRegion.startY;
-                    const radiusPx = Math.hypot(activeRegion.endX - activeRegion.startX, activeRegion.endY - activeRegion.startY);
-                    const wcs = await fitsWorker.pixToWorld(cx, cy);
-                    shapeAdql = `CIRCLE('ICRS', ${wcs.ra}, ${wcs.dec}, ${radiusPx * pxToDeg})`;
+                    // 2. Exact Great-Circle distance for Circles (Haversine Formula)
+                    const c_wcs = await fitsWorker.pixToWorld(activeRegion.startX, activeRegion.startY);
+                    const e_wcs = await fitsWorker.pixToWorld(activeRegion.endX, activeRegion.endY);
+                    
+                    // Convert RA/Dec from degrees to radians for the math
+                    const ra1 = c_wcs.ra * (Math.PI / 180);
+                    const dec1 = c_wcs.dec * (Math.PI / 180);
+                    const ra2 = e_wcs.ra * (Math.PI / 180);
+                    const dec2 = e_wcs.dec * (Math.PI / 180);
+                    
+                    // Haversine calculation
+                    const dRa = ra2 - ra1;
+                    const dDec = dec2 - dec1;
+                    
+                    const a = Math.sin(dDec / 2) ** 2 + 
+                              Math.cos(dec1) * Math.cos(dec2) * Math.sin(dRa / 2) ** 2;
+                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                    
+                    // The distance 'c' is in radians. Convert it back to degrees for ADQL.
+                    const radiusDeg = c * (180 / Math.PI);
+                    
+                    shapeAdql = `CIRCLE('ICRS', ${c_wcs.ra}, ${c_wcs.dec}, ${radiusDeg})`;
                 }
             } else {
-                // NO REGION -> Query whole image bounding box
-                const cx = imageData.width / 2;
-                const cy = imageData.height / 2;
-                const w = imageData.width * pxToDeg;
-                const h = imageData.height * pxToDeg;
-                const wcs = await fitsWorker.pixToWorld(cx, cy);
-                shapeAdql = `BOX('ICRS', ${wcs.ra}, ${wcs.dec}, ${w}, ${h})`;
+                // 3. Exact Polygon for the Full Image Boundaries
+                const tl = await fitsWorker.pixToWorld(0, 0);
+                const tr = await fitsWorker.pixToWorld(imageData.width, 0);
+                const br = await fitsWorker.pixToWorld(imageData.width, imageData.height);
+                const bl = await fitsWorker.pixToWorld(0, imageData.height);
+                
+                shapeAdql = `POLYGON('ICRS', ${tl.ra}, ${tl.dec}, ${tr.ra}, ${tr.dec}, ${br.ra}, ${br.dec}, ${bl.ra}, ${bl.dec})`;
             }
 
             // Build ADQL and execute
             const adql = `SELECT * FROM ${tableName} WHERE CONTAINS(POINT('ICRS', ra, dec), ${shapeAdql}) = 1`;
-            await executeQuery('https://heasarc.gsfc.nasa.gov/xamin/vo/tap', adql, label, false); // clearImage = false
+            await executeQuery('https://heasarc.gsfc.nasa.gov/xamin/vo/tap', adql, label, false);
             
         } catch (err: any) {
             alert(`Context Query Error: ${err.message}`);
