@@ -4,6 +4,7 @@ import re
 import json
 from pathlib import Path
 
+
 def main():
     """Sync the version in package.json from ../fviewer/__init__.py"""
     frontend_dir = Path(__file__).parent
@@ -37,8 +38,8 @@ def main():
         with open(app_file, "r") as f:
             app_content = f.read()
         updated_content = re.sub(
-            r"(FViewer Version:\s*)[\d\.]+", 
-            rf"\g<1>{py_version}", 
+            r"(FViewer Version:\s*)[\d\.]+",
+            rf"\g<1>{py_version}",
             app_content
         )
         with open(app_file, "w") as f:
@@ -48,6 +49,7 @@ def main():
         print(f"--- Warning: Could not sync versions: {e} ---")
         raise e
     # =========================================================
+
 
 if __name__ == '__main__':
     main()
