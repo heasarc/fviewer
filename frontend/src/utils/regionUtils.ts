@@ -31,16 +31,14 @@ const DEFAULT_PHYSICAL_TRANSFORM: PhysicalTransform = { ltv1: 0, ltv2: 0, ltm1_1
 const parseDS9Arg = (val: string, index: number) => {
     let s = val.trim().toLowerCase();
     
-    // 1. Handle unit suffixes for sizes and radii (index >= 2)
     if (index >= 2) {
-        if (s.endsWith('"')) return parseFloat(s) / 3600; // arcsec to degrees
-        if (s.endsWith("'")) return parseFloat(s) / 60;   // arcmin to degrees
-        if (s.endsWith('d')) return parseFloat(s);        // degrees
-        if (s.endsWith('r')) return parseFloat(s) * (180 / Math.PI); // radians to degrees
-        if (s.endsWith('p') || s.endsWith('i')) return parseFloat(s); // pixels/image
+        if (s.endsWith('"')) return parseFloat(s) / 3600; 
+        if (s.endsWith("'")) return parseFloat(s) / 60;   
+        if (s.endsWith('d')) return parseFloat(s);        
+        if (s.endsWith('r')) return parseFloat(s) * (180 / Math.PI); 
+        if (s.endsWith('p') || s.endsWith('i')) return parseFloat(s); 
     }
 
-    // 2. Handle HMS (Hours, Minutes, Seconds) - Typically for RA
     if (s.includes('h') && s.includes('m')) {
         const match = s.match(/([+-]?\d+)h(\d+)m([0-9.]+)s?/);
         if (match) {
@@ -48,12 +46,10 @@ const parseDS9Arg = (val: string, index: number) => {
             const m = parseFloat(match[2]);
             const sec = parseFloat(match[3]);
             const sign = (s.startsWith('-') || parseFloat(match[1]) < 0) ? -1 : 1;
-            // RA in HMS is multiplied by 15 to convert to standard decimal degrees
             return sign * (h + m / 60 + sec / 3600) * 15;
         }
     }
 
-    // 3. Handle DMS (Degrees, Minutes, Seconds) - Typically for Dec
     if (s.includes('d') && s.includes('m')) {
         const match = s.match(/([+-]?\d+)d(\d+)m([0-9.]+)s?/);
         if (match) {
@@ -65,7 +61,6 @@ const parseDS9Arg = (val: string, index: number) => {
         }
     }
 
-    // 4. Handle standard colon-separated format (e.g., 12:34:56.7)
     if (s.includes(':')) {
         const parts = s.split(':').map(Number);
         const degOrHour = Math.abs(parts[0] || 0);
@@ -74,16 +69,10 @@ const parseDS9Arg = (val: string, index: number) => {
         const sign = (parts[0] < 0 || s.startsWith('-')) ? -1 : 1;
         
         let parsed = sign * (degOrHour + m / 60 + sec / 3600);
-        
-        // DS9 Convention: If it's the first coordinate (RA) and in colon format, 
-        // it is assumed to be in hours, so we convert it to degrees.
-        if (index === 0) {
-            parsed *= 15; 
-        }
+        if (index === 0) parsed *= 15; 
         return parsed;
     }
 
-    // 5. Fallback: parse pure numbers (strip any lingering unrecognized characters)
     return parseFloat(s.replace(/[^0-9.-]/g, ''));
 };
 
@@ -93,19 +82,11 @@ export const parseDS9Regions = async (
     height: number,
     _pixToWorld: (x: number, y: number) => Promise<{ ra: number, dec: number } | null>,
     worldToPix: (ra: number, dec: number) => Promise<{ x: number, y: number } | null>,
-    pixelScale: PixelScale | null,
     physicalTransform: PhysicalTransform = DEFAULT_PHYSICAL_TRANSFORM
 ): Promise<Region[]> => {
     const lines = text.split('\n');
     const loadedRegions: Region[] = [];
-    
     let coordSystem = 'image'; 
-    
-    // Use the provided pixel scale (average the absolute X and Y scales)
-    let pixScale = 1;
-    if (pixelScale) {
-        pixScale = (Math.abs(pixelScale.scaleX) + Math.abs(pixelScale.scaleY)) / 2;
-    }
 
     for (let i = 0; i < lines.length; i++) {
         let line = lines[i].trim();
@@ -130,30 +111,44 @@ export const parseDS9Regions = async (
         
         try {
             let cx = args[0], cy = args[1];
-            let scaleX = 1, scaleY = 1, scaleAvg = 1;
+            let pxRadius = 0, pxWidth = 0, pxHeight = 0, pxInner = 0;
             
             if (coordSystem === 'physical') {
-                // Physical to Image: Image = LTM * Phys + LTV
-                cx = (physicalTransform.ltm1_1 * cx) + physicalTransform.ltv1;
-                cy = (physicalTransform.ltm2_2 * cy) + physicalTransform.ltv2;
-                
-                scaleX = Math.abs(physicalTransform.ltm1_1);
-                scaleY = Math.abs(physicalTransform.ltm2_2);
-                scaleAvg = (scaleX + scaleY) / 2;
+                cx = (physicalTransform.ltm1_1 * args[0]) + physicalTransform.ltv1;
+                cy = (physicalTransform.ltm2_2 * args[1]) + physicalTransform.ltv2;
+                pxRadius = args[2] * Math.abs(physicalTransform.ltm1_1);
+                pxWidth = args[2] * Math.abs(physicalTransform.ltm1_1);
+                pxHeight = args[3] * Math.abs(physicalTransform.ltm2_2);
+                pxInner = args[2] * Math.abs(physicalTransform.ltm1_1);
             } else if (coordSystem !== 'image') {
-                // WCS to Image
-                const pix = await worldToPix(cx, cy); 
-                if (pix && pix.x !== undefined && pix.y !== undefined) { 
-                    cx = pix.x; 
-                    cy = pix.y; 
+                // --- WCS to Image: Use exact WCS offsets to find pixel sizes ---
+                const cp = await worldToPix(args[0], args[1]);
+                if (cp) {
+                    cx = cp.x; cy = cp.y;
+                    
+                    if (type === 'circle') {
+                        // Offset Dec by radius to find edge
+                        const ep = await worldToPix(args[0], args[1] + args[2]);
+                        if (ep) pxRadius = Math.hypot(ep.x - cp.x, ep.y - cp.y);
+                    } else if (type === 'annulus') {
+                        const inP = await worldToPix(args[0], args[1] + args[2]);
+                        const outP = await worldToPix(args[0], args[1] + args[3]);
+                        if (inP) pxInner = Math.hypot(inP.x - cp.x, inP.y - cp.y);
+                        if (outP) pxRadius = Math.hypot(outP.x - cp.x, outP.y - cp.y);
+                    } else {
+                        // Box/Ellipse: args[2] is width/rx, args[3] is height/ry
+                        const ex = await worldToPix(args[0] + (args[2] / Math.cos(args[1] * Math.PI / 180)), args[1]);
+                        const ey = await worldToPix(args[0], args[1] + args[3]);
+                        if (ex) pxWidth = Math.hypot(ex.x - cp.x, ex.y - cp.y);
+                        if (ey) pxHeight = Math.hypot(ey.x - cp.x, ey.y - cp.y);
+                    }
                 }
-                scaleX = 1 / pixScale;
-                scaleY = 1 / pixScale;
-                scaleAvg = 1 / pixScale;
+            } else {
+                // Pure Image coords
+                pxRadius = args[2]; pxWidth = args[2]; pxHeight = args[3]; pxInner = args[2];
             }
 
-            // --- FIX: Convert FITS Bottom-Left origin to SVG Top-Left origin ---
-            cy = height - cy; 
+            cy = height - cy; // FITS to SVG origin
 
             let r: Region = { 
                 id: `loaded_${Date.now()}_${i}`, type, 
@@ -162,21 +157,16 @@ export const parseDS9Regions = async (
             };
             
             if (type === 'circle') {
-                const radius = args[2] * scaleAvg;
-                r.endX = cx + radius; 
+                r.endX = cx + pxRadius; 
             } else if (type === 'box') {
-                const w = args[2] * scaleX; const h = args[3] * scaleY;
-                r.startX = cx - w/2; r.startY = cy - h/2;
-                r.endX = cx + w/2; r.endY = cy + h/2;
-                // --- FIX: Invert DS9 counter-clockwise angle to SVG clockwise angle ---
+                r.startX = cx - pxWidth/2; r.startY = cy - pxHeight/2;
+                r.endX = cx + pxWidth/2; r.endY = cy + pxHeight/2;
                 r.angle = -(args[4] || 0);
             } else if (type === 'ellipse') {
-                const rx = args[2] * scaleX; const ry = args[3] * scaleY;
-                r.endX = cx + rx; r.endY = cy + ry;
-                // --- FIX: Invert angle ---
+                r.endX = cx + pxWidth; r.endY = cy + pxHeight;
                 r.angle = -(args[4] || 0);
             } else if (type === 'annulus') {
-                r.innerR = args[2] * scaleAvg; r.endX = cx + (args[3] * scaleAvg); 
+                r.innerR = pxInner; r.endX = cx + pxRadius; 
             }
 
             if (isNaN(r.startX) || isNaN(r.startY) || isNaN(r.endX) || isNaN(r.endY)) continue;
@@ -201,22 +191,23 @@ export const serializeDS9Regions = async (
     let fileContent = "# Region file format: DS9 version 4.1\n";
     fileContent += "global color=green dashlist=8 3 width=1 font=\"helvetica 10 normal roman\" select=1 highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 include=1 source=1\n";
     
-    // Fallback to image if we requested fk5 but have no WCS scale
-    if (format === 'fk5' && !pixelScale) {
-        format = 'image';
-    }
-    
+    if (format === 'fk5' && !pixelScale) format = 'image';
     fileContent += `${format}\n`; 
 
-    // --- Derive pixScale directly from WCS ---
-    let pixScale = 1;
-    if (format === 'fk5' && pixelScale) {
-        pixScale = (Math.abs(pixelScale.scaleX) + Math.abs(pixelScale.scaleY)) / 2;
-    }
+    // --- Helper: Exact great-circle Haversine distance in degrees ---
+    const getDegDistance = async (x1: number, y1: number, x2: number, y2: number) => {
+        const p1 = await pixToWorld(x1, y1);
+        const p2 = await pixToWorld(x2, y2);
+        if (!p1 || !p2) return 0;
+        const ra1 = p1.ra * (Math.PI / 180), dec1 = p1.dec * (Math.PI / 180);
+        const ra2 = p2.ra * (Math.PI / 180), dec2 = p2.dec * (Math.PI / 180);
+        const a = Math.sin((dec2 - dec1) / 2) ** 2 + Math.cos(dec1) * Math.cos(dec2) * Math.sin((ra2 - ra1) / 2) ** 2;
+        return (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))) * (180 / Math.PI);
+    };
     
     for (const r of regions) {
         let line = "";
-        let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
+        let cx = 0, cy = 0, w = 0, h = 0, radius = 0, inner = 0;
 
         if (r.type === 'box') {
             w = Math.abs(r.endX - r.startX); h = Math.abs(r.endY - r.startY);
@@ -227,27 +218,33 @@ export const serializeDS9Regions = async (
         } else { 
             radius = Math.hypot(r.endX - r.startX, r.endY - r.startY);
             cx = r.startX; cy = r.startY;
+            inner = r.innerR ?? (radius / 2);
         }
 
         let outCx = cx;
-        // --- FIX: Convert SVG Top-Left back to FITS Bottom-Left ---
-        let outCy = height - cy; 
-        
-        // --- FIX: Revert the angle for DS9 ---
+        let outCy = height - cy; // SVG to FITS
         const outAngle = -(r.angle || 0); 
 
         if (format === 'fk5') {
-            const world = await pixToWorld(outCx, outCy);
-            if (world) { outCx = world.ra; outCy = world.dec; }
-            w *= pixScale; h *= pixScale; radius *= pixScale;
+            const worldCenter = await pixToWorld(outCx, outCy);
+            if (worldCenter) { outCx = worldCenter.ra; outCy = worldCenter.dec; }
+            
+            // --- Use exact Haversine WCS distances instead of pixScale ---
+            if (r.type === 'box' || r.type === 'ellipse') {
+                w = await getDegDistance(cx, cy, cx + (w/2), cy) * 2;
+                h = await getDegDistance(cx, cy, cx, cy + (h/2)) * 2;
+            } else {
+                radius = await getDegDistance(cx, cy, cx + radius, cy);
+                inner = await getDegDistance(cx, cy, cx + inner, cy);
+            }
         } else if (format === 'physical') {
-            // Image to Physical: Phys = (Image - LTV) / LTM
             outCx = (outCx - physicalTransform.ltv1) / physicalTransform.ltm1_1;
             outCy = (outCy - physicalTransform.ltv2) / physicalTransform.ltm2_2;
-            
             w /= Math.abs(physicalTransform.ltm1_1);
             h /= Math.abs(physicalTransform.ltm2_2);
-            radius /= ((Math.abs(physicalTransform.ltm1_1) + Math.abs(physicalTransform.ltm2_2)) / 2);
+            const pScaleAvg = (Math.abs(physicalTransform.ltm1_1) + Math.abs(physicalTransform.ltm2_2)) / 2;
+            radius /= pScaleAvg;
+            inner /= pScaleAvg;
         }
 
         if (r.type === 'box') {
@@ -255,16 +252,12 @@ export const serializeDS9Regions = async (
         } else if (r.type === 'ellipse') {
             line = `ellipse(${outCx.toFixed(5)},${outCy.toFixed(5)},${(w/2).toFixed(5)},${(h/2).toFixed(5)},${outAngle.toFixed(3)})`;
         } else if (r.type === 'annulus') {
-            let inner = (r.innerR ?? (radius / 2));
-            if (format === 'fk5') inner *= pixScale;
-            else if (format === 'physical') inner /= ((Math.abs(physicalTransform.ltm1_1) + Math.abs(physicalTransform.ltm2_2)) / 2);
-            
             line = `annulus(${outCx.toFixed(5)},${outCy.toFixed(5)},${inner.toFixed(5)},${radius.toFixed(5)})`;
         } else {
             line = `circle(${outCx.toFixed(5)},${outCy.toFixed(5)},${radius.toFixed(5)})`;
         }
         
-        let props = ''; // `color=${r.color}`;
+        let props = ''; 
         if (r.isBackground) props += ` background`;
         fileContent += `${line} # ${props}\n`;
     }

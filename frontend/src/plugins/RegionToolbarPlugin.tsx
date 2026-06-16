@@ -54,7 +54,7 @@ const RegionToolbarPluginComponent = () => {
         const text = await file.text(); 
         const loadedRegions = await parseDS9Regions(
             text, imageData.width, imageData.height, fitsWorker.pixToWorld, fitsWorker.worldToPix,
-            imageData.pixScale || null, physicalTransform
+            physicalTransform
         );
         
         setRegions((prev: any[]) => [...prev, ...loadedRegions]);
