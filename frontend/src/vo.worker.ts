@@ -24,16 +24,31 @@ self.onmessage = async (e: MessageEvent) => {
             case 'LOAD_VOTABLE_STRING': {
                 const parsedVOTable = fromXML(payload.xmlString);
                 
-                // Navigate the correct Serde JSON structure
-                const resource = parsedVOTable.votable.resources[0];
+                // 1. Iterate safely through ALL resources to find the table
+                let tableContainer = null;
+                const resources = parsedVOTable.votable.resources || [];
                 
-                // Find the first Table element inside sub_elems
-                const tableContainer = resource.sub_elems.find(
-                    (e: any) => e.resource_or_table?.elem_type === 'Table'
-                );
+                for (const res of resources) {
+                    if (res.sub_elems) {
+                        tableContainer = res.sub_elems.find(
+                            (e: any) => e.resource_or_table?.elem_type === 'Table'
+                        );
+                        if (tableContainer) break; // Found it!
+                    }
+                }
                 
+                // 2. If no table is found, check if the server sent an Error VOTable
                 if (!tableContainer) {
-                    throw new Error("No TABLE found in the VOTable resource");
+                    let errorMsg = "No data TABLE found in the VOTable response.";
+                    
+                    // Look for <INFO name="QUERY_STATUS" value="ERROR">
+                    const allInfos = parsedVOTable.votable.infos || [];
+                    const errInfo = allInfos.find((i: any) => i.name === 'QUERY_STATUS' && i.value === 'ERROR');
+                    
+                    if (errInfo) {
+                        errorMsg = `TAP Server Error: ${errInfo.content || 'Unknown Server Error'}`;
+                    }
+                    throw new Error(errorMsg);
                 }
                 
                 const table = tableContainer.resource_or_table;
@@ -46,11 +61,6 @@ self.onmessage = async (e: MessageEvent) => {
                 if (table.data) {
                     // Try TABLEDATA first, then fallback to BINARY stream
                     rows = table.data.rows || table.data.stream?.rows || [];
-                    
-                    // DEBUG: If it's still 0, let's print exactly what VizieR sent
-                    if (rows.length === 0) {
-                        console.log("DEBUG table.data:", table.data);
-                    }
                 }
 
                 tableMetadata.numRows = rows.length;
