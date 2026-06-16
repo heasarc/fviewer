@@ -72,7 +72,9 @@ interface CoreContextType {
     setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
     // table type
     activeDataType: 'fits' | 'votable';
-    setActiveDataType: React.Dispatch<React.SetStateAction<'fits' | 'votable'>>; 
+    setActiveDataType: React.Dispatch<React.SetStateAction<'fits' | 'votable'>>;
+    selectedCatalogRow: number | null;
+    setSelectedCatalogRow: React.Dispatch<React.SetStateAction<number | null>>;
 }
 
 export const FViewerContext = createContext<CoreContextType | null>(null);
@@ -114,6 +116,9 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
 
     // left sidebar
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+    // Catalogs
+    const [selectedCatalogRow, setSelectedCatalogRow] = useState<number | null>(null);
 
     // More about regions
     const {
@@ -193,6 +198,7 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
         selectedRegionId, setSelectedRegionId, hoveredRegionId, setHoveredRegionId,
         dragAction, setDragAction, deleteSelectedRegion, handleRegionDrag,
         isSidebarOpen, setIsSidebarOpen,
+        selectedCatalogRow, setSelectedCatalogRow
     };
 
     return (

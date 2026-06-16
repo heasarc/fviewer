@@ -31,6 +31,8 @@ export const createMockContext = (overrides = {}) => {
             readColumn: vi.fn()
         } as any,
         
+        selectedCatalogRow: null, setSelectedCatalogRow: vi.fn(),
+        
         // App State
         activeDataType: 'fits' as 'fits' | 'votable', setActiveDataType: vi.fn(), // <--- NEW
         fileName: 'data/test_im.fits', setFileName: vi.fn(),
