@@ -31,7 +31,7 @@ const ServerFilePluginComponent = () => {
                 };
                 const newRegions = await parseDS9Regions(
                     text, imageData.width, imageData.height, 
-                    fitsWorker.pixToWorld, fitsWorker.worldToPix, imageData.pixScale || null,
+                    fitsWorker.pixToWorld, fitsWorker.worldToPix,
                     physicalTransform
                 );
                 setRegions((prev: any[]) => [...prev, ...newRegions]);

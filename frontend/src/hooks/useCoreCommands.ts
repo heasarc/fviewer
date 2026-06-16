@@ -244,8 +244,7 @@ export function useCoreCommands(
                 imageData.width, 
                 imageData.height, 
                 pixToWorld, 
-                worldToPix, 
-                imageData.pixScale || null,
+                worldToPix,
                 {
                     ltv1: imageData.ltv1 ?? 0,
                     ltv2: imageData.ltv2 ?? 0,
