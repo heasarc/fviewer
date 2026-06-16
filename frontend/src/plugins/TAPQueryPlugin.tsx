@@ -65,61 +65,117 @@ const TAPQueryMenu = () => {
     };
 
     // Context-Aware spatial query builder
-    // Context-Aware spatial query builder
     const handleContextQuery = async (tableName: string, label: string) => {
         if (!imageData) return;
         setIsFetching(true);
         
         try {
-            let shapeAdql = "";
+            let adqlCondition = "";
             const activeRegion = regions.find(r => r.id === selectedRegionId);
+
+            // --- MATH HELPERS ---
+            // 1. Rotate a 2D point around a center
+            const rotatePoint = (x: number, y: number, cx: number, cy: number, angleDeg: number) => {
+                const rad = angleDeg * (Math.PI / 180);
+                const cos = Math.cos(rad);
+                const sin = Math.sin(rad);
+                return {
+                    x: cos * (x - cx) - sin * (y - cy) + cx,
+                    y: sin * (x - cx) + cos * (y - cy) + cy
+                };
+            };
+
+            // 2. Convert a pixel radius to true WCS degrees using Haversine
+            const getDegRadius = async (cx: number, cy: number, rPx: number) => {
+                const c_wcs = await fitsWorker.pixToWorld(cx, cy);
+                const e_wcs = await fitsWorker.pixToWorld(cx + rPx, cy);
+                
+                const ra1 = c_wcs.ra * (Math.PI / 180);
+                const dec1 = c_wcs.dec * (Math.PI / 180);
+                const ra2 = e_wcs.ra * (Math.PI / 180);
+                const dec2 = e_wcs.dec * (Math.PI / 180);
+                
+                const a = Math.sin((dec2 - dec1) / 2) ** 2 + 
+                          Math.cos(dec1) * Math.cos(dec2) * Math.sin((ra2 - ra1) / 2) ** 2;
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return { center: c_wcs, radiusDeg: c * (180 / Math.PI) };
+            };
 
             if (activeRegion) {
                 if (activeRegion.type === 'box') {
-                    // 1. Exact Polygon for Box Regions (handles rotation perfectly)
-                    const tl = await fitsWorker.pixToWorld(activeRegion.startX, activeRegion.startY);
-                    const tr = await fitsWorker.pixToWorld(activeRegion.endX, activeRegion.startY);
-                    const br = await fitsWorker.pixToWorld(activeRegion.endX, activeRegion.endY);
-                    const bl = await fitsWorker.pixToWorld(activeRegion.startX, activeRegion.endY);
+                    // Box: Calculate 4 corners, rotate, and send as POLYGON
+                    const cx = (activeRegion.startX + activeRegion.endX) / 2;
+                    const cy = (activeRegion.startY + activeRegion.endY) / 2;
+                    const minX = Math.min(activeRegion.startX, activeRegion.endX);
+                    const maxX = Math.max(activeRegion.startX, activeRegion.endX);
+                    const minY = Math.min(activeRegion.startY, activeRegion.endY);
+                    const maxY = Math.max(activeRegion.startY, activeRegion.endY);
                     
-                    shapeAdql = `POLYGON('ICRS', ${tl.ra}, ${tl.dec}, ${tr.ra}, ${tr.dec}, ${br.ra}, ${br.dec}, ${bl.ra}, ${bl.dec})`;
+                    const cornersPx = [
+                        { x: minX, y: minY }, { x: maxX, y: minY },
+                        { x: maxX, y: maxY }, { x: minX, y: maxY }
+                    ].map(p => rotatePoint(p.x, p.y, cx, cy, activeRegion.angle || 0));
+
+                    const wcsPts = await Promise.all(cornersPx.map(p => fitsWorker.pixToWorld(p.x, p.y)));
+                    const polyStr = wcsPts.map(p => `${p.ra}, ${p.dec}`).join(', ');
+                    adqlCondition = `CONTAINS(POINT('ICRS', ra, dec), POLYGON('ICRS', ${polyStr})) = 1`;
+
+                } else if (activeRegion.type === 'ellipse') {
+                    // Ellipse: Approx with 32 rotated points along the perimeter (ADQL has no ELLIPSE)
+                    const cx = activeRegion.startX;
+                    const cy = activeRegion.startY;
+                    const rx = Math.abs(activeRegion.endX - activeRegion.startX);
+                    const ry = Math.abs(activeRegion.endY - activeRegion.startY);
+                    
+                    const ptsPx = [];
+                    for (let i = 0; i < 32; i++) {
+                        const theta = (i / 32) * 2 * Math.PI;
+                        const px = cx + rx * Math.cos(theta);
+                        const py = cy + ry * Math.sin(theta);
+                        ptsPx.push(rotatePoint(px, py, cx, cy, activeRegion.angle || 0));
+                    }
+                    
+                    const wcsPts = await Promise.all(ptsPx.map(p => fitsWorker.pixToWorld(p.x, p.y)));
+                    const polyStr = wcsPts.map(p => `${p.ra}, ${p.dec}`).join(', ');
+                    adqlCondition = `CONTAINS(POINT('ICRS', ra, dec), POLYGON('ICRS', ${polyStr})) = 1`;
+
+                } else if (activeRegion.type === 'annulus') {
+                    // Annulus: Outer circle matches = 1 AND Inner circle matches = 0
+                    const cx = activeRegion.startX;
+                    const cy = activeRegion.startY;
+                    const outerPx = Math.hypot(activeRegion.endX - activeRegion.startX, activeRegion.endY - activeRegion.startY);
+                    const innerPx = activeRegion.innerR ?? (outerPx * 0.5);
+
+                    const { center, radiusDeg: rOuter } = await getDegRadius(cx, cy, outerPx);
+                    const { radiusDeg: rInner } = await getDegRadius(cx, cy, innerPx);
+
+                    adqlCondition = `(CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', ${center.ra}, ${center.dec}, ${rOuter})) = 1 ` +
+                                    `AND CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', ${center.ra}, ${center.dec}, ${rInner})) = 0)`;
+
                 } else {
-                    // 2. Exact Great-Circle distance for Circles (Haversine Formula)
-                    const c_wcs = await fitsWorker.pixToWorld(activeRegion.startX, activeRegion.startY);
-                    const e_wcs = await fitsWorker.pixToWorld(activeRegion.endX, activeRegion.endY);
+                    // Circle (Default)
+                    const cx = activeRegion.startX;
+                    const cy = activeRegion.startY;
+                    const rPx = Math.hypot(activeRegion.endX - activeRegion.startX, activeRegion.endY - activeRegion.startY);
                     
-                    // Convert RA/Dec from degrees to radians for the math
-                    const ra1 = c_wcs.ra * (Math.PI / 180);
-                    const dec1 = c_wcs.dec * (Math.PI / 180);
-                    const ra2 = e_wcs.ra * (Math.PI / 180);
-                    const dec2 = e_wcs.dec * (Math.PI / 180);
-                    
-                    // Haversine calculation
-                    const dRa = ra2 - ra1;
-                    const dDec = dec2 - dec1;
-                    
-                    const a = Math.sin(dDec / 2) ** 2 + 
-                              Math.cos(dec1) * Math.cos(dec2) * Math.sin(dRa / 2) ** 2;
-                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                    
-                    // The distance 'c' is in radians. Convert it back to degrees for ADQL.
-                    const radiusDeg = c * (180 / Math.PI);
-                    
-                    shapeAdql = `CIRCLE('ICRS', ${c_wcs.ra}, ${c_wcs.dec}, ${radiusDeg})`;
+                    const { center, radiusDeg } = await getDegRadius(cx, cy, rPx);
+                    adqlCondition = `CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', ${center.ra}, ${center.dec}, ${radiusDeg})) = 1`;
                 }
             } else {
-                // 3. Exact Polygon for the Full Image Boundaries
-                const tl = await fitsWorker.pixToWorld(0, 0);
-                const tr = await fitsWorker.pixToWorld(imageData.width, 0);
-                const br = await fitsWorker.pixToWorld(imageData.width, imageData.height);
-                const bl = await fitsWorker.pixToWorld(0, imageData.height);
-                
-                shapeAdql = `POLYGON('ICRS', ${tl.ra}, ${tl.dec}, ${tr.ra}, ${tr.dec}, ${br.ra}, ${br.dec}, ${bl.ra}, ${bl.dec})`;
+                // Full Image: 4 Corners Polygon
+                const wcsPts = await Promise.all([
+                    fitsWorker.pixToWorld(0, 0),
+                    fitsWorker.pixToWorld(imageData.width, 0),
+                    fitsWorker.pixToWorld(imageData.width, imageData.height),
+                    fitsWorker.pixToWorld(0, imageData.height)
+                ]);
+                const polyStr = wcsPts.map(p => `${p.ra}, ${p.dec}`).join(', ');
+                adqlCondition = `CONTAINS(POINT('ICRS', ra, dec), POLYGON('ICRS', ${polyStr})) = 1`;
             }
 
             // Build ADQL and execute
-            const adql = `SELECT * FROM ${tableName} WHERE CONTAINS(POINT('ICRS', ra, dec), ${shapeAdql}) = 1`;
-            await executeQuery('https://heasarc.gsfc.nasa.gov/xamin/vo/tap', adql, label, false);
+            const adql = `SELECT * FROM ${tableName} WHERE ${adqlCondition}`;
+            await executeQuery('https://heasarc.gsfc.nasa.gov/xamin/vo/tap', adql, label, false); // clearImage = false
             
         } catch (err: any) {
             alert(`Context Query Error: ${err.message}`);
