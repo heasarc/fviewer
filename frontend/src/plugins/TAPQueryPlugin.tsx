@@ -65,13 +65,14 @@ const TAPQueryMenu = () => {
     };
 
     // Context-Aware spatial query builder
-    const handleContextQuery = async (tableName: string, label: string) => {
+    const handleContextQuery = async (tableName: string, label: string, tapUrl: string) => {
         if (!imageData) return;
         setIsFetching(true);
         
         try {
             let adqlCondition = "";
             const activeRegion = regions.find(r => r.id === selectedRegionId);
+            const imgH = imageData.height; // Use this to flip the Y-axis!
 
             // --- MATH HELPERS ---
             // 1. Rotate a 2D point around a center
@@ -87,8 +88,9 @@ const TAPQueryMenu = () => {
 
             // 2. Convert a pixel radius to true WCS degrees using Haversine
             const getDegRadius = async (cx: number, cy: number, rPx: number) => {
-                const c_wcs = await fitsWorker.pixToWorld(cx, cy);
-                const e_wcs = await fitsWorker.pixToWorld(cx + rPx, cy);
+                // FLIP THE Y-AXIS FOR WCS!
+                const c_wcs = await fitsWorker.pixToWorld(cx, imgH - cy);
+                const e_wcs = await fitsWorker.pixToWorld(cx + rPx, imgH - cy);
                 
                 const ra1 = c_wcs.ra * (Math.PI / 180);
                 const dec1 = c_wcs.dec * (Math.PI / 180);
@@ -116,12 +118,13 @@ const TAPQueryMenu = () => {
                         { x: maxX, y: maxY }, { x: minX, y: maxY }
                     ].map(p => rotatePoint(p.x, p.y, cx, cy, activeRegion.angle || 0));
 
-                    const wcsPts = await Promise.all(cornersPx.map(p => fitsWorker.pixToWorld(p.x, p.y)));
+                    // FLIP THE Y-AXIS FOR ALL CORNERS!
+                    const wcsPts = await Promise.all(cornersPx.map(p => fitsWorker.pixToWorld(p.x, imgH - p.y)));
                     const polyStr = wcsPts.map(p => `${p.ra}, ${p.dec}`).join(', ');
                     adqlCondition = `CONTAINS(POINT('ICRS', ra, dec), POLYGON('ICRS', ${polyStr})) = 1`;
 
                 } else if (activeRegion.type === 'ellipse') {
-                    // Ellipse: Approx with 32 rotated points along the perimeter (ADQL has no ELLIPSE)
+                    // Ellipse: Approx with 32 rotated points along the perimeter
                     const cx = activeRegion.startX;
                     const cy = activeRegion.startY;
                     const rx = Math.abs(activeRegion.endX - activeRegion.startX);
@@ -135,7 +138,8 @@ const TAPQueryMenu = () => {
                         ptsPx.push(rotatePoint(px, py, cx, cy, activeRegion.angle || 0));
                     }
                     
-                    const wcsPts = await Promise.all(ptsPx.map(p => fitsWorker.pixToWorld(p.x, p.y)));
+                    // FLIP THE Y-AXIS FOR ALL PERIMETER POINTS!
+                    const wcsPts = await Promise.all(ptsPx.map(p => fitsWorker.pixToWorld(p.x, imgH - p.y)));
                     const polyStr = wcsPts.map(p => `${p.ra}, ${p.dec}`).join(', ');
                     adqlCondition = `CONTAINS(POINT('ICRS', ra, dec), POLYGON('ICRS', ${polyStr})) = 1`;
 
@@ -162,12 +166,12 @@ const TAPQueryMenu = () => {
                     adqlCondition = `CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', ${center.ra}, ${center.dec}, ${radiusDeg})) = 1`;
                 }
             } else {
-                // Full Image: 4 Corners Polygon
+                // Full Image: 4 Corners Polygon (FLIP Y HERE TOO)
                 const wcsPts = await Promise.all([
-                    fitsWorker.pixToWorld(0, 0),
-                    fitsWorker.pixToWorld(imageData.width, 0),
-                    fitsWorker.pixToWorld(imageData.width, imageData.height),
-                    fitsWorker.pixToWorld(0, imageData.height)
+                    fitsWorker.pixToWorld(0, imgH - 0),
+                    fitsWorker.pixToWorld(imageData.width, imgH - 0),
+                    fitsWorker.pixToWorld(imageData.width, imgH - imageData.height),
+                    fitsWorker.pixToWorld(0, imgH - imageData.height)
                 ]);
                 const polyStr = wcsPts.map(p => `${p.ra}, ${p.dec}`).join(', ');
                 adqlCondition = `CONTAINS(POINT('ICRS', ra, dec), POLYGON('ICRS', ${polyStr})) = 1`;
@@ -175,7 +179,7 @@ const TAPQueryMenu = () => {
 
             // Build ADQL and execute
             const adql = `SELECT * FROM ${tableName} WHERE ${adqlCondition}`;
-            await executeQuery('https://heasarc.gsfc.nasa.gov/xamin/vo/tap', adql, label, false); // clearImage = false
+            await executeQuery(tapUrl, adql, label, false);
             
         } catch (err: any) {
             alert(`Context Query Error: ${err.message}`);
@@ -183,6 +187,8 @@ const TAPQueryMenu = () => {
         }
     };
 
+    const heasarcTap = "https://heasarc.gsfc.nasa.gov/xamin/vo/tap";
+    const irsaTap = "https://irsa.ipac.caltech.edu/TAP";
     return (
         <>
             {/* The Catalogs Dropdown Menu */}
@@ -209,17 +215,25 @@ const TAPQueryMenu = () => {
                     <li>
                         <button 
                             className={`dropdown-item fv-dropdown-item d-flex align-items-center ${!imageData ? 'disabled fv-text-muted' : ''}`} 
-                            onClick={() => handleContextQuery('csc', 'Chandra Source Catalog')}
+                            onClick={() => handleContextQuery('csc', 'Chandra Source Catalog', heasarcTap)}
                         >
-                            <i className="bi bi-stars me-2 text-warning"></i> HEASARC Chandra
+                            HEASARC Chandra
                         </button>
                     </li>
                     <li>
                         <button 
                             className={`dropdown-item fv-dropdown-item d-flex align-items-center ${!imageData ? 'disabled fv-text-muted' : ''}`} 
-                            onClick={() => handleContextQuery('xmmssc', 'XMM Serendipitous Source Catalog ')}
+                            onClick={() => handleContextQuery('xmmssc', 'XMM Serendipitous Source Catalog', heasarcTap)}
                         >
-                            <i className="bi bi-stars me-2 text-warning"></i> HEASARC XMM
+                            HEASARC XMM
+                        </button>
+                    </li>
+                    <li>
+                        <button 
+                            className={`dropdown-item fv-dropdown-item d-flex align-items-center ${!imageData ? 'disabled fv-text-muted' : ''}`} 
+                            onClick={() => handleContextQuery('ztf_objects_dr24', 'ZTF DR24', irsaTap)}
+                        >
+                            ZTF DR24
                         </button>
                     </li>
                 </ul>
