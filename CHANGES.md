@@ -1,3 +1,7 @@
+# 0.3.4
+- Bug fixes:
+  - Fits Tables display should use full height.
+
 # 0.3.3
 - Add support for querying catalogs and displaying their results on an image.
 
