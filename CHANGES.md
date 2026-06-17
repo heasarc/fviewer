@@ -2,6 +2,7 @@
 - Add support for log scale plotting.
 - Bug fixes:
   - Fits Tables display should use full height.
+  - Fits tables should not be closable.
 
 # 0.3.3
 - Add support for querying catalogs and displaying their results on an image.
