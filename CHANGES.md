@@ -3,6 +3,7 @@
 - Bug fixes:
   - Fits Tables display should use full height.
   - Fits tables should not be closable.
+  - Fix: Loading a new file after an image+votable setup was not working.
 
 # 0.3.3
 - Add support for querying catalogs and displaying their results on an image.
