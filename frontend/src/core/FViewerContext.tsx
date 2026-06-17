@@ -133,7 +133,6 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
 
     // handle the logic of opening a file, from upload or from the API
     const processFile = async (file: File) => {
-        // You might need to import ALLOWED_EXTS and FITS_FORMATS at the top of this file!
         const fileName = file.name.toLowerCase();
         const isValid = ALLOWED_EXTS.some(ext => fileName.endsWith(ext));
         if (!isValid) {
@@ -143,7 +142,15 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
 
         setFileName(file.name);
         setIsLoading(true);
-        setActiveHdu(null); // Force UI wipe
+        
+        // --- Completely sanitize state before loading a new file ---
+        setActiveHdu(null); 
+        setActiveDataType('fits'); // Reset back to FITS mode (crucial if a VOTable was loaded)
+        setImageData(null);
+        setTableInfo(null);
+        setSelectedCatalogRow(null);
+        setRegions([]); // Wipe all regions from the previous image/catalog
+        // ------------------------------------------------------------
         
         try {
             let buffer: ArrayBuffer;
