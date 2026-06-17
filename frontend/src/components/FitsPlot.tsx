@@ -19,13 +19,16 @@ interface FitsPlotProps {
     subsetMode?: 'all' | 'range' | 'random';
     subsetRange?: [number, number];
     subsetRandomN?: number;
+    logX?: boolean;
+    logY?: boolean;
 }
 
 export const FitsPlot: React.FC<FitsPlotProps> = ({ 
     xData, yData, xErrData, yErrData, xLabel, yLabel, title, 
     plotType = 'scatter', numBins = 50,
     pointSize, pointColor,
-    subsetMode = 'all', subsetRange = [0, 10000], subsetRandomN = 10000
+    subsetMode = 'all', subsetRange = [0, 10000], subsetRandomN = 10000,
+    logX = false, logY = false
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const plotRef = useRef<uPlot | null>(null);
@@ -142,9 +145,14 @@ export const FitsPlot: React.FC<FitsPlotProps> = ({
         for (let i = startIndex; i <= endIndex; i++) {
             const xV = Number(xData[i]);
             if (!isNaN(xV)) {
+                // Skip non-positive values if X is logarithmic
+                if (logX && xV <= 0) continue;
+
                 if (plotType === 'histogram') {
                     indices[validCount++] = i;
                 } else if (yData && yData[i] != null && !isNaN(Number(yData[i]))) {
+                    const yV = Number(yData[i]);
+                    if (logY && yV <= 0) continue;
                     indices[validCount++] = i;
                 }
             }
@@ -191,6 +199,12 @@ export const FitsPlot: React.FC<FitsPlotProps> = ({
                 finalX = [min - binWidth/2, ...bins, max + binWidth/2];
                 finalY = [0, ...counts, 0];
                 actualYLabel = 'Count';
+
+                // If logY is true for a histogram, 0 counts will crash uPlot.
+                // We replace 0s with null so uPlot ignores them.
+                if (logY) {
+                    finalY = finalY.map(v => v <= 0 ? null : v) as any;
+                }
             }
         } 
         else {
@@ -248,7 +262,15 @@ export const FitsPlot: React.FC<FitsPlotProps> = ({
             height: 350,
             cursor: { drag: { x: true, y: true } },
             axes: [ { ...axisConfig, label: xLabel }, { ...axisConfig, label: actualYLabel } ],
-            scales: { x: { time: false }, y: { } },
+            scales: { 
+                x: { 
+                    time: false,
+                    distr: logX ? 3 : 1 // 3 = log10, 1 = linear
+                }, 
+                y: { 
+                    distr: logY ? 3 : 1
+                } 
+            },
             series: seriesList
         };
 
@@ -269,7 +291,8 @@ export const FitsPlot: React.FC<FitsPlotProps> = ({
         };
     }, [
         xData, yData, xErrData, yErrData, xLabel, yLabel, title, plotType, numBins,
-        pointSize, pointColor, subsetMode, subsetRange[0], subsetRange[1], subsetRandomN
+        pointSize, pointColor, subsetMode, subsetRange[0], subsetRange[1], subsetRandomN,
+        logX, logY
     ]);
 
     return <div className="w-100 h-100 d-flex justify-content-center align-items-center" ref={containerRef} />;

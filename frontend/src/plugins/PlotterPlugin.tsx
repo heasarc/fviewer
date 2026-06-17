@@ -44,6 +44,9 @@ const PlotterSidebar = () => {
     const [plotSubsetEnd, setPlotSubsetEnd] = useState<number>(10000);
     const [plotSubsetRandomN, setPlotSubsetRandomN] = useState<number>(10000);
 
+    const [plotLogX, setPlotLogX] = useState<boolean>(false);
+    const [plotLogY, setPlotLogY] = useState<boolean>(false);
+
     // Fetch full columns ONLY when they are selected AND the plotter is visible
     useEffect(() => {
         // Protect the render: Must have a FITS HDU OR a VOTable
@@ -169,6 +172,11 @@ const PlotterSidebar = () => {
                                                 {plotType !== 'histogram' && tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
                                             </select>
                                         </div>
+                                        {/* Log X Switch */}
+                                        <div className="form-check form-switch mt-2">
+                                            <input className="form-check-input" type="checkbox" role="switch" id="logXSwitch" checked={plotLogX} onChange={(e) => setPlotLogX(e.target.checked)} />
+                                            <label className="form-check-label text-white" htmlFor="logXSwitch" style={{ fontSize: '0.75rem' }}>Log Scale (X)</label>
+                                        </div>
                                     </div>
 
                                     {/* Right Column: Y and ErrY */}
@@ -190,6 +198,11 @@ const PlotterSidebar = () => {
                                                 <option value="">None</option>
                                                 {plotType !== 'histogram' && tableInfo.columns.map((c: any) => <option key={c.name} value={c.name}>{c.name}</option>)}
                                             </select>
+                                        </div>
+                                        {/* Log Y Switch */}
+                                        <div className="form-check form-switch mt-2">
+                                            <input className="form-check-input" type="checkbox" role="switch" id="logYSwitch" checked={plotLogY} onChange={(e) => setPlotLogY(e.target.checked)} disabled={plotType === 'histogram' && plotLogY === false /* optional UX tweak */} />
+                                            <label className="form-check-label text-white" htmlFor="logYSwitch" style={{ fontSize: '0.75rem' }}>Log Scale (Y)</label>
                                         </div>
                                     </div>
                                 </div>
@@ -304,7 +317,9 @@ const PlotterSidebar = () => {
                                                 pointColor={plotPointColor}
                                                 subsetMode={plotSubsetMode}
                                                 subsetRange={[plotSubsetStart, plotSubsetEnd]}
-                                                subsetRandomN={plotSubsetRandomN} 
+                                                subsetRandomN={plotSubsetRandomN}
+                                                logX={plotLogX}
+                                                logY={plotLogY}
                                             />
                                         </div>
                                     ) : (
