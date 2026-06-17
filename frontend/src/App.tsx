@@ -470,7 +470,8 @@ function App() {
                                                     <span className="badge bg-secondary ms-2">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
                                                 </div>
                                                 
-                                                {/* NEW: Clear Catalog Button */}
+                                                {/* Clear Catalog Button; show only if displayed along with image data */}
+                                                {(imageData && imageData.width > 0) &&
                                                 <button 
                                                     className="btn btn-sm btn-link text-white p-0 m-0 border-0" 
                                                     onClick={handleClearCatalog}
@@ -481,6 +482,7 @@ function App() {
                                                 >
                                                     <i className="bi bi-x-lg"></i>
                                                 </button>
+                                                }
                                             </div>
                                             
                                             {/* Only render the table body if the drawer is open */}
