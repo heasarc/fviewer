@@ -354,7 +354,7 @@ function App() {
                             <li className="nav-item dropdown">
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">About</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
-                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.3.3</span></li>
+                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.3.4</span></li>
                                 </ul>
                             </li>
 
@@ -446,9 +446,16 @@ function App() {
                                         <div 
                                             className="fv-panel-box d-flex flex-column shadow-sm border-0" 
                                             style={{ 
-                                                flex: 'none', 
-                                                height: isTableDrawerOpen ? `${tableHeight}px` : 'auto',
-                                                minHeight: isTableDrawerOpen ? `${tableHeight}px` : 'auto',
+                                                // CONDITIONAL LAYOUT:
+                                                // If there is an image above, stick to the fixed dragged height.
+                                                // If there is no image, grow to fill the entire workspace (flex: 1).
+                                                flex: (imageData && imageData.width > 0) ? 'none' : '1', 
+                                                height: isTableDrawerOpen 
+                                                    ? ((imageData && imageData.width > 0) ? `${tableHeight}px` : '100%') 
+                                                    : 'auto',
+                                                minHeight: isTableDrawerOpen 
+                                                    ? ((imageData && imageData.width > 0) ? `${tableHeight}px` : '0') 
+                                                    : 'auto',
                                             }}
                                         >
                                             <div 
