@@ -28,3 +28,6 @@ dist-ssr
 *pyc
 .vitest-attachments
 __screenshots__
+coverage_html_report
+frontend/coverage
+.coverage
