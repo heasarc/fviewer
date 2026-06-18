@@ -1,93 +1,106 @@
-# FV
+# FViewer: Quickstart Guide
 
+Welcome to **FViewer**, a modern, browser-based astronomical FITS file viewer designed to replace traditional desktop tools like `fv` and `ds9`. 
 
+FViewer provides a fast, hardware-accelerated web UI combined with a powerful bidirectional Python API, allowing you to control the viewer and extract data directly from your Jupyter Notebooks.
 
-## Getting started
+## Installation & Setup
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+Ensure you have FViewer installed in your current Python environment:
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://sed-gitlab.gsfc.nasa.gov/heasarc/heasoft/fv.git
-git branch -M main
-git push -uf origin main
+```bash
+pip install fviewer
 ```
 
-## Integrate with your tools
+Start the FViewer backend server and UI in your terminal (or it may be auto-started by your JupyterHub environment):
+```bash
+fviewer
+```
+This will automatically open a browser window to the application at `http://127.0.0.1:8000`.
 
-- [ ] [Set up project integrations](https://sed-gitlab.gsfc.nasa.gov/heasarc/heasoft/fv/-/settings/integrations)
+You specify custom host and port by passing them to the command line.
 
-## Collaborate with your team
+Calling `fviewer` with a file name will load it automatically.
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+---
 
-## Test and Deploy
+## Python API Tutorial
 
-Use the built-in continuous integration in GitLab.
+The easiest way to use FViewer is alongside a Jupyter Notebook. This allows you to load files, adjust image parameters, and retrieve drawn regions programmatically.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+### 1. Connect to the Viewer
+First, import the client and connect it to your open browser tab.
 
-***
+```python
+from fviewer import FViewer
 
-# Editing this README
+# Initialize the client (defaults to localhost:8000)
+viewer = FViewer()
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+# Block execution until the browser tab is open and connected
+viewer.wait_for_ready(timeout=15)
+```
 
-## Suggestions for a good README
+### 2. Load a FITS File
+Use the `load_file` method to open a FITS file. 
+*Note: For security reasons, the file path must be relative to the directory where you started the FViewer server.*
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```python
+# Loads the file into the UI and automatically displays the Primary HDU
+viewer.load_file("data/m51_chandra.fits")
+```
 
-## Name
-Choose a self-explaining name for your project.
+### 3. Adjust Image Settings
+You can easily adjust the image scaling and colormap to highlight different features in your astronomical data.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+```python
+# Check current settings
+print("Current Colormap:", viewer.get_colormap())
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+# Apply a new stretch and colormap
+viewer.set_stretch("log")
+viewer.set_colormap("plasma") # Options: 'gray', 'heat', 'cool', 'plasma'
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### 4. Programmatic Regions
+You can push mathematical regions from your Python code directly to the FViewer canvas.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+```python
+# Draw a red circle at Pixel X=500, Y=500 with a radius of 50
+viewer.add_circle(x=500, y=500, radius=50, color="#ff0000")
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+# Draw an elliptical background region
+viewer.add_ellipse(
+    x=450, y=450, rx=100, ry=50, 
+    angle=45, color="#00ffff", 
+    is_background=True
+)
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+### 5. Extracting Data Back to Jupyter
+If you draw regions manually using your mouse in the FViewer UI, you can instantly pull those coordinates back into Python for analysis.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+```python
+# Retrieve all drawn regions in World Coordinate System (RA/Dec)
+regions = viewer.get_regions(format="fk5")
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+for reg in regions:
+    print(f"Type: {reg['type']}, RA: {reg['ra']:.5f}, Dec: {reg['dec']:.5f}")
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+# Save the current UI regions to a DS9-compatible .reg file on disk
+viewer.save_regions("my_science_regions.reg", format="fk5")
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+---
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+## User Interface Overview
 
-## License
-For open source projects, say how it is licensed.
+If you prefer to work manually, the FViewer UI is designed like a compact Desktop IDE:
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+* **Left Sidebar (HDU List):** Shows all extensions in your FITS file. Clicking an `IMAGE` extension opens the image viewer. Clicking a `BINTABLE` extension opens the massive-scale Virtual Table.
+* **Image Viewer:** 
+  * **Pan/Zoom:** Use your mouse wheel to zoom in/out natively. Click and drag to pan around the image.
+  * **Regions:** Use the `Regions` dropdown to select drawing tools (Circle, Box, Ellipse, Annulus). Click and drag on the image to draw. Select a region and press `Delete` to remove it.
+  * **Status Bar:** Look at the bottom of the screen to see real-time Pixel coordinates, Flux values, and WCS (RA/Dec) coordinates.
+* **Virtual Table:** Double-click any cell to edit it. The table uses lazy-loading, meaning you can scroll through millions of rows instantly without crashing your browser.
+* **Right Sidebar (Plotter):** Toggle the plotter using the top menu to create interactive 1D Histograms and 2D Scatter plots based on your table data or image regions.

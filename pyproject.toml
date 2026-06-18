@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling>=1.21.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fviewer"
+dynamic = ["version"]
+description = "A modern, browser-based astronomical FITS file viewer"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.100.0",
+    "requests>=2.33.1",
+    "uvicorn>=0.23.0",
+    "websockets>=11.0",
+]
+license = { file = "LICENSE" }
+
+authors = [
+    { name = "Abdu Zoghbi", email = "a.zoghbi@nasa.gov" },
+]
+
+[project.scripts]
+# This exposes the "fviewer" command line tool
+fviewer = "fviewer.cli:main"
+
+[tool.hatch.version]
+path = "fviewer/__init__.py"
+
+
+
+[dependency-groups]
+dev = [
+    "hatchling>=1.29.0",
+    "httpx>=0.28.1",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+    "pytest-playwright>=0.7.2",
+    "responses>=0.26.0",
+    "uvicorn>=0.46.0",
+]
+
+[tool.hatch.build.targets.wheel]
+# Tell the builder to include our Python code and the compiled Vite static files
+packages = ["fviewer"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/fviewer",
+    "/fviewer/static",
+    "LICENSE",
+    "3rd-party-licenses"
+]
+exclude = [
+    "/.git",
+    "/frontend/node_modules",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Asyncio settings
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+# (Optional but helpful) add the root directory to PYTHONPATH
+# so pytest can easily import the `fviewer` package without
+# forcing you to run `pip install -e .` every time you test.
+pythonpath = ["."]
