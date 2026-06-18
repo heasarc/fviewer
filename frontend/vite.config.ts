@@ -36,5 +36,16 @@ export default defineConfig({
     },
     // Pattern to find your tests
     include: ['tests/**/*.test.{ts,tsx}'],
+    
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      include: ['src/**/*.{ts,tsx}'], 
+      exclude: [
+        'src/**/*.d.ts', 
+        'src/**/*.worker.ts',
+        'tests/**'
+      ]
+    }
   },
 })

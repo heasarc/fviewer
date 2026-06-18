@@ -1,23 +1,17 @@
-// src/vo.worker.ts
-// Import the default export (init) along with fromXML
+// frontend/src/workers/vo.core.ts
 import init, { fromXML } from 'votable-wasm'; 
-
 import wasmUrl from 'votable-wasm/vot_bg.wasm?url'; 
 
-let activeTableCache: Record<string, any> = {};
-let tableMetadata = { numRows: 0, numCols: 0, colNames: [] as string[] };
-let isWasmInitialized = false;
+export class VOCore {
+    activeTableCache: Record<string, any> = {};
+    tableMetadata = { numRows: 0, numCols: 0, colNames: [] as string[] };
+    isWasmInitialized = false;
 
-// Note: Made the handler async!
-self.onmessage = async (e: MessageEvent) => {
-    const { id, action, payload } = e.data;
-
-    try {
+    async processCommand(action: string, payload: any): Promise<{ data?: any, transferables?: ArrayBuffer[] }> {
         // 1. Initialize WASM before doing anything else
-        if (!isWasmInitialized) {
+        if (!this.isWasmInitialized) {
             await init({ module_or_path: wasmUrl }); 
-            
-            isWasmInitialized = true;
+            this.isWasmInitialized = true;
         }
 
         switch (action) {
@@ -63,85 +57,81 @@ self.onmessage = async (e: MessageEvent) => {
                     rows = table.data.rows || table.data.stream?.rows || [];
                 }
 
-                tableMetadata.numRows = rows.length;
-                tableMetadata.numCols = fields.length;
-                tableMetadata.colNames = fields.map((f: any) => f.name);
+                this.tableMetadata.numRows = rows.length;
+                this.tableMetadata.numCols = fields.length;
+                this.tableMetadata.colNames = fields.map((f: any) => f.name);
 
-                activeTableCache = {};
+                this.activeTableCache = {};
                 fields.forEach((field: any, colIdx: number) => {
                     const colName = field.name;
                     // Double/float mapping based on datatype
                     const isNumeric = field.datatype === 'double' || field.datatype === 'float';
                     
-                    activeTableCache[colName] = isNumeric 
+                    this.activeTableCache[colName] = isNumeric 
                         ? new Float64Array(rows.length) 
                         : new Array(rows.length);
                     
                     for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
-                        activeTableCache[colName][rowIdx] = rows[rowIdx][colIdx];
+                        this.activeTableCache[colName][rowIdx] = rows[rowIdx][colIdx];
                     }
                 });
 
                 // Clear the parsed array for Garbage Collection
                 rows.length = 0;
 
-                self.postMessage({ id, success: true, data: { metadata: tableMetadata } });
-                break;
+                return { data: { metadata: this.tableMetadata } };
             }
+
             // --- CHUNKED ROWS (FOR VIRTUAL TABLE) ---
             case 'READ_TABLE_CHUNK': {
                 const { startRow, endRow } = payload;
                 const chunkData: Record<string, any> = {};
                 const transferables: ArrayBuffer[] = [];
 
-                tableMetadata.colNames.forEach((colName) => {
-                    const fullCol = activeTableCache[colName];
+                this.tableMetadata.colNames.forEach((colName) => {
+                    const fullCol = this.activeTableCache[colName];
                     if (!fullCol) return;
 
                     if (ArrayBuffer.isView(fullCol)) {
                         // Slice creates a new underlying ArrayBuffer view
                         const chunk = (fullCol as any).slice(startRow, endRow + 1);
                         chunkData[colName] = chunk;
-                        transferables.push(chunk.buffer); // Zero-copy transfer
+                        transferables.push(chunk.buffer as ArrayBuffer); // Zero-copy transfer, cast for strict TS
                     } else {
                         // Standard JS Array (strings)
                         chunkData[colName] = fullCol.slice(startRow, endRow + 1);
                     }
                 });
 
-                (self as any).postMessage({ id, success: true, data: chunkData }, transferables);
-                break;
+                return { data: chunkData, transferables };
             }
 
             // --- FULL COLUMN (FOR PLOTTER) ---
             case 'READ_COLUMN': {
                 // FITS uses colNum (1-indexed), VOTable might be queried by colName or colNum
                 const colIndex = payload.colNum !== undefined ? payload.colNum - 1 : -1;
-                const name = payload.colName || tableMetadata.colNames[colIndex];
+                const name = payload.colName || this.tableMetadata.colNames[colIndex];
                 
-                if (!name || !activeTableCache[name]) {
+                if (!name || !this.activeTableCache[name]) {
                     throw new Error(`Column not found`);
                 }
 
-                const fullCol = activeTableCache[name];
+                const fullCol = this.activeTableCache[name];
                 const transferables: ArrayBuffer[] = [];
                 let sendData: any = fullCol;
 
                 if (ArrayBuffer.isView(fullCol)) {
                     // Clone our safe JS cache so we don't lose access to it in the worker
                     const transferClone = (fullCol as any).slice();
-                    transferables.push(transferClone.buffer);
+                    transferables.push(transferClone.buffer as ArrayBuffer); // Cast for strict TS
                     sendData = transferClone;
                 }
 
                 // Mimic the exact { data: ... } wrapping that fits.worker.ts uses
-                (self as any).postMessage({ id, success: true, data: { data: sendData } }, transferables);
-                break;
+                return { data: { data: sendData }, transferables };
             }
             default:
-                self.postMessage({ id, success: false, error: "Unknown action" });
+                throw new Error("Unknown action");
         }
-    } catch (error: any) {
-        self.postMessage({ id, success: false, error: error.message });
     }
-};
+}

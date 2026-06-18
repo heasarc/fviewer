@@ -1,3 +1,7 @@
+# 0.3.5
+- Improvements on testing infrastrucutre and coverage:
+  - Internal refactoring of fits and vo workers enable testing.
+
 # 0.3.4
 - Add support for log scale plotting.
 - Bug fixes:
