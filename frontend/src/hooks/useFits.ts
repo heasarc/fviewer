@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 
 // Vite specific import for web workers
-import FitsWorker from '../fits.worker?worker';
+import FitsWorker from '../workers/fits.worker?worker';
 
 interface WorkerResponse {
     id: number;

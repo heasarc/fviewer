@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import VOWorker from '../vo.worker?worker';
+import VOWorker from '../workers/vo.worker?worker';
 
 interface WorkerResponse {
     id: number;
