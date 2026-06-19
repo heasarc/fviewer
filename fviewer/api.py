@@ -44,6 +44,7 @@ class FViewer(ImageControlMixin, RegionsMixin, DataCubeMixin):
                                       remote JupyterLab environments).
             client_id (str, optional): Target a specific connected browser tab.
         """
+        default_url = 'http://127.0.0.1:8000/api'
         if base_url is not None:
             self.base_url = base_url
         elif host is None or port is None:
@@ -51,12 +52,11 @@ class FViewer(ImageControlMixin, RegionsMixin, DataCubeMixin):
             url = os.environ.get('JUPYTER_SERVER_URL')
             if url is None:
                 url = os.environ.get('JUPYTERHUB_SERVICE_URL')
-                if url is None:
-                    raise ValueError(
-                        'Unable to figure out the url. '
-                        'No base_url, or (host, port) are passed.'
-                    )
-            self.base_url = urljoin(url, 'fviewer/api')
+            if url is None:
+                # fall back to the default
+                self.base_url = default_url
+            else:
+                self.base_url = urljoin(url, 'fviewer/api')
         else:
             self.base_url = f"http://{host}:{port}/api"
 
