@@ -38,13 +38,12 @@ def test_initialization_jupyterhub_service_url(monkeypatch):
 
 
 def test_initialization_missing_all_urls(monkeypatch):
-    """Test ValueError is raised if no URL or env vars are provided."""
+    """Test default url if no URL or env vars are provided."""
     monkeypatch.delenv("JUPYTER_SERVER_URL", raising=False)
     monkeypatch.delenv("JUPYTERHUB_SERVICE_URL", raising=False)
 
-    with pytest.raises(ValueError) as exc:
-        FViewer()
-    assert "Unable to figure out the url" in str(exc.value)
+    fv = FViewer()
+    assert fv.base_url == 'http://127.0.0.1:8000/api'
 
 
 def test_initialization_auth_token(monkeypatch):
