@@ -116,10 +116,16 @@ export const parseDS9Regions = async (
             if (coordSystem === 'physical') {
                 cx = (physicalTransform.ltm1_1 * args[0]) + physicalTransform.ltv1;
                 cy = (physicalTransform.ltm2_2 * args[1]) + physicalTransform.ltv2;
-                pxRadius = args[2] * Math.abs(physicalTransform.ltm1_1);
                 pxWidth = args[2] * Math.abs(physicalTransform.ltm1_1);
                 pxHeight = args[3] * Math.abs(physicalTransform.ltm2_2);
-                pxInner = args[2] * Math.abs(physicalTransform.ltm1_1);
+                
+                if (type === 'annulus') {
+                    pxInner = args[2] * Math.abs(physicalTransform.ltm1_1);
+                    pxRadius = args[3] * Math.abs(physicalTransform.ltm1_1);
+                } else {
+                    pxRadius = args[2] * Math.abs(physicalTransform.ltm1_1);
+                    pxInner = pxRadius / 2;
+                }
             } else if (coordSystem !== 'image') {
                 // --- WCS to Image: Use exact WCS offsets to find pixel sizes ---
                 const cp = await worldToPix(args[0], args[1]);
@@ -142,10 +148,19 @@ export const parseDS9Regions = async (
                         if (ex) pxWidth = Math.hypot(ex.x - cp.x, ex.y - cp.y);
                         if (ey) pxHeight = Math.hypot(ey.x - cp.x, ey.y - cp.y);
                     }
+                } else {
+                    continue; // Fix 3: Skip region if WCS origin conversion fails
                 }
             } else {
                 // Pure Image coords
-                pxRadius = args[2]; pxWidth = args[2]; pxHeight = args[3]; pxInner = args[2];
+                pxWidth = args[2]; pxHeight = args[3]; 
+                if (type === 'annulus') {
+                    pxInner = args[2];
+                    pxRadius = args[3];
+                } else {
+                    pxRadius = args[2];
+                    pxInner = pxRadius / 2;
+                }
             }
 
             cy = height - cy; // FITS to SVG origin
