@@ -7,6 +7,7 @@ import threading
 import os
 import sys
 from fviewer.server import app
+from fviewer.api import FViewer
 
 
 def open_browser(url: str):
@@ -16,7 +17,6 @@ def open_browser(url: str):
 
 def open_file_on_startup(filepath, host="127.0.0.1", port=8000):
     """Run in a background thread to wait for the UI and load a file"""
-    from fviewer.api import FViewer
     fv = FViewer(host=host, port=port)
     try:
         fv.wait_for_ready()
@@ -36,20 +36,16 @@ def main():
     parser.add_argument(
         "--host", type=str, default="127.0.0.1", help="Host IP")
     parser.add_argument(
-        "--no-browser", action="store_true",
+        "--no-browser", action="store_true", default=False,
         help="Don't open the browser automatically")
 
     args = parser.parse_args()
     url = f"http://{args.host}:{args.port}"
 
-    print(f"Starting FViewer on {url}")
-
-    # Schedule the browser to open 1 second from now in a background thread
-    if not args.no_browser:
-        threading.Timer(1.0, open_browser, args=(url,)).start()
-
+    # do the check here before starting the browser
+    abs_path = None
     if args.filepath:
-        abs_path = os.path.abspath(args.filepath)
+        abs_path = abs_path = os.path.abspath(args.filepath)
         if not os.path.exists(abs_path):
             print(f"Error: File not found -> {abs_path}")
             sys.exit(1)
@@ -60,6 +56,12 @@ def main():
             args=(abs_path, args.host, args.port),
             daemon=True
         ).start()
+
+    print(f"Starting FViewer at {url}")
+
+    # Schedule the browser to open 1 second from now in a background thread
+    if not args.no_browser:
+        threading.Timer(1.0, open_browser, args=(url,)).start()
 
     # Launch FastAPI (this blocks the main thread)
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
