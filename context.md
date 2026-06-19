@@ -54,10 +54,9 @@ The FastAPI server is divided using `APIRouter`.
 5. **State Management**: Manages two separate data pools to prevent UI freezing:
     - tableData: Holds tiny 100-row chunks for the VirtualTable.
     - fullPlotData: Holds full-length columns for the Plotter (fetched eagerly via Transferable Objects only when the plotter panel is open, tracked via fetchedPlotColumns ref to prevent request spam).
-6. **Web Workers:**
-    - **`fits.worker.ts`:** Wraps C++ WASM (`cfitsio`). Handles `READ_TABLE_CHUNK` and `READ_COLUMN` by returning zero-copy Transferable Objects (ArrayBuffers) to the main thread for 0ms transfer times. Extracts multidimensional data cubes via bindings.
-    - **`vo.worker.ts`:** Wraps Rust WASM (`cds-votable-rust`). Parses ADQL XML payloads. Transposes the heavily nested Serde-generated JSON into flat columnar `TypedArrays` and actively garbage collects the JSON objects to save RAM. Perfectly mimics the `Transferable` message payload contract of the FITS worker so the React frontend requires zero code changes to display VOTables.
-
+6. **Web Workers (`src/workers/`):** Uses a "Core Logic Split" pattern. The business logic is written in classes (`fits.core.ts`, `vo.core.ts`) and imported into thin wrapper files (`fits.worker.ts`, `vo.worker.ts`) to allow background threading in production while enabling synchronous, 100% covered main-thread testing in Vitest.
+    - **`fits.core.ts`:** Wraps C++ WASM (`cfitsio`). Handles `READ_TABLE_CHUNK` and `READ_COLUMN` by returning zero-copy Transferable Objects (ArrayBuffers) to the main thread for 0ms transfer times. Extracts multidimensional data cubes via bindings.
+    - **`vo.core.ts`:** Wraps Rust WASM (`cds-votable-rust`). Parses ADQL XML payloads. Transposes the heavily nested Serde-generated JSON into flat columnar `TypedArrays` and actively garbage collects the JSON objects to save RAM. Perfectly mimics the `Transferable` message payload contract of the FITS worker so the React frontend requires zero code changes to display VOTables.
 7. **Regions:**
    * `useRegions.ts` (Hook): Manages local drawing modes (pan, circle, box, ellipse, annulus), drafts, and the mathematical calculations for dragging, resizing, and rotating shapes on the canvas.
    * `RegionOverlay.tsx`: A stateless SVG component overlay sitting on top of the canvas. Renders shapes, hit-detection areas, and interactive drag handles. Visually distinguishes background regions with dashed outlines.
@@ -65,9 +64,9 @@ The FastAPI server is divided using `APIRouter`.
    * Regions can be saved/loaded to DS9-style `.reg` text files.
 
 #### Testing Strategy
-*   **Frontend & WASM (Vitest + Playwright):** Runs in "Browser Mode" to natively test Web Workers and WASM initializations. Uses a custom `PluginTestWrapper` that creates a mock `FViewerContext` with dummy workers (`fitsWorker`, `voWorker`) and data states to test isolated plugin rendering.
-*   **FastAPI Backend (Pytest + HTTPX):** Validates security (e.g., path traversal prevention). Asynchronous WebSocket routing and `send_and_wait` Futures are tested using pure `asyncio` to avoid FastAPI `TestClient` deadlocks.
-*   **Python Client (Pytest + Responses):** Mocks REST calls to validate JSON payload formatting, dynamic session connection logic, and authentication token injection. Modular tests (`test_plugin_regions.py`) mocking the REST/WebSocket responses to ensure correct JSON payloads are generated.
+*   **Frontend & WASM (Vitest + Playwright + V8):** Runs in "Browser Mode" to natively test Web Workers and WASM initializations. Generate coverage metrics. We use a custom `PluginTestWrapper` that creates a mock `FViewerContext` to test isolated plugin rendering. The Web Worker logic (`*.core.ts`) is tested synchronously on the main thread to ensure ~100% V8 coverage tracking.
+*   **FastAPI Backend (Pytest + HTTPX + pytest-cov):** Fully covered (100%). Validates security (e.g., path traversal prevention uses `monkeypatch` and `tmp_path`). Asynchronous WebSocket routing and `send_and_wait` Futures are tested using pure `asyncio` and dummy mocks to avoid FastAPI `TestClient` deadlocks.
+*   **Python Client (Pytest + Responses + pytest-cov):** Fully covered (100%). Mocks REST calls using the `responses` library to validate JSON payload formatting, dynamic session connection logic (Jupyter env vars), and authentication token injection. CLI is tested via `unittest.mock.patch` to intercept system and thread calls.
 *   **End-to-End (Pytest-Playwright):** Starts a live `uvicorn` server and headless Chromium browser. Validates the complete bidirectional loop: Python API sends a command -> WebSocket routes it -> React/WASM processes it -> Playwright asserts the actual DOM/canvas updates.
 *   **React Plugins (`Vitest + Testing Library`):** We use a custom `PluginTestWrapper` that creates a mock `FViewerContext`. This allows us to mount and test individual plugins (UI rendering and WebSocket command execution) in total isolation without mounting the heavy Canvas/App components.
 
