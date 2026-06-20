@@ -55,7 +55,7 @@ const ImageControlPluginComponent = () => {
                 <ul className="dropdown-menu fv-dropdown-menu shadow">
                     <li><button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('linear')}><span style={{ width: '16px' }}>{stretch === 'linear' && <i className="bi bi-check2"></i>}</span> Linear</button></li>
                     <li><button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('log')}><span style={{ width: '16px' }}>{stretch === 'log' && <i className="bi bi-check2"></i>}</span> Log</button></li>
-                    <li><button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('sqrt')}><span style={{ width: '16px' }}>{stretch === 'sqrt' && <i className="bi bi-check2"></i>}</span> Square Root</button></li>
+                    <li><button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('square root')}><span style={{ width: '16px' }}>{stretch === 'square root' && <i className="bi bi-check2"></i>}</span> Square Root</button></li>
                     <li><button className="dropdown-item fv-dropdown-item" onClick={() => setStretch('asinh')}><span style={{ width: '16px' }}>{stretch === 'asinh' && <i className="bi bi-check2"></i>}</span> ASINH</button></li>
                 </ul>
             </div>

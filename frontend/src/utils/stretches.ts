@@ -9,7 +9,7 @@ export function applyStretch(norm: number, stretch: string): number {
         case 'log':
             // Logarithmic: Enhances faint details (a=1000 is standard ds9)
             return Math.log10(v * 1000 + 1) / 3.000434; 
-        case 'sqrt':
+        case 'square root':
             // Square Root: Good balance between linear and log
             return Math.sqrt(v);
         case 'asinh':
