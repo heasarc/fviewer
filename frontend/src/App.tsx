@@ -466,7 +466,7 @@ function App() {
                                             >
                                                 <div>
                                                     <i className={`bi ${isTableDrawerOpen ? 'bi-chevron-down' : 'bi-chevron-right'} me-2`}></i>
-                                                    <span><i className="bi bi-table me-2"></i> Binary Table</span>
+                                                    <span><i className="bi bi-table me-2"></i>Table</span>
                                                     <span className="badge bg-secondary ms-2">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
                                                 </div>
                                                 
