@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useCore } from '../core/FViewerContext';
 import { pluginManager } from '../core/PluginManager';
+import { getApiUrl } from '../hooks/useWebSocket';
 
 const TAPQueryMenu = () => {
     const { 
@@ -12,7 +13,7 @@ const TAPQueryMenu = () => {
 
     const [isOpen, setIsOpen] = useState(false);
     const [tapUrl, setTapUrl] = useState('https://heasarc.gsfc.nasa.gov/xamin/vo/tap');
-    const [query, setQuery] = useState("SELECT TOP 100 name,ra,dec FROM numaster");
+    const [query, setQuery] = useState("SELECT TOP 100 * FROM ivoa.obscore");
     const [isFetching, setIsFetching] = useState(false);
 
     // General handler for both manual ADQL and automatic Image overlays
@@ -22,7 +23,7 @@ const TAPQueryMenu = () => {
         
         try {
             // 1. Fetch via our FastAPI proxy to bypass CORS
-            const response = await fetch(`/api/tap-proxy`, {
+            const response = await fetch(getApiUrl(`api/tap-proxy`), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: targetUrl, query: adqlQuery })
