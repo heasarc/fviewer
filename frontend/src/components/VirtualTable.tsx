@@ -327,6 +327,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                     className="d-flex fw-bold shadow-sm position-sticky top-0 border-bottom" 
                     style={{ 
                         width: totalWidth, height: '40px', zIndex: 3, 
+                        borderLeft: '4px solid transparent',
                         backgroundColor: 'var(--fv-panel-hover)', color: 'var(--fv-accent)'
                     }}
                 >
