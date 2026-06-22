@@ -1,6 +1,10 @@
 # 0.3.5
 - Improvements on testing infrastrucutre and coverage:
   - Internal refactoring of fits and vo workers to enable testing.
+- Bug fixes:
+  - Fix the url for tap-proxy when running inside jupyterlab
+  - Fix UI borders for tables
+  - Fix region calculations math.
 
 # 0.3.4
 - Add support for log scale plotting.
