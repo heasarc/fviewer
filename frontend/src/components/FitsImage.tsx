@@ -155,7 +155,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
      */
     useEffect(() => {
         const ctx = canvasRef.current?.getContext('2d');
-        if (!ctx) return;
+        if (!ctx || width === 0 || height === 0) return;
         const imgData = ctx.createImageData(width, height);
         const range = max - min;
         const lut = getColormapLUT(colormap);

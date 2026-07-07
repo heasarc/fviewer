@@ -1,6 +1,8 @@
 # 0.3.6
  - Enhancements:
    - Header menu is now View/Edit instead of just Edit.
+ - Bug fixes:
+   - HDU images with 0 width or height.
 
 # 0.3.5
 - Improvements on testing infrastrucutre and coverage:
