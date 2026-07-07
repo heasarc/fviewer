@@ -1,3 +1,7 @@
+# 0.3.6
+ - Enhancements:
+   - Header menu is now View/Edit instead of just Edit.
+
 # 0.3.5
 - Improvements on testing infrastrucutre and coverage:
   - Internal refactoring of fits and vo workers to enable testing.

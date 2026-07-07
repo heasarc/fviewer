@@ -47,7 +47,7 @@ const HeaderEditorPluginComponent = () => {
                     onClick={() => setIsOpen(true)} 
                     disabled={!activeHdu}
                 >
-                    <i className="bi bi-card-heading"></i> Edit Header
+                    <i className="bi bi-card-heading"></i> View/Edit Header
                 </button>
             </li>
 

@@ -344,6 +344,7 @@ function App() {
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">View</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
                                     <li><button className="dropdown-item fv-dropdown-item"><i className="bi bi-aspect-ratio"></i> Reset View</button></li>
+                                    <ExtensionSlot name="menubar:view" />
                                 </ul>
                             </li>
 
@@ -354,7 +355,7 @@ function App() {
                             <li className="nav-item dropdown">
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">About</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
-                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.3.5</span></li>
+                                    <li><span className="dropdown-item fv-dropdown-item">FViewer Version: 0.3.6</span></li>
                                 </ul>
                             </li>
 
