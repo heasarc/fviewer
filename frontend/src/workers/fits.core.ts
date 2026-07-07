@@ -217,7 +217,7 @@ export class FitsCore {
                             // If it's strings, postMessage handles it normally, no transferables needed
                         }
                     } else {
-                        chunkData[colInfo.name] = new Array(numRowsToRead).fill('Unsupported');
+                        chunkData[colInfo.name] = new Array(numRowsToRead).fill('');
                     }
                 }
 
