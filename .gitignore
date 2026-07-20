@@ -31,3 +31,4 @@ __screenshots__
 coverage_html_report
 frontend/coverage
 .coverage
+site

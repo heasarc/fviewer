@@ -2,14 +2,20 @@ site_name: FViewer Documentation
 site_url: https://heasarc.github.io/fviewer/
 theme:
   name: material
+  logo: app/fviewer-logo.svg
+  favicon: app/fviewer-logo.svg
   # palette:
   #   scheme: slate
 nav:
   - Getting Started: index.md
+  - 🚀 Launch FViewer: app/index.html
   - The Workspace: workspace.md
   - Regions and Catalogs: regions-catalogs.md
-  - Python API: python-api.md
+  - Python interactions: python-api.md
   - Architecture & Contributing: architecture.md
+  - API Reference: 
+      - Core Client: api-core.md
+      - Client Plugins: api-plugins.md
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -18,3 +24,14 @@ markdown_extensions:
       pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.superfences
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [./fviewer/]
+          options:
+            docstring_style: google # Or 'numpy' or 'sphinx'
+            show_root_heading: true
+            show_source: true
