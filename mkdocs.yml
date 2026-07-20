@@ -8,7 +8,7 @@ theme:
   #   scheme: slate
 nav:
   - Getting Started: index.md
-  - 🚀 Launch FViewer: app/index.html
+  - FViewer Demo: demo.md
   - The Workspace: workspace.md
   - Regions and Catalogs: regions-catalogs.md
   - Python interactions: python-api.md
