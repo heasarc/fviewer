@@ -64,12 +64,3 @@ To use the standalone version:
 2. Drag and drop your `.fits` or `.vot` file directly into the browser window, or click **Open File** to select one from your computer. 
 
 Because all the heavy lifting (like image processing and coordinate math) is done securely inside your browser using WebAssembly, **your data never leaves your computer**.
-
-***
-
-### What's Next?
-Let me know what you think of this tone and structure! 
-
-Regarding the "Browser-Only Mode", the standard practice for a Vite-built React app is to deploy the `dist` folder to GitHub Pages (or a similar static host). Users just go to the URL and drag-and-drop their files into the browser. Does that sound like the right approach for your static version? 
-
-If this looks good, we can move on to the **User Interface Guide (The Workspace)** next!
