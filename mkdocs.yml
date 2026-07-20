@@ -1,0 +1,20 @@
+site_name: FViewer Documentation
+site_url: https://heasarc.github.io/fviewer/
+theme:
+  name: material
+  # palette:
+  #   scheme: slate
+nav:
+  - Getting Started: index.md
+  - The Workspace: workspace.md
+  - Regions and Catalogs: regions-catalogs.md
+  - Python API: python-api.md
+  - Architecture & Contributing: architecture.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
