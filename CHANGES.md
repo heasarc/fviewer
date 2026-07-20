@@ -1,4 +1,5 @@
 # 0.3.6
+ - Add docs and gh publishing.
  - Enhancements:
    - Header menu is now View/Edit instead of just Edit.
  - Bug fixes:
