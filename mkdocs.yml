@@ -2,13 +2,14 @@ site_name: FViewer Documentation
 site_url: https://heasarc.github.io/fviewer/
 theme:
   name: material
+  custom_dir: overrides/
   logo: app/fviewer-logo.svg
   favicon: app/fviewer-logo.svg
   # palette:
   #   scheme: slate
 nav:
   - Getting Started: index.md
-  - FViewer Demo: demo.md
+  - Demo: demo.md
   - The Workspace: workspace.md
   - Regions and Catalogs: regions-catalogs.md
   - Python interactions: python-api.md
@@ -17,7 +18,13 @@ nav:
       - Core Client: api-core.md
       - Client Plugins: api-plugins.md
 
+extra:
+  announcement: |
+    <b>Warning:</b> FViewer is in beta. Features may change.
+    Please report <a href="https://github.com/heasarc/fviewer/issues">issues</a>.
+
 markdown_extensions:
+  - admonition
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span

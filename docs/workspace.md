@@ -37,6 +37,11 @@ If you select a table HDU, or load a catalog (like a VOTable), it opens in the c
 *   **Massive Catalogs:** You can smoothly scroll through catalogs with hundreds of thousands of rows. The viewer only loads what you are looking at, so your browser won't freeze.
 *   **Nested Arrays:** Sometimes, a single cell in a FITS table contains an entire list of numbers (an array or vector). Instead of cluttering the screen with a massive wall of text, FViewer displays an interactive button in that cell. Click it to open a quick popup window where you can scroll through and inspect the nested data.
 
+!!! tip
+    If you are not seeing the 'Catalogs' menu, it generally means you are using the static (browser-only) FViewer version.
+    Install the full version using `pip` to be able to use all features.
+
+
 ## 5. Split-Screen and Linking
 If you are working with both an image and a catalog at the same time (for example, comparing an observation to a known catalog of sources), FViewer will automatically split the center workspace down the middle to show both.
 
