@@ -23,6 +23,7 @@ The frontend avoids the trap of a massive, tangled React app. It relies on three
 
 ### 1. Web Workers & WebAssembly
 Processing gigabytes of FITS data or parsing complex XML VOTables on the main JavaScript thread would instantly freeze the browser UI. Instead, FViewer uses background Web Workers:
+
 *   **`fits.worker.ts`:** Wraps C++ libraries (`cfitsio` and `wcslib`) via WASM. It handles all FITS reading, coordinate math, and data extraction.
 *   **`vo.worker.ts`:** Wraps Rust (`cds-votable-rust`) via WASM to parse complex ADQL and VOTable XML payloads at lightning speed.
 

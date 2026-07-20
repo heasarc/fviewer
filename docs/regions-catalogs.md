@@ -8,6 +8,7 @@ Regions are shapes you can draw directly over your FITS image to highlight areas
 
 ### Drawing and Editing
 You can access the region tools from the **Region Toolbar** or the top menubar. 
+
 *   **Shapes:** You can draw Circles, Boxes, Ellipses, and Annuli (rings). 
 *   **Interacting:** Once a shape is drawn, you can click and drag it around the image. You can also use the drag handles to resize or rotate the shape precisely.
 *   **Pan vs. Draw Mode:** By default, clicking and dragging on the image pans your view. To draw, simply select a shape from the toolbar. Once you are done drawing, FViewer automatically switches back to Pan mode so you don't accidentally draw shapes when trying to navigate.
@@ -24,6 +25,7 @@ While regions let you manually mark objects, Catalogs let you overlay thousands 
 FViewer includes a powerful **TAP (Table Access Protocol)** client. This allows you to query massive remote astronomical archives—like HEASARC, Chandra, or XMM-Newton—from inside the viewer.
 
 ### Searching Archives
+
 1. Open the **Catalogs** menu.
 2. You can perform a **Context-Aware Spatial Query**: If you are currently viewing an image with built-in coordinates (WCS), FViewer can automatically search a remote database for any known sources that fall within the exact footprint of your current screen.
 4. If a region is selected from the image when making the query, the catalog will be searched for soruces within that region.
@@ -31,6 +33,7 @@ FViewer includes a powerful **TAP (Table Access Protocol)** client. This allows 
 
 ### Interactive Overlays
 When you load a catalog (whether from a remote TAP query or by opening a local `VOTable` file):
+
 *   FViewer automatically plots the catalog sources as circular markers directly over your FITS image.
 *   The center workspace splits in half, showing the image on one side and the catalog data in a spreadsheet on the other.
 

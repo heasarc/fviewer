@@ -24,6 +24,8 @@ FViewer is designed to stay out of your way and let you focus on the data.
 *   **Catalog Overlays:** Search remote archives (like HEASARC) using ADQL, load VOTables, and overlay the sources directly onto the active image.
 *   **Python & Jupyter Ready:** Control the viewer, load files, and extract data back into your Jupyter Notebook using a clean, simple Python API.
 
+![A screenshot of the FViewer workspace](images/fviewer.png)
+
 ---
 
 ## Installation
@@ -60,7 +62,8 @@ If you just need to quickly inspect files and don't want to install anything, FV
 *(Note: In this mode, some advanced features like python integration and remote catalog queries, but the core viewing and plotting tools work perfectly.)*
 
 To use the standalone version:
-1. Navigate to **[Insert Link to Hosted Static Version, e.g., fviewer.github.io]**.
-2. Drag and drop your `.fits` or `.vot` file directly into the browser window, or click **Open File** to select one from your computer. 
+
+1. Navigate to the [Demo page](demo.md).
+2. Load your `.fits` file directly into the browser window. 
 
 Because all the heavy lifting (like image processing and coordinate math) is done securely inside your browser using WebAssembly, **your data never leaves your computer**.
