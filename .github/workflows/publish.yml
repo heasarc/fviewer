@@ -1,0 +1,36 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build-and-publish:
+    name: Build and Publish
+    runs-on: ubuntu-latest
+    
+    # Required permissions for PyPI Trusted Publishing (OIDC)
+    permissions:
+      id-token: write
+      contents: read
+      
+    environment:
+      name: pypi
+      url: https://pypi.org/p/fviewer 
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build the package (sdist and wheel)
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
