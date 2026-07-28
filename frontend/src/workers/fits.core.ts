@@ -105,12 +105,20 @@ export class FitsCore {
                     const xtension = (this.activeFile.readKeyword("XTENSION") || "").replace(/'/g, '').trim();
                     const extname = (this.activeFile.readKeyword("EXTNAME") || "").replace(/'/g, '').trim() || `HDU ${i}`;
                     const naxis = parseInt(this.activeFile.readKeyword("NAXIS") || "0", 10);
+
+                    // Check if this is a tile-compressed image
+                    const zimage = (this.activeFile.readKeyword("ZIMAGE") || "").replace(/'/g, '').trim();
+                    const isCompressedImage = (zimage === 'T');
                     
                     let type = 'unknown';
                     const naxes: number[] = []; // <-- Array to hold dimension sizes
 
                     if (i === 1) {
-                        type = naxis > 0 ? 'image' : 'empty'; // Primary HDU is an image, but might be 0 pixels
+                        type = naxis > 0 ? 'image' : 'empty'; 
+                    } else if (isCompressedImage) {
+                        // Compressed images logically act as images, even if XTENSION is BINTABLE
+                        const znaxis = parseInt(this.activeFile.readKeyword("ZNAXIS") || "0", 10);
+                        type = znaxis > 0 ? 'image' : 'empty';
                     } else if (xtension === 'IMAGE') {
                         type = naxis > 0 ? 'image' : 'empty';
                     } else if (xtension === 'BINTABLE' || xtension === 'TABLE') {
@@ -118,10 +126,18 @@ export class FitsCore {
                     }
 
                     // --- If it's an image, grab all axis sizes ---
-                    if (type === 'image' && naxis > 0) {
-                        for (let j = 1; j <= naxis; j++) {
-                            const dimSize = parseInt(this.activeFile.readKeyword(`NAXIS${j}`) || "0", 10);
-                            naxes.push(dimSize);
+                    if (type === 'image') {
+                        if (isCompressedImage) {
+                            const znaxis = parseInt(this.activeFile.readKeyword("ZNAXIS") || "0", 10);
+                            for (let j = 1; j <= znaxis; j++) {
+                                const dimSize = parseInt(this.activeFile.readKeyword(`ZNAXIS${j}`) || "0", 10);
+                                naxes.push(dimSize);
+                            }
+                        } else if (naxis > 0) { // Standard uncompressed image
+                            for (let j = 1; j <= naxis; j++) {
+                                const dimSize = parseInt(this.activeFile.readKeyword(`NAXIS${j}`) || "0", 10);
+                                naxes.push(dimSize);
+                            }
                         }
                     }
 
@@ -254,9 +270,18 @@ export class FitsCore {
                 // Extract optional slice payload
                 const { sliceIndices = [] } = payload || {};
 
-                const naxis1 = parseInt(this.activeFile.readKeyword("NAXIS1") || "0", 10);
-                const naxis2 = parseInt(this.activeFile.readKeyword("NAXIS2") || "0", 10);
-                const naxis = parseInt(this.activeFile.readKeyword("NAXIS") || "0", 10);
+                // Check if this is a tile-compressed image
+                const zimage = (this.activeFile.readKeyword("ZIMAGE") || "").replace(/'/g, '').trim();
+                const isCompressedImage = (zimage === 'T');
+
+                // Determine which keywords to read based on compression
+                const kwAxis = isCompressedImage ? "ZNAXIS" : "NAXIS";
+                const kwAxis1 = isCompressedImage ? "ZNAXIS1" : "NAXIS1";
+                const kwAxis2 = isCompressedImage ? "ZNAXIS2" : "NAXIS2";
+
+                const naxis1 = parseInt(this.activeFile.readKeyword(kwAxis1) || "0", 10);
+                const naxis2 = parseInt(this.activeFile.readKeyword(kwAxis2) || "0", 10);
+                const naxis = parseInt(this.activeFile.readKeyword(kwAxis) || "0", 10);
 
                 let fpixel = null;
                 let lpixel = null;
