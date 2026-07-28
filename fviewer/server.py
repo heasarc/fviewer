@@ -20,6 +20,7 @@ import asyncio
 import os
 import re
 import uuid
+import signal
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket
@@ -207,6 +208,15 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 manager.pending_requests[msg_id].set_result(data)
     except WebSocketDisconnect:
         manager.disconnect(client_id)
+        print(f"Browser connection closed (Client: {client_id}).")
+
+        # If no more tabs are open, shut down the server
+        if len(manager.active_connections) == 0:
+            # SAFETY CHECK: Only auto-shutdown if outside Jupyterlab
+            # FVIEWER_ROOT_PATH is defined by the fviewer-labextension
+            if not os.getenv("FVIEWER_ROOT_PATH"):
+                print("All browsers closed. Shutting down local server...")
+                os.kill(os.getpid(), signal.SIGINT)
 
 
 @app.post("/api/command", dependencies=[Depends(verify_token)])
