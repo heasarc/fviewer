@@ -1,3 +1,9 @@
+# 0.3.7
+  - Enhancements:
+   - Increment port if 8000 is in use instead of failing.
+  - Bug fixes:
+    - Fix how compressed images were read. 
+
 # 0.3.6
  - Add docs and gh publishing.
  - Enhancements:

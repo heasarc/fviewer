@@ -6,6 +6,7 @@ import webbrowser
 import threading
 import os
 import sys
+import socket
 from fviewer.server import app
 from fviewer.api import FViewer
 
@@ -26,13 +27,41 @@ def open_file_on_startup(filepath, host="127.0.0.1", port=8000):
         print(f"Failed to load file on startup: {e}")
 
 
+def find_available_port(
+        host: str, start_port: int, max_attempts: int = 100) -> int:
+    """Finds an available port by incrementing until one is free."""
+    port = start_port
+    for _ in range(max_attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                # Try to bind to the port to see if it's available
+                s.bind((host, port))
+                return port
+            except OSError:
+                # Port is in use, increment and try again
+                port += 1
+
+    # If we get here and max_attempts was 1,
+    # it means the explicit port was taken
+    if max_attempts == 1:
+        raise RuntimeError(
+            f"Port {start_port} is already in use on {host}. "
+            "Pass another port, or remove --port to use any open port."
+        )
+    raise RuntimeError(("Could not find an available port on "
+                        f"{host} starting from {start_port}"))
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Launch the FViewer server")
     parser.add_argument(
         "filepath", nargs="?",  help="Path to a FITS file to open on launch")
     parser.add_argument(
-        "--port", type=int, default=8000, help="Port to run the server on")
+        "--port", type=int, default=None,
+        help=("Port to run the server on. "
+              "Default is to use any open port in 8000:8100")
+    )
     parser.add_argument(
         "--host", type=str, default="127.0.0.1", help="Host IP")
     parser.add_argument(
@@ -40,7 +69,23 @@ def main():
         help="Don't open the browser automatically")
 
     args = parser.parse_args()
-    url = f"http://{args.host}:{args.port}"
+
+    # --- Port Selection Logic ---
+    try:
+        if args.port is not None:
+            # User explicitly requested a port.
+            # Try ONLY that port (max_attempts=1).
+            actual_port = find_available_port(
+                args.host, args.port, max_attempts=1)
+        else:
+            # No port specified. Start at 8000 and increment if needed.
+            actual_port = find_available_port(
+                args.host, 8000, max_attempts=100)
+    except RuntimeError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    url = f"http://{args.host}:{actual_port}"
 
     # do the check here before starting the browser
     abs_path = None
@@ -53,7 +98,7 @@ def main():
         # daemon=True ensures this thread doesn't prevent the app from exiting
         threading.Thread(
             target=open_file_on_startup,
-            args=(abs_path, args.host, args.port),
+            args=(abs_path, args.host, actual_port),
             daemon=True
         ).start()
 
@@ -64,7 +109,7 @@ def main():
         threading.Timer(1.0, open_browser, args=(url,)).start()
 
     # Launch FastAPI (this blocks the main thread)
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    uvicorn.run(app, host=args.host, port=actual_port, log_level="info")
 
 
 if __name__ == "__main__":

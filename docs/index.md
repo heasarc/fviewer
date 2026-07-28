@@ -53,6 +53,8 @@ Simply type:
 fviewer
 ```
 
+Pass the `-h` or `--help` option to see other command line options. You pass a file name to open and control the host, port or browser behavior.
+
 This command starts a lightweight, secure local server and will automatically open FViewer in your default web browser
 (usually at `http://localhost:8000`). From there, you can use the **File** menu to browse your computer and open FITS files.
 
