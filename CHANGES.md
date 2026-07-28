@@ -1,9 +1,12 @@
-# 0.3.7
+# 0.3.8
   - Enhancements:
    - Increment port if 8000 is in use instead of failing.
    - The command line process now stops when the browser or tab are closed.
   - Bug fixes:
     - Fix how compressed images were read.
+
+# 0.3.7
+  - Skip due to pypi issue.
 
 # 0.3.6
  - Add docs and gh publishing.
