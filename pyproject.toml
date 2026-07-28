@@ -50,14 +50,12 @@ packages = ["fviewer"]
 [tool.hatch.build.targets.sdist]
 include = [
     "/fviewer",
-    "/fviewer/static",
     "LICENSE",
     "3rd-party-licenses"
 ]
-exclude = [
-    "/.git",
-    "/frontend/node_modules",
-]
+
+[tool.hatch.build.targets.sdist.force-include]
+"fviewer/static" = "fviewer/static"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
