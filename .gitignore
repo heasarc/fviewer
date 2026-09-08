@@ -32,3 +32,6 @@ coverage_html_report
 frontend/coverage
 .coverage
 site
+.venv
+.pytest_cache
+__pycache__
