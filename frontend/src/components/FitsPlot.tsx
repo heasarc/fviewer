@@ -4,11 +4,13 @@ import React, { useEffect, useRef } from 'react';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 
+type PlotDataArray = number[] | Float32Array | Float64Array | Int32Array | BigInt64Array;
+
 interface FitsPlotProps {
-    xData: number[] | Float32Array | Int32Array | Float64Array;
-    yData?: number[] | Float32Array | Int32Array | Float64Array;
-    xErrData?: number[] | Float32Array | Int32Array | Float64Array;
-    yErrData?: number[] | Float32Array | Int32Array | Float64Array;
+    xData: PlotDataArray;
+    yData?: PlotDataArray;
+    xErrData?: PlotDataArray;
+    yErrData?: PlotDataArray;
     xLabel: string;
     yLabel?: string;
     title?: string;
