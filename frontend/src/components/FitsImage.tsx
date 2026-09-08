@@ -21,9 +21,11 @@ import { ExtensionSlot } from '../core/PluginManager';
 /**
  * Props for the FitsImage component.
  */
+type FitsImageData = Float32Array | Float64Array | Int32Array | Int16Array | Uint8Array | BigInt64Array;
+
 interface FitsImageProps {
     /** 1D flat typed array containing the raw FITS image data. */
-    data: Float32Array | Int32Array | Int16Array | Uint8Array;
+    data: FitsImageData;
     /** Width of the image in pixels (NAXIS1). */
     width: number;
     /** Height of the image in pixels (NAXIS2). */
@@ -67,22 +69,32 @@ export const FitsImage: React.FC<FitsImageProps> = ({
     // Check WCS availability on load
     useEffect(() => { checkWcs().then(setHasWCS).catch(() => setHasWCS(false)); }, [checkWcs]);
 
+    // BigInt64Array cannot participate in Number arithmetic — convert to Float64Array for display
+    const displayData = useMemo((): Float64Array | Float32Array | Int32Array | Int16Array | Uint8Array => {
+        if (data instanceof BigInt64Array) {
+            const f64 = new Float64Array(data.length);
+            for (let i = 0; i < data.length; i++) f64[i] = Number(data[i]);
+            return f64;
+        }
+        return data as Exclude<FitsImageData, BigInt64Array>;
+    }, [data]);
+
     // Fast min/max calculation for scaling the image intensity
     const { min, max } = useMemo(() => {
         let minVal = Infinity; let maxVal = -Infinity;
-        for (let i = 0; i < data.length; i++) {
-            if (data[i] < minVal) minVal = data[i];
-            if (data[i] > maxVal) maxVal = data[i];
+        for (let i = 0; i < displayData.length; i++) {
+            if (displayData[i] < minVal) minVal = displayData[i];
+            if (displayData[i] > maxVal) maxVal = displayData[i];
         }
         if (maxVal === minVal) maxVal = minVal + 1;
         return { min: minVal, max: maxVal };
-    }, [data]);
+    }, [displayData]);
 
     // --- EXTRACT REGION PIXELS FOR HISTOGRAM ---
     const handleRegionChange = React.useCallback((region: any | null) => {
-        // We no longer need to check isPlotterOpenRef here! 
+        // We no longer need to check isPlotterOpenRef here!
         // If they draw a region, we just calculate the pixels. The plotter will use them if it's open.
-        if (!region || !data) {
+        if (!region || !displayData) {
             setActiveRegionPixels(null);
             return;
         }
@@ -139,13 +151,13 @@ export const FitsImage: React.FC<FitsImageProps> = ({
 
                 if (inside) {
                     const dataIdx = (height - y) * width + (x - 1);
-                    pixels.push(data[dataIdx]);
+                    pixels.push(displayData[dataIdx]);
                 }
             }
         }
         
         setActiveRegionPixels(pixels);
-    }, [data, width, height, setActiveRegionPixels]);
+    }, [displayData, width, height, setActiveRegionPixels]);
 
     /**
      * Core Render Loop
@@ -160,23 +172,23 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         const range = max - min;
         const lut = getColormapLUT(colormap);
 
-        for (let i = 0; i < data.length; i++) {
+        for (let i = 0; i < displayData.length; i++) {
             const x = i % width;
             // FITS files are stored bottom-to-top, so we invert Y when rendering
             const y = height - 1 - Math.floor(i / width);
             const idx = (y * width + x) * 4;
-            
-            const norm = (data[i] - min) / range;
+
+            const norm = (displayData[i] - min) / range;
             const stretched = applyStretch(norm, stretch);
             const colorIdx = Math.max(0, Math.min(255, Math.floor(stretched * 255))) * 3;
 
-            imgData.data[idx] = lut[colorIdx]; 
+            imgData.data[idx] = lut[colorIdx];
             imgData.data[idx+1] = lut[colorIdx+1];
-            imgData.data[idx+2] = lut[colorIdx+2]; 
+            imgData.data[idx+2] = lut[colorIdx+2];
             imgData.data[idx+3] = 255; // Alpha
         }
         ctx.putImageData(imgData, 0, 0);
-    }, [data, width, height, colormap, stretch, min, max]);
+    }, [displayData, width, height, colormap, stretch, min, max]);
 
     /**
      * Native Wheel Handler
@@ -221,12 +233,12 @@ export const FitsImage: React.FC<FitsImageProps> = ({
 
     // Jump-start region pixel calculation when the Plotter is opened
     useEffect(() => {
-        if (isPlotterOpen && data && regions.length > 0) {
+        if (isPlotterOpen && displayData && regions.length > 0) {
             // Find the active region, or just use the last one drawn
             const selected = regions.find(r => r.id === selectedRegionId) || regions[regions.length - 1];
             handleRegionChange(selected);
         }
-    }, [isPlotterOpen, data, regions, selectedRegionId, handleRegionChange]);
+    }, [isPlotterOpen, displayData, regions, selectedRegionId, handleRegionChange]);
 
     // Keyboard listener for Backspace / Delete
     useEffect(() => {
@@ -409,7 +421,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         const fitsY = height - Math.floor(imgY);
         
         if (fitsX >= 1 && fitsX <= width && fitsY >= 1 && fitsY <= height) {
-            const val = data[(fitsY - 1) * width + (fitsX - 1)];
+            const val = displayData[(fitsY - 1) * width + (fitsX - 1)];
             setHoverInfo(prev => ({ ...prev, x: fitsX, y: fitsY, val }));
 
             if (hasWCS && !isWcsPending.current) {
