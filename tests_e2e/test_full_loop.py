@@ -18,11 +18,15 @@ def start_test_server():
     """Starts the FastAPI server in a background process for
     the duration of the tests."""
 
+    env = os.environ.copy()
+    env["FVIEWER_ROOT_PATH"] = "/test"
+
     process = subprocess.Popen(
         ["uv", "run", "uvicorn", "fviewer.server:app",
          "--host", TEST_HOST, "--port", str(TEST_PORT)],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
+        env=env,
     )
 
     server_up = False

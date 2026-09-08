@@ -71,8 +71,9 @@ def test_main_defaults(mock_thread, mock_timer, mock_uvicorn):
 
 @patch("fviewer.cli.uvicorn.run")
 @patch("fviewer.cli.threading.Timer")
+@patch("fviewer.cli.find_available_port", return_value=9000)
 @patch("sys.argv", ["fviewer", "--no-browser", "--port", "9000"])
-def test_main_no_browser_flag(mock_timer, mock_uvicorn):
+def test_main_no_browser_flag(mock_find_port, mock_timer, mock_uvicorn):
     """Test that --no-browser suppresses the Timer thread."""
     main()
     mock_timer.assert_not_called()
