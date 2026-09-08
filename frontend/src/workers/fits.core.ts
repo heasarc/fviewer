@@ -114,7 +114,12 @@ export class FitsCore {
                     const naxes: number[] = []; // <-- Array to hold dimension sizes
 
                     if (i === 1) {
-                        type = naxis > 0 ? 'image' : 'empty'; 
+                        const groups = (this.activeFile.readKeyword("GROUPS") || "").replace(/'/g, '').trim();
+                        if (groups === 'T') {
+                            type = 'groups';
+                        } else {
+                            type = naxis > 0 ? 'image' : 'empty';
+                        }
                     } else if (isCompressedImage) {
                         // Compressed images logically act as images, even if XTENSION is BINTABLE
                         const znaxis = parseInt(this.activeFile.readKeyword("ZNAXIS") || "0", 10);

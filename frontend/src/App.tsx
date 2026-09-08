@@ -406,6 +406,12 @@ function App() {
                                     </div>
                                 )}
 
+                                {hduList.find(h => h.index === activeHdu)?.type === 'groups' && (
+                                    <div className="alert border bg-dark text-white d-flex align-items-center" style={{ borderColor: 'var(--fv-border)' }}>
+                                        <i className="bi bi-info-circle me-2"></i> Random Groups HDU detected. Viewing is not yet supported for this legacy format.
+                                    </div>
+                                )}
+
                                 {/* Center Workspace: flex-column for Bottom Drawer layout */}
                                 <div className="d-flex flex-column flex-grow-1 gap-2 overflow-hidden">
                                     
