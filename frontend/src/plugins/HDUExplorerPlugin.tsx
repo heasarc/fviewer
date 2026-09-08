@@ -94,8 +94,12 @@ const HDUSidebarPanel = () => {
                                     </span>
                                 )}
                             </span>
-                            <span className="badge border border-secondary text-secondary bg-dark" style={{ fontSize: '0.65rem', fontWeight: 'normal' }}>
-                                {hdu.type.toUpperCase()}
+                            <span
+                                className="badge border border-secondary text-secondary bg-dark"
+                                style={{ fontSize: '0.65rem', fontWeight: 'normal' }}
+                                title={hdu.compression ? `Tile compressed (${hdu.compression})` : undefined}
+                            >
+                                {hdu.type.toUpperCase()}{hdu.compression ? '*' : ''}
                             </span>
                         </button>
                     ))

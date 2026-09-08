@@ -146,9 +146,13 @@ export class FitsCore {
                         }
                     }
 
-                    hduList.push({ index: i, type, extname, naxes });
+                    const compression = isCompressedImage
+                        ? (this.activeFile.readKeyword("ZCMPTYPE") || "").replace(/'/g, '').trim()
+                        : undefined;
+
+                    hduList.push({ index: i, type, extname, naxes, compression });
                 }
-                
+
                 return { data: hduList };
             }
 
@@ -255,8 +259,9 @@ export class FitsCore {
                 const firstElem = arrayIndex !== undefined ? arrayIndex + 1 : 1;
                 
                 const status = this.activeFile.writeCell(colNum, rowNum, value, firstElem);
-                
+
                 if (status !== 0) throw new Error(`Write failed with status ${status}`);
+                delete this.tableCache[colNum];
                 return { data: { status } };
             }
 
