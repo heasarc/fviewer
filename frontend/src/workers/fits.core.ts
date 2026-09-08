@@ -342,6 +342,18 @@ export class FitsCore {
                 return { data: this.activeFile.hasWCS() };
             }
 
+            case 'GET_WCS_COUNT': {
+                if (!this.activeFile) throw new Error("No file opened");
+                return { data: this.activeFile.getWCSCount() };
+            }
+
+            case 'SET_ACTIVE_WCS': {
+                if (!this.activeFile) throw new Error("No file opened");
+                const success = this.activeFile.setActiveWCS(payload.index);
+                if (!success) throw new Error(`Invalid WCS index: ${payload.index}`);
+                return { data: { index: payload.index } };
+            }
+
             case 'PIX_TO_WORLD': {
                 if (!this.activeFile) throw new Error("No file opened");
                 const { x, y } = payload;

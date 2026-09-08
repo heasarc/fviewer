@@ -65,6 +65,8 @@ export function useFits() {
     const saveFile = useCallback(() => sendCommand('SAVE_FILE'), [sendCommand]);
     const readImage = useCallback((sliceIndices?: number[]) => sendCommand('READ_IMAGE', {sliceIndices}), [sendCommand]);
     const checkWcs = useCallback(() => sendCommand('CHECK_WCS'), [sendCommand]);
+    const getWcsCount = useCallback(() => sendCommand('GET_WCS_COUNT'), [sendCommand]);
+    const setActiveWcs = useCallback((index: number) => sendCommand('SET_ACTIVE_WCS', { index }), [sendCommand]);
     const pixToWorld = useCallback((x: number, y: number) => sendCommand('PIX_TO_WORLD', { x, y }), [sendCommand]);
     const worldToPix = useCallback((ra: number, dec: number) => sendCommand('WORLD_TO_PIX', { ra, dec }), [sendCommand]);
     const getPixScale = useCallback(() => sendCommand('PIX_SCALE'), [sendCommand]);
@@ -72,9 +74,9 @@ export function useFits() {
         return sendCommand('UPDATE_KEYWORD', { key, value, isNumeric, comment });
     }, [sendCommand]);
 
-    return { 
-        openFile, readHeader, getHduList, moveToHDU, getTableInfo, readColumn, writeCell, 
-        saveFile, readImage, checkWcs, pixToWorld, worldToPix, getPixScale, updateKeyword,
-        readTableChunk
+    return {
+        openFile, readHeader, getHduList, moveToHDU, getTableInfo, readColumn, writeCell,
+        saveFile, readImage, checkWcs, getWcsCount, setActiveWcs, pixToWorld, worldToPix,
+        getPixScale, updateKeyword, readTableChunk
     };
 }
