@@ -33,52 +33,75 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
 
     const cards = useMemo(() => {
         if (!rawHeader) return [];
-        
-        // FITS headers are exactly 80 characters per card, padded with spaces.
-        // If your wrapper returns them separated by newlines, we split on \n.
-        // If it returns a single continuous 2880-byte string, we match 80-char chunks.
+
         const lines = rawHeader.includes('\n') ? rawHeader.split('\n') : rawHeader.match(/.{1,80}/g) || [];
         const parsed: HeaderCard[] = [];
 
-        for (const line of lines) {
-            if (!line || line.trim() === 'END') continue;
-            
-            const keyword = line.substring(0, 8).trim();
-            if (!keyword) continue;
-
-            const valueIndicator = line.substring(8, 10);
+        const parseValueComment = (rest: string) => {
             let value = '';
             let comment = '';
             let isNumeric = true;
-            let isCommentOnly = false;
+            const trimmed = rest.trim();
 
-            if (valueIndicator === '= ') {
-                const rest = line.substring(10).trim();
-                
-                if (rest.startsWith("'")) {
-                    isNumeric = false;
-                    const endQuoteIdx = rest.indexOf("'", 1);
-                    if (endQuoteIdx !== -1) {
-                        value = rest.substring(1, endQuoteIdx).trim();
-                        const slashIdx = rest.indexOf('/', endQuoteIdx);
-                        if (slashIdx !== -1) comment = rest.substring(slashIdx + 1).trim();
-                    }
-                } else {
-                    const parts = rest.split('/');
-                    value = parts[0].trim();
-                    if (parts.length > 1) comment = parts[1].trim();
-                    
-                    if (value === 'T' || value === 'F') isNumeric = false;
-                    if (isNaN(Number(value))) isNumeric = false;
+            if (trimmed.startsWith("'")) {
+                isNumeric = false;
+                const endQuoteIdx = trimmed.indexOf("'", 1);
+                if (endQuoteIdx !== -1) {
+                    value = trimmed.substring(1, endQuoteIdx).trim();
+                    const slashIdx = trimmed.indexOf('/', endQuoteIdx);
+                    if (slashIdx !== -1) comment = trimmed.substring(slashIdx + 1).trim();
                 }
             } else {
-                isCommentOnly = true;
-                comment = line.substring(8).trim();
+                const parts = trimmed.split('/');
+                value = parts[0].trim();
+                if (parts.length > 1) comment = parts[1].trim();
+                if (value === 'T' || value === 'F') isNumeric = false;
+                if (isNaN(Number(value))) isNumeric = false;
+            }
+            return { value, comment, isNumeric };
+        };
+
+        for (const line of lines) {
+            if (!line || line.trim() === 'END') continue;
+
+            // HIERARCH convention: keyword extends beyond column 8
+            if (line.startsWith('HIERARCH ')) {
+                const eqPos = line.indexOf('= ');
+                if (eqPos !== -1) {
+                    const keyword = line.substring(9, eqPos).trim();
+                    const { value, comment, isNumeric } = parseValueComment(line.substring(eqPos + 2));
+                    parsed.push({ keyword: `HIERARCH ${keyword}`, value, comment, isNumeric, isCommentOnly: false });
+                } else {
+                    parsed.push({ keyword: line.substring(0, 8).trim(), value: '', comment: line.substring(9).trim(), isNumeric: false, isCommentOnly: true });
+                }
+                continue;
             }
 
-            parsed.push({ keyword, value, comment, isNumeric, isCommentOnly });
+            const keyword = line.substring(0, 8).trim();
+            if (!keyword) continue;
+
+            // CONTINUE cards are handled in the merge pass below
+            const valueIndicator = line.substring(8, 10);
+
+            if (valueIndicator === '= ') {
+                const { value, comment, isNumeric } = parseValueComment(line.substring(10));
+                parsed.push({ keyword, value, comment, isNumeric, isCommentOnly: false });
+            } else {
+                parsed.push({ keyword, value: '', comment: line.substring(8).trim(), isNumeric: false, isCommentOnly: true });
+            }
         }
-        return parsed;
+
+        // Merge CONTINUE cards into the preceding keyword (FITS long string convention)
+        const merged: HeaderCard[] = [];
+        for (const card of parsed) {
+            if (card.keyword === 'CONTINUE' && merged.length > 0) {
+                const prev = merged[merged.length - 1];
+                prev.value = prev.value.replace(/&$/, '') + card.comment.replace(/^'/, '').replace(/'.*/, '').trim();
+            } else {
+                merged.push(card);
+            }
+        }
+        return merged;
     }, [rawHeader]);
 
     const filteredCards = useMemo(() => {
@@ -118,8 +141,9 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
             return;
         }
         
-        // FITS keywords are typically max 8 chars and uppercase
-        const formattedKey = newKey.trim().toUpperCase().substring(0, 8);
+        const trimmed = newKey.trim().toUpperCase();
+        // FITS standard keywords are max 8 chars; longer names use the HIERARCH convention
+        const formattedKey = trimmed.length > 8 ? `HIERARCH ${trimmed}` : trimmed;
         
         try {
             await onUpdateKeyword(formattedKey, newValue, isNumeric, newComment);
@@ -188,10 +212,9 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
                             type="text" 
                             className="form-control form-control-sm border-0 ms-2" 
                             placeholder="KEYWORD" 
-                            maxLength={8}
-                            value={newKey} 
-                            onChange={(e) => setNewKey(e.target.value.toUpperCase())} 
-                            style={{ width: '120px', backgroundColor: 'var(--fv-bg)', color: 'var(--fv-text-bright)' }}
+                            value={newKey}
+                            onChange={(e) => setNewKey(e.target.value.toUpperCase())}
+                            style={{ width: '180px', backgroundColor: 'var(--fv-bg)', color: 'var(--fv-text-bright)' }}
                             autoFocus
                         />
                         
@@ -243,7 +266,7 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
                     
                     {/* Sticky Table Header */}
                     <div className="d-flex fw-bold position-sticky top-0 shadow-sm border-bottom" style={{ height: '36px', backgroundColor: 'var(--fv-panel-hover)', color: 'var(--fv-text-bright)', borderColor: 'var(--fv-border)', zIndex: 3 }}>
-                        <div className="d-flex align-items-center px-3 border-end flex-shrink-0" style={{ width: '120px', borderColor: 'rgba(255,255,255,0.05)' }}>Keyword</div>
+                        <div className="d-flex align-items-center px-3 border-end flex-shrink-0" style={{ width: '180px', borderColor: 'rgba(255,255,255,0.05)' }}>Keyword</div>
                         <div className="d-flex align-items-center px-3 border-end flex-shrink-0" style={{ width: '200px', borderColor: 'rgba(255,255,255,0.05)' }}>Value</div>
                         <div className="d-flex align-items-center px-3 flex-grow-1">Comment</div>
                     </div>
@@ -265,7 +288,7 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
                                     }}
                                 >
                                     {/* Keyword Cell */}
-                                    <div className="d-flex align-items-center px-3 border-end flex-shrink-0 fw-bold font-monospace text-truncate" style={{ width: '120px', borderColor: 'rgba(255,255,255,0.05)', color: 'var(--fv-accent)' }} title={c.keyword}>
+                                    <div className="d-flex align-items-center px-3 border-end flex-shrink-0 fw-bold font-monospace text-truncate" style={{ width: '180px', borderColor: 'rgba(255,255,255,0.05)', color: 'var(--fv-accent)' }} title={c.keyword}>
                                         {c.keyword}
                                     </div>
                                     
