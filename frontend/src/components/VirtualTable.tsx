@@ -247,11 +247,20 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                         
                         // Handle loading state gracefully while waiting for worker chunks
                         const isMissing = val === undefined;
-                        const isArray = !isMissing && val?.length !== undefined && typeof val !== 'string';
+                        const isComplex = !isMissing && (Math.abs(col.typecode) === 83 || Math.abs(col.typecode) === 163);
+                        const isArray = !isMissing && !isComplex && val?.length !== undefined && typeof val !== 'string';
                         
                         let displayVal = '...'; // Default loading string
                         if (!isMissing) {
-                            displayVal = isArray ? `[Array ${val.length}]` : String(val ?? '');
+                            if (isArray && val.length === 2 && (Math.abs(col.typecode) === 83 || Math.abs(col.typecode) === 163)) {
+                                displayVal = `(${val[0]}, ${val[1]})`;
+                            } else if (isArray) {
+                                displayVal = `[Array ${val.length}]`;
+                            } else if (Math.abs(col.typecode) === 14) {
+                                displayVal = val === 1 ? 'T' : val === 0 ? 'F' : String(val ?? '');
+                            } else {
+                                displayVal = String(val ?? '');
+                            }
                         }
 
                         const isEditing = editingCell?.row === i && editingCell?.colName === col.name;
