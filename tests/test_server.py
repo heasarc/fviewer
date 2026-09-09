@@ -1,10 +1,14 @@
 # tests/test_server.py
 import pytest
+import os
 from fastapi.testclient import TestClient
 from fastapi import WebSocketDisconnect
 
 # Absolute imports from the fviewer package
 from fviewer.server import app, manager
+
+# Set FVIEWER_ROOT_PATH so the server is not auto-shutdown
+os.environ['FVIEWER_ROOT_PATH'] = '1'
 
 # Initialize the test client
 client = TestClient(app)
