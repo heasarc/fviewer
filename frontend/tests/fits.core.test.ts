@@ -101,8 +101,8 @@ describe('HIERARCH keywords', () => {
         core = new FitsCore();
         const data = await loadFixture(testHierarchUrl);
         await core.processCommand('OPEN_FILE', data);
-        const result = await core.processCommand('READ_HEADER');
-        rawHeader = result;
+        const result = await core.processCommand('READ_HEADER', {});
+        rawHeader = result.data as string;
     });
 
     it('should contain HIERARCH keywords in the raw header', () => {
@@ -119,8 +119,8 @@ describe('Long string CONTINUE convention', () => {
         core = new FitsCore();
         const data = await loadFixture(testLongstringUrl);
         await core.processCommand('OPEN_FILE', data);
-        const result = await core.processCommand('READ_HEADER');
-        rawHeader = result;
+        const result = await core.processCommand('READ_HEADER', {});
+        rawHeader = result.data as string;
     });
 
     it('should contain CONTINUE cards in the raw header', () => {
