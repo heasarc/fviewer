@@ -8,7 +8,7 @@
  * thread during production.
  */
 
-import { FitsFile } from 'wasm-cfitsio'; 
+import { FitsFile } from 'wasm-cfitsio';
 
 export class FitsCore {
     /** 
@@ -372,6 +372,11 @@ export class FitsCore {
                 if (!this.activeFile) throw new Error("No file opened");
                 const scale = this.activeFile.getPixelScale();
                 return { data: scale };
+            }
+
+            case 'VERIFY_CHECKSUM': {
+                if (!this.activeFile) throw new Error("No file opened");
+                return { data: this.activeFile.verifyChecksum() };
             }
 
             default:
