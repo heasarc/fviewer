@@ -15,8 +15,8 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "uplot": "^1.6.32",
-    "votable-wasm": "file:../../cds-votable-rust/crates/wasm/pkg",
-    "wasm-cfitsio": "file:../../wasm-cfitsio/wasm-cfitsio-0.0.10.tgz"
+    "votable-wasm": "https://github.com/cds-astro/cds-votable-rust/releases/download/v0.7.0/vot-wasm-v0.7.0.tar.gz",
+    "wasm-cfitsio": "https://github.com/heasarc/wasm-cfitsio/releases/download/v0.0.10/wasm-cfitsio-0.0.10.tgz"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
@@ -40,6 +40,7 @@
     "vitest": "^4.1.9"
   },
   "allowScripts": {
-    "fsevents@2.3.3": true
+    "fsevents@2.3.3": true,
+    "fsevents@2.3.2": true
   }
 }
