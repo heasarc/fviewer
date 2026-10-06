@@ -1,5 +1,5 @@
 // frontend/tests/fits.core.test.ts
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { FitsCore } from '../src/workers/fits.core';
 import testFitsUrl from './data/test.fits?url';
 import testBitpix64Url from './data/test_bitpix64.fits?url';
@@ -24,6 +24,19 @@ describe('FITS Core Logic (Main Thread)', () => {
     it('should open a real FITS file and initialize WASM', async () => {
         const result = await core.processCommand('OPEN_FILE', testFitsData);
         expect(result.data.numHDUs).toBeGreaterThan(0);
+    });
+
+    it('should select the requested HDU before verifying checksums', async () => {
+        const verifyChecksum = vi.spyOn(core.activeFile!, 'verifyChecksum').mockReturnValue({
+            dataOk: 1,
+            headerOk: 1
+        });
+
+        const result = await core.processCommand('VERIFY_CHECKSUM', { hduNum: 2 });
+
+        expect(verifyChecksum).toHaveBeenCalledOnce();
+        expect(result.data).toEqual({ dataOk: 1, headerOk: 1 });
+        verifyChecksum.mockRestore();
     });
 
     it('should read a specific row chunk', async () => {

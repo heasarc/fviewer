@@ -376,6 +376,12 @@ export class FitsCore {
 
             case 'VERIFY_CHECKSUM': {
                 if (!this.activeFile) throw new Error("No file opened");
+                const hduNum = payload?.hduNum;
+                if (!Number.isInteger(hduNum) || hduNum < 1) {
+                    throw new Error("A valid HDU number is required to verify checksums");
+                }
+                const status = this.activeFile.moveToHDU(hduNum);
+                if (status !== 0) throw new Error(`Failed to move to HDU ${hduNum}. Status: ${status}`);
                 return { data: this.activeFile.verifyChecksum() };
             }
 

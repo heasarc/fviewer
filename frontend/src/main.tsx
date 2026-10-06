@@ -19,6 +19,7 @@ import { initRegionToolbarPlugin } from './plugins/RegionToolbarPlugin';
 import { initHDUExplorerPlugin } from './plugins/HDUExplorerPlugin';
 import { initDataCubePlugin } from './plugins/DataCubePlugin';
 import { initTAPQueryPlugin } from './plugins/TAPQueryPlugin';
+import { initChecksumPlugin } from './plugins/ChecksumPlugin';
 
 initPlotterPlugin();
 initHeaderEditorPlugin();
@@ -30,6 +31,7 @@ initRegionToolbarPlugin();
 initHDUExplorerPlugin();
 initDataCubePlugin();
 initTAPQueryPlugin();
+initChecksumPlugin();
 
 createRoot(document.getElementById('root') as HTMLElement).render(
     <React.StrictMode>

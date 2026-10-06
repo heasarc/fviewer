@@ -182,6 +182,10 @@ describe('useFits Hook', () => {
             fits.getPixScale();
             expect(mockPostMessage).toHaveBeenLastCalledWith({ id: expect.any(Number), action: 'PIX_SCALE', payload: undefined });
 
+            // verifyChecksum
+            fits.verifyChecksum(2);
+            expect(mockPostMessage).toHaveBeenLastCalledWith({ id: expect.any(Number), action: 'VERIFY_CHECKSUM', payload: { hduNum: 2 } });
+
             // updateKeyword
             fits.updateKeyword('BZERO', 0, true, 'Offset');
             expect(mockPostMessage).toHaveBeenLastCalledWith({ id: expect.any(Number), action: 'UPDATE_KEYWORD', payload: { key: 'BZERO', value: 0, isNumeric: true, comment: 'Offset' } });

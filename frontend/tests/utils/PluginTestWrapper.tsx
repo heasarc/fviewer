@@ -20,7 +20,7 @@ export const createMockContext = (overrides = {}) => {
             openFile: vi.fn(), getHduList: vi.fn(), moveToHDU: vi.fn(),
             getTableInfo: vi.fn(), readColumn: vi.fn(), writeCell: vi.fn(), saveFile: vi.fn(),
             readImage: vi.fn(), readHeader: vi.fn(), updateKeyword: vi.fn(), readTableChunk: vi.fn(),
-            checkWcs: vi.fn().mockResolvedValue(true), 
+            checkWcs: vi.fn().mockResolvedValue(true), verifyChecksum: vi.fn(),
             pixToWorld: vi.fn(), worldToPix: vi.fn(),
         } as any,
 

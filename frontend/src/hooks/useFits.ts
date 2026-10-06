@@ -70,7 +70,7 @@ export function useFits() {
     const pixToWorld = useCallback((x: number, y: number) => sendCommand('PIX_TO_WORLD', { x, y }), [sendCommand]);
     const worldToPix = useCallback((ra: number, dec: number) => sendCommand('WORLD_TO_PIX', { ra, dec }), [sendCommand]);
     const getPixScale = useCallback(() => sendCommand('PIX_SCALE'), [sendCommand]);
-    const verifyChecksum = useCallback(() => sendCommand('VERIFY_CHECKSUM'), [sendCommand]);
+    const verifyChecksum = useCallback((hduNum: number) => sendCommand('VERIFY_CHECKSUM', { hduNum }), [sendCommand]);
     const updateKeyword = useCallback((key: string, value: string | number, isNumeric: boolean, comment?: string) => {
         return sendCommand('UPDATE_KEYWORD', { key, value, isNumeric, comment });
     }, [sendCommand]);
