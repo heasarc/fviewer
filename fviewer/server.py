@@ -47,6 +47,7 @@ ORIGINS = [os.getenv("FVIEWER_ORIGIN", "")]
 # Regex to allow ANY port on localhost or 127.0.0.1
 # Matches: http://localhost:8123, http://127.0.0.1:40593, etc.
 LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$"
+SHUTDOWN_GRACE_PERIOD_SECONDS = 5
 
 
 app = FastAPI(title="FViewer API", root_path=ROOT_PATH)
@@ -101,16 +102,41 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: dict[str, WebSocket] = {}
         self.pending_requests: dict[str, asyncio.Future] = {}
+        self.shutdown_task: asyncio.Task | None = None
 
     async def connect(self, client_id: str, websocket: WebSocket):
         """Accepts and stores a new WebSocket connection."""
         await websocket.accept()
+        self.cancel_pending_shutdown()
         self.active_connections[client_id] = websocket
 
     def disconnect(self, client_id: str):
         """Removes a disconnected WebSocket."""
         if client_id in self.active_connections:
             del self.active_connections[client_id]
+
+    def cancel_pending_shutdown(self):
+        """Cancels shutdown if a browser reconnects during the grace period."""
+        if self.shutdown_task and not self.shutdown_task.done():
+            self.shutdown_task.cancel()
+        self.shutdown_task = None
+
+    def schedule_shutdown(self):
+        """Shuts down a standalone server after a brief
+        browserreconnect window."""
+        self.cancel_pending_shutdown()
+
+        async def shutdown_after_grace_period():
+            await asyncio.sleep(SHUTDOWN_GRACE_PERIOD_SECONDS)
+            self.shutdown_task = None
+            if (
+                not self.active_connections and
+                not os.getenv("FVIEWER_ROOT_PATH")
+            ):
+                print("No browsers reconnected. Shutting down local server...")
+                os.kill(os.getpid(), signal.SIGINT)
+
+        self.shutdown_task = asyncio.create_task(shutdown_after_grace_period())
 
     async def send_to_client(self, client_id: str, message: dict):
         """Sends a Fire-and-Forget message to a specific client."""
@@ -215,8 +241,12 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             # SAFETY CHECK: Only auto-shutdown if outside Jupyterlab
             # FVIEWER_ROOT_PATH is defined by the fviewer-labextension
             if not os.getenv("FVIEWER_ROOT_PATH"):
-                print("All browsers closed. Shutting down local server...")
-                os.kill(os.getpid(), signal.SIGINT)
+                print(
+                    "All browsers closed. Waiting "
+                    f"{SHUTDOWN_GRACE_PERIOD_SECONDS} seconds "
+                    "before shutdown..."
+                )
+                manager.schedule_shutdown()
 
 
 @app.post("/api/command", dependencies=[Depends(verify_token)])

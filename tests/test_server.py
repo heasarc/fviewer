@@ -1,10 +1,12 @@
 # tests/test_server.py
+import asyncio
 import pytest
 import os
 from fastapi.testclient import TestClient
 from fastapi import WebSocketDisconnect
 
 # Absolute imports from the fviewer package
+from fviewer import server
 from fviewer.server import app, manager
 
 # Set FVIEWER_ROOT_PATH so the server is not auto-shutdown
@@ -208,6 +210,39 @@ async def test_broadcast_and_send_to_client():
 
     manager.disconnect("c1")
     manager.disconnect("c2")
+
+
+@pytest.mark.asyncio
+async def test_scheduled_shutdown_waits_then_signals(monkeypatch):
+    """Standalone shutdown is delayed to allow a page refresh to reconnect."""
+    monkeypatch.delenv("FVIEWER_ROOT_PATH", raising=False)
+    monkeypatch.setattr(server, "SHUTDOWN_GRACE_PERIOD_SECONDS", 0.01)
+    calls = []
+    monkeypatch.setattr(
+        server.os, "kill", lambda pid, sig: calls.append((pid, sig)))
+
+    manager.schedule_shutdown()
+    await asyncio.sleep(0.02)
+
+    assert calls == [(os.getpid(), server.signal.SIGINT)]
+
+
+@pytest.mark.asyncio
+async def test_reconnect_cancels_scheduled_shutdown(monkeypatch):
+    """A browser reconnect during the grace period keeps the server running."""
+    monkeypatch.delenv("FVIEWER_ROOT_PATH", raising=False)
+    monkeypatch.setattr(server, "SHUTDOWN_GRACE_PERIOD_SECONDS", 0.01)
+    calls = []
+    monkeypatch.setattr(
+        server.os, "kill", lambda pid, sig: calls.append((pid, sig)))
+    manager.schedule_shutdown()
+
+    client_id = "refreshing_client"
+    await manager.connect(client_id, MockWebSocket())
+    await asyncio.sleep(0.02)
+
+    assert calls == []
+    manager.disconnect(client_id)
 
 
 def test_websocket_cswsh_allowed_local():
