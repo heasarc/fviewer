@@ -45,35 +45,49 @@ function App() {
     // State for the Bottom Drawer (Table) visibility and height
     const [isTableDrawerOpen, setIsTableDrawerOpen] = useState(true);
     const [tableHeight, setTableHeight] = useState(300); // Default 300px height
-    const isDraggingRef = useRef(false);
+    const [tableWidth, setTableWidth] = useState(420);
+    const [catalogLayout, setCatalogLayout] = useState<'stacked' | 'side-by-side'>('stacked');
     const [isFileDragOver, setIsFileDragOver] = useState(false);
+    const viewerWorkspaceRef = useRef<HTMLDivElement>(null);
+
+    // Handlers are registered once per drag, so they read the layout from a ref
+    // to avoid acting on the layout that was active when they were created.
+    const catalogLayoutRef = useRef(catalogLayout);
+    catalogLayoutRef.current = catalogLayout;
 
     // Native Drag-to-Resize Handlers
     const startDrag = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
-        isDraggingRef.current = true;
-        document.body.style.cursor = 'row-resize'; // Change cursor for whole body while dragging
+        const isSideBySide = catalogLayoutRef.current === 'side-by-side';
+        document.body.style.cursor = isSideBySide ? 'col-resize' : 'row-resize';
+
+        const onDrag = (event: MouseEvent) => {
+            const workspace = viewerWorkspaceRef.current;
+            if (!workspace) return;
+
+            // The table is last in the workspace, so dragging left/up grows it.
+            if (isSideBySide) {
+                setTableWidth(prevWidth => Math.max(
+                    220,
+                    Math.min(prevWidth - event.movementX, Math.max(220, workspace.clientWidth - 180))
+                ));
+            } else {
+                setTableHeight(prevHeight => Math.max(
+                    120,
+                    Math.min(prevHeight - event.movementY, Math.max(120, workspace.clientHeight - 150))
+                ));
+            }
+        };
+
+        const stopDrag = () => {
+            document.body.style.cursor = '';
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('mouseup', stopDrag);
+        };
+
         document.addEventListener('mousemove', onDrag);
         document.addEventListener('mouseup', stopDrag);
     }, []);
-
-    const onDrag = useCallback((e: MouseEvent) => {
-        if (!isDraggingRef.current) return;
-        // e.movementY is negative when dragging up, positive when down.
-        // Since the table is at the bottom, dragging UP increases its height.
-        setTableHeight((prevHeight) => {
-            const newHeight = prevHeight - e.movementY;
-            // Constrain between 100px (min) and window height - 150px (max)
-            return Math.max(100, Math.min(newHeight, window.innerHeight - 150));
-        });
-    }, []);
-
-    const stopDrag = useCallback(() => {
-        isDraggingRef.current = false;
-        document.body.style.cursor = ''; // Reset cursor
-        document.removeEventListener('mousemove', onDrag);
-        document.removeEventListener('mouseup', stopDrag);
-    }, [onDrag]);
 
     const handleClearCatalog = (e: React.MouseEvent) => {
         e.stopPropagation(); // Prevent the click from toggling the drawer collapse
@@ -468,11 +482,22 @@ function App() {
                                 )}
 
                                 {/* Center Workspace: flex-column for Bottom Drawer layout */}
-                                <div className="d-flex flex-column flex-grow-1 gap-2 overflow-hidden">
+                                <div
+                                    ref={viewerWorkspaceRef}
+                                    data-testid="viewer-workspace"
+                                    className={`d-flex ${catalogLayout === 'side-by-side' && imageData && tableInfo ? 'flex-row' : 'flex-column'} flex-grow-1 gap-2 overflow-hidden`}
+                                >
                                     
                                     {/* Image Viewer (Top) */}
                                     {imageData && imageData.width > 0 && (
-                                        <div className="d-flex flex-column shadow-sm" style={{ flex: 1, minHeight: 0 }}>
+                                        <div
+                                            className="d-flex flex-column shadow-sm"
+                                            style={{
+                                                flex: catalogLayout === 'side-by-side' && tableInfo ? '1 1 0' : 1,
+                                                minWidth: 0,
+                                                minHeight: 0,
+                                            }}
+                                        >
                                             <div className="fv-panel-box d-flex flex-column w-100 h-100 border-0">
                                                 <div className="fv-panel-header">
                                                     <span><i className="bi bi-image me-2"></i> Image Display</span>
@@ -490,10 +515,14 @@ function App() {
                                     {imageData && tableInfo && isTableDrawerOpen && (
                                         <div 
                                             onMouseDown={startDrag}
-                                            className="w-100 rounded"
+                                            className="rounded flex-shrink-0"
+                                            role="separator"
+                                            aria-orientation={catalogLayout === 'side-by-side' ? 'vertical' : 'horizontal'}
+                                            aria-label="Resize image and catalog panels"
                                             style={{ 
-                                                height: '6px', 
-                                                cursor: 'row-resize', 
+                                                width: catalogLayout === 'side-by-side' ? '6px' : '100%',
+                                                height: catalogLayout === 'side-by-side' ? '100%' : '6px',
+                                                cursor: catalogLayout === 'side-by-side' ? 'col-resize' : 'row-resize',
                                                 backgroundColor: 'var(--fv-border)',
                                                 opacity: 0.8,
                                                 transition: 'opacity 0.2s'
@@ -503,37 +532,41 @@ function App() {
                                         />
                                     )}
 
-                                    {/* Table Viewer (Bottom Drawer) */}
+                                    {/* Table Viewer */}
                                     {tableInfo && (
                                         <div 
                                             className="fv-panel-box d-flex flex-column shadow-sm border-0" 
                                             style={{ 
-                                                // CONDITIONAL LAYOUT:
-                                                // If there is an image above, stick to the fixed dragged height.
-                                                // If there is no image, grow to fill the entire workspace (flex: 1).
-                                                flex: (imageData && imageData.width > 0) ? 'none' : '1', 
-                                                height: isTableDrawerOpen 
-                                                    ? ((imageData && imageData.width > 0) ? `${tableHeight}px` : '100%') 
-                                                    : 'auto',
-                                                minHeight: isTableDrawerOpen 
-                                                    ? ((imageData && imageData.width > 0) ? `${tableHeight}px` : '0') 
-                                                    : 'auto',
+                                                flex: imageData && imageData.width > 0
+                                                    ? 'none'
+                                                    : '1',
+                                                width: imageData && imageData.width > 0 && catalogLayout === 'side-by-side'
+                                                    ? (isTableDrawerOpen ? `${tableWidth}px` : '48px')
+                                                    : undefined,
+                                                height: imageData && imageData.width > 0 && catalogLayout === 'stacked'
+                                                    ? (isTableDrawerOpen ? `${tableHeight}px` : 'auto')
+                                                    : '100%',
+                                                minWidth: 0,
+                                                minHeight: imageData && imageData.width > 0 && catalogLayout === 'stacked' && isTableDrawerOpen ? `${tableHeight}px` : 0,
                                             }}
                                         >
                                             <div 
-                                                className="fv-panel-header d-flex justify-content-between align-items-center"
-                                                style={{ cursor: 'pointer' }}
+                                                className={`fv-panel-header d-flex ${catalogLayout === 'side-by-side' && !isTableDrawerOpen ? 'flex-column' : ''} justify-content-between align-items-center`}
+                                                style={{
+                                                    cursor: 'pointer',
+                                                    writingMode: catalogLayout === 'side-by-side' && !isTableDrawerOpen ? 'vertical-rl' : undefined,
+                                                }}
                                                 onClick={() => setIsTableDrawerOpen(!isTableDrawerOpen)}
                                                 title={isTableDrawerOpen ? "Collapse Table" : "Expand Table"}
                                             >
                                                 <div>
                                                     <i className={`bi ${isTableDrawerOpen ? 'bi-chevron-down' : 'bi-chevron-right'} me-2`}></i>
                                                     <span><i className="bi bi-table me-2"></i>Table</span>
-                                                    <span className="badge bg-secondary ms-2">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>
+                                                    {isTableDrawerOpen && <span className="badge bg-secondary ms-2">{tableInfo.numRows} Rows | {tableInfo.numCols} Cols</span>}
                                                 </div>
                                                 
                                                 {/* Clear Catalog Button; show only if displayed along with image data */}
-                                                {(imageData && imageData.width > 0) &&
+                                                {(imageData && imageData.width > 0 && isTableDrawerOpen) &&
                                                 <button 
                                                     className="btn btn-sm btn-link text-white p-0 m-0 border-0" 
                                                     onClick={handleClearCatalog}
@@ -545,6 +578,20 @@ function App() {
                                                     <i className="bi bi-x-lg"></i>
                                                 </button>
                                                 }
+                                                {imageData && imageData.width > 0 && isTableDrawerOpen && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-secondary ms-auto"
+                                                        aria-label={catalogLayout === 'stacked' ? 'Switch to side-by-side layout' : 'Switch to stacked layout'}
+                                                        title={catalogLayout === 'stacked' ? 'Show image and catalog side by side' : 'Stack catalog below image'}
+                                                        onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            setCatalogLayout(layout => layout === 'stacked' ? 'side-by-side' : 'stacked');
+                                                        }}
+                                                    >
+                                                        <i className={`bi ${catalogLayout === 'stacked' ? 'bi-layout-split' : 'bi-view-stacked'}`} aria-hidden="true"></i>
+                                                    </button>
+                                                )}
                                             </div>
                                             
                                             {/* Only render the table body if the drawer is open */}

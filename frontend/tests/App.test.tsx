@@ -155,6 +155,47 @@ describe('App', () => {
         expect(ctx.setIsLoading).toHaveBeenLastCalledWith(false);
     });
 
+    it('toggles between stacked and side-by-side image/catalog layouts', () => {
+        renderApp({
+            activeDataType: 'votable',
+            imageData: { data: new Float32Array(4), width: 2, height: 2 },
+            tableInfo,
+        });
+
+        const workspace = screen.getByTestId('viewer-workspace');
+        expect(workspace.classList.contains('flex-column')).toBe(true);
+        expect(screen.getByRole('separator', { name: 'Resize image and catalog panels' }).getAttribute('aria-orientation')).toBe('horizontal');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Switch to side-by-side layout' }));
+        expect(workspace.classList.contains('flex-row')).toBe(true);
+        expect(screen.getByRole('separator', { name: 'Resize image and catalog panels' }).getAttribute('aria-orientation')).toBe('vertical');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Switch to stacked layout' }));
+        expect(workspace.classList.contains('flex-column')).toBe(true);
+    });
+
+    it('resizes the table horizontally when dragging the divider in side-by-side layout', () => {
+        renderApp({
+            activeDataType: 'votable',
+            imageData: { data: new Float32Array(4), width: 2, height: 2 },
+            tableInfo,
+        });
+        fireEvent.click(screen.getByRole('button', { name: 'Switch to side-by-side layout' }));
+
+        const separator = screen.getByRole('separator', { name: 'Resize image and catalog panels' });
+        const tablePanel = separator.nextElementSibling as HTMLElement;
+        const height = tablePanel.style.height;
+        expect(tablePanel.style.width).toBe('420px');
+
+        fireEvent.mouseDown(separator);
+        expect(document.body.style.cursor).toBe('col-resize');
+        act(() => { document.dispatchEvent(new MouseEvent('mousemove', { movementX: 30 })); });
+        expect(tablePanel.style.width).not.toBe('420px');
+        expect(tablePanel.style.height).toBe(height);
+        act(() => { document.dispatchEvent(new MouseEvent('mouseup')); });
+        expect(document.body.style.cursor).toBe('');
+    });
+
     it('loads a cube HDU with default slice', async () => {
         const ctx: any = createMockContext({
             activeHdu: 2, hduList: [{ index: 2, type: 'image', naxes: [4, 4, 5, 2] }],
