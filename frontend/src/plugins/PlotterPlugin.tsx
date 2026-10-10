@@ -29,6 +29,10 @@ const PlotterSidebar = () => {
     // Move all the plotter-specific state here!
     const [plotterWidth, setPlotterWidth] = useState(450);
     const [isResizingPlotter, setIsResizingPlotter] = useState(false);
+    const [isNarrowScreen, setIsNarrowScreen] = useState(() => {
+        const viewportWidth = Math.max(document.body?.clientWidth || window.innerWidth || 0, 320);
+        return viewportWidth < 900;
+    });
     const [plotX, setPlotX] = useState<string>('');
     const [plotY, setPlotY] = useState<string>('');
     const [plotXErr, setPlotXErr] = useState<string>('');
@@ -77,12 +81,38 @@ const PlotterSidebar = () => {
     }, [plotX, plotY, plotXErr, plotYErr, activeHdu, activeDataType, 
         tableInfo, fitsWorker, voWorker, isPlotterOpen]);
 
+    useEffect(() => {
+        const updateLayoutMode = () => {
+            const viewportWidth = Math.max(document.body.clientWidth || window.innerWidth, 320);
+            const nextNarrow = viewportWidth < 900;
+            setIsNarrowScreen(nextNarrow);
+            setPlotterWidth((currentWidth) => {
+                const maxWidth = nextNarrow ? Math.min(450, viewportWidth - 24) : 450;
+                const minWidth = nextNarrow ? 280 : 300;
+                return Math.min(maxWidth, Math.max(minWidth, currentWidth));
+            });
+        };
+
+        updateLayoutMode();
+        window.addEventListener('resize', updateLayoutMode);
+        return () => window.removeEventListener('resize', updateLayoutMode);
+    }, []);
+
     // Resize Logic
     useEffect(() => {
         if (!isResizingPlotter) return;
         const handlePointerMove = (e: PointerEvent) => {
-            const newWidth = document.body.clientWidth - e.clientX;
-            if (newWidth > 300 && newWidth < document.body.clientWidth - 300) setPlotterWidth(newWidth);
+            const viewportWidth = Math.max(document.body.clientWidth || window.innerWidth, 320);
+            const newWidth = viewportWidth - e.clientX;
+
+            if (isNarrowScreen) {
+                const maxWidth = Math.min(450, viewportWidth - 24);
+                const clamped = Math.min(maxWidth, Math.max(280, newWidth));
+                if (clamped >= 280 && clamped <= maxWidth) setPlotterWidth(clamped);
+                return;
+            }
+
+            if (newWidth > 300 && newWidth < viewportWidth - 300) setPlotterWidth(newWidth);
         };
         const handlePointerUp = () => setIsResizingPlotter(false);
 
@@ -92,7 +122,7 @@ const PlotterSidebar = () => {
             window.removeEventListener('pointermove', handlePointerMove);
             window.removeEventListener('pointerup', handlePointerUp);
         };
-    }, [isResizingPlotter]);
+    }, [isResizingPlotter, isNarrowScreen]);
 
     // When tableInfo changes (a new HDU is loaded), reset the default axes!
     useEffect(() => {
@@ -128,14 +158,21 @@ const PlotterSidebar = () => {
             <div 
                 className="d-flex flex-column flex-shrink-0" 
                 style={{ 
-                    width: isPlotterOpen ? `${plotterWidth}px` : '0px', 
-                    backgroundColor: 'var(--fv-panel)', 
+                    width: isPlotterOpen ? `${plotterWidth}px` : '0px',
+                    maxWidth: isNarrowScreen ? 'calc(100vw - 1rem)' : undefined,
+                    backgroundColor: 'var(--fv-panel)',
+                    position: isNarrowScreen ? 'fixed' : 'relative',
+                    right: isNarrowScreen ? '0' : undefined,
+                    top: isNarrowScreen ? '0' : undefined,
+                    bottom: isNarrowScreen ? '0' : undefined,
+                    zIndex: isNarrowScreen ? 1200 : undefined,
+                    boxShadow: isNarrowScreen ? '0 0 20px rgba(0,0,0,0.35)' : undefined,
                     transition: isResizingPlotter ? 'none' : 'width 0.3s ease-in-out',
                     overflow: 'hidden'
                 }}
             >
                 {/* Inner container uses dynamic plotterWidth to stay rigid during animation */}
-                <div style={{ width: `${plotterWidth}px`, minWidth: `${plotterWidth}px` }} className="d-flex flex-column h-100 p-3">
+                <div style={{ width: `${plotterWidth}px`, minWidth: `${plotterWidth}px`, maxWidth: isNarrowScreen ? 'calc(100vw - 1rem)' : undefined }} className="d-flex flex-column h-100 p-3">
                     <div className="d-flex align-items-center justify-content-between mb-3 text-white fw-bold border-bottom pb-2" style={{ borderColor: 'var(--fv-border)' }}>
                         <span><i className="bi bi-graph-up me-2 text-primary"></i> Analysis Plotter</span>
                         <button className="btn-close btn-close-white" style={{ fontSize: '0.7rem' }} onClick={() => setIsPlotterOpen(false)}></button>

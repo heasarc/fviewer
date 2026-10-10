@@ -91,6 +91,17 @@ describe('PlotterPlugin interactions', () => {
         expect(lastProps()).toMatchObject({ subsetMode: 'random', subsetRandomN: 25 });
     });
 
+    it('uses an overlay on narrow screens and keeps width inside the viewport', async () => {
+        vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(500);
+        vi.spyOn(document.body, 'clientWidth', 'get').mockReturnValue(500);
+        const { container } = render();
+        await screen.findByTestId('plot');
+        const panel = container.querySelector('.d-flex.flex-column.flex-shrink-0') as HTMLElement;
+        expect(panel.style.position).toBe('fixed');
+        expect(panel.style.right).toBe('0px');
+        expect(panel.style.width).toBe('450px');
+    });
+
     it('resizes by dragging, within limits, and stops on pointer up', async () => {
         vi.spyOn(document.body, 'clientWidth', 'get').mockReturnValue(1400);
         const { container } = render();
