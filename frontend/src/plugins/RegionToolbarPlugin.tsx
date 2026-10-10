@@ -22,6 +22,7 @@ const RegionToolbarPluginComponent = () => {
     } = useCore();
 
     const [saveFormat, setSaveFormat] = useState<'image' | 'physical' | 'fk5'>('image');
+    const [feedback, setFeedback] = useState<{ type: 'error' | 'success' | 'info'; message: string; retry?: () => void } | null>(null);
     const regionInputRef = useRef<HTMLInputElement>(null);
     const toggleRef = useRef<HTMLButtonElement>(null);
 
@@ -50,44 +51,67 @@ const RegionToolbarPluginComponent = () => {
 
     // --- REGION FILE I/O ---
     const handleSaveRegions = async (format: 'image' | 'physical' | 'fk5' = 'fk5') => {
-        if (regions.length === 0) return alert("No regions to save.");
-        if (!imageData) return alert("No image data loaded.");
+        if (regions.length === 0) {
+            setFeedback({ type: 'error', message: 'No regions to save.' });
+            return;
+        }
+        if (!imageData) {
+            setFeedback({ type: 'error', message: 'No image data loaded.' });
+            return;
+        }
 
-        const physicalTransform = {
-            ltv1: imageData.ltv1 ?? 0, ltv2: imageData.ltv2 ?? 0,
-            ltm1_1: imageData.ltm1_1 ?? 1, ltm2_2: imageData.ltm2_2 ?? 1
-        };
-        
-        const fileContent = await serializeDS9Regions(
-            regions, format, imageData.width, imageData.height, fitsWorker.pixToWorld,
-            imageData.pixScale || null, physicalTransform
-        );
+        try {
+            const physicalTransform = {
+                ltv1: imageData.ltv1 ?? 0, ltv2: imageData.ltv2 ?? 0,
+                ltm1_1: imageData.ltm1_1 ?? 1, ltm2_2: imageData.ltm2_2 ?? 1
+            };
+            
+            const fileContent = await serializeDS9Regions(
+                regions, format, imageData.width, imageData.height, fitsWorker.pixToWorld,
+                imageData.pixScale || null, physicalTransform
+            );
 
-        const blob = new Blob([fileContent], { type: 'text/plain' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${fileName ? fileName.replace(/\.fits$/i, '') : 'fviewer'}.reg`;
-        a.click();
-        URL.revokeObjectURL(a.href);
+            const blob = new Blob([fileContent], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `${fileName ? fileName.replace(/\.fits$/i, '') : 'fviewer'}.reg`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            setFeedback({ type: 'success', message: `Saved ${regions.length} region${regions.length === 1 ? '' : 's'} to disk.` });
+        } catch (error) {
+            setFeedback({
+                type: 'error',
+                message: 'Unable to save regions.',
+                retry: () => handleSaveRegions(format)
+            });
+        }
     };
 
     const handleLoadRegions = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !imageData) return;
+        if (!file || !imageData) {
+            setFeedback({ type: 'error', message: imageData ? 'Select a region file to load.' : 'Load a FITS file before importing regions.' });
+            return;
+        }
 
-        const physicalTransform = {
-            ltv1: imageData.ltv1 ?? 0, ltv2: imageData.ltv2 ?? 0,
-            ltm1_1: imageData.ltm1_1 ?? 1, ltm2_2: imageData.ltm2_2 ?? 1
-        };
+        try {
+            const physicalTransform = {
+                ltv1: imageData.ltv1 ?? 0, ltv2: imageData.ltv2 ?? 0,
+                ltm1_1: imageData.ltm1_1 ?? 1, ltm2_2: imageData.ltm2_2 ?? 1
+            };
 
-        const text = await file.text(); 
-        const loadedRegions = await parseDS9Regions(
-            text, imageData.width, imageData.height, fitsWorker.pixToWorld, fitsWorker.worldToPix,
-            physicalTransform
-        );
-        
-        setRegions((prev: any[]) => [...prev, ...loadedRegions]);
-        if (regionInputRef.current) regionInputRef.current.value = ''; 
+            const text = await file.text(); 
+            const loadedRegions = await parseDS9Regions(
+                text, imageData.width, imageData.height, fitsWorker.pixToWorld, fitsWorker.worldToPix,
+                physicalTransform
+            );
+            
+            setRegions((prev: any[]) => [...prev, ...loadedRegions]);
+            setFeedback({ type: 'success', message: `Loaded ${loadedRegions.length} region${loadedRegions.length === 1 ? '' : 's'}.` });
+            if (regionInputRef.current) regionInputRef.current.value = ''; 
+        } catch (error) {
+            setFeedback({ type: 'error', message: `Unable to read ${file.name}.`, retry: () => handleLoadRegions(e) });
+        }
     };
 
     return (
@@ -159,6 +183,14 @@ const RegionToolbarPluginComponent = () => {
                 <button className="fv-btn" title="Return to Pointer / Pan (Esc)" onClick={() => setDrawMode('pan')}>
                     <i className="bi bi-arrows-move"></i> <span className="ms-1">Pan</span>
                 </button>
+            )}
+            {feedback && (
+                <div className={`small rounded px-2 py-1 mt-2 border ${feedback.type === 'error' ? 'border-danger text-danger bg-danger-subtle' : 'border-success text-success bg-success-subtle'}`}>
+                    <span>{feedback.message}</span>
+                    {feedback.retry && (
+                        <button type="button" className="btn btn-link btn-sm p-0 ms-2" onClick={feedback.retry}>Retry</button>
+                    )}
+                </div>
             )}
         </div>
     );

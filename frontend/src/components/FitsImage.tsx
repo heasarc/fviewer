@@ -65,6 +65,8 @@ export const FitsImage: React.FC<FitsImageProps> = ({
 
     // --- CATALOG OVERLAY STATE ---
     const [catalogPoints, setCatalogPoints] = useState<{x: number, y: number, rowIndex: number}[]>([]);
+    const [catalogStats, setCatalogStats] = useState<{ plotted: number; total: number; truncated: boolean }>({ plotted: 0, total: 0, truncated: false });
+    const MAX_CATALOG_POINTS = 2000;
     
     // Check WCS availability on load
     useEffect(() => { checkWcs().then(setHasWCS).catch(() => setHasWCS(false)); }, [checkWcs]);
@@ -279,6 +281,7 @@ export const FitsImage: React.FC<FitsImageProps> = ({
         // Only run if we have an image, WCS, and a catalog is actively loaded
         if (activeDataType !== 'votable' || !tableInfo || !hasWCS) {
             setCatalogPoints([]);
+            setCatalogStats({ plotted: 0, total: 0, truncated: false });
             return;
         }
 
@@ -299,8 +302,10 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                 
                 // Limit to 2000 points to prevent flooding the Web Worker message queue
                 // (For massive catalogs, a bulk WORLD_TO_PIX WASM function should be added later)
-                const totalPoints = Math.min(raData.length, decData.length, 2000);
+                const totalRows = Math.min(raData.length, decData.length);
+                const totalPoints = Math.min(totalRows, MAX_CATALOG_POINTS);
                 const points: {x: number, y: number, rowIndex: number}[] = [];
+                let plotted = 0;
 
                 for (let i = 0; i < totalPoints; i++) {
                     const ra = raData[i];
@@ -321,9 +326,15 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                             y: height - pxCoords.y,
                             rowIndex: i
                         });
+                        plotted += 1;
                     }
                 }
                 setCatalogPoints(points);
+                setCatalogStats({
+                    plotted,
+                    total: totalRows,
+                    truncated: totalRows > MAX_CATALOG_POINTS,
+                });
             } catch (err) {
                 console.error("Failed to map catalog overlay:", err);
             }
@@ -498,6 +509,20 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                         style={{ top: 8, left: 8, zIndex: 10, pointerEvents: 'none', background: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: '0.8rem' }}
                     >
                         {`Click and drag to draw ${drawMode === 'ellipse' ? 'an' : 'a'} ${drawMode}. Press Esc to return to pan.`}
+                    </div>
+                )}
+                {catalogStats.total > 0 && (
+                    <div
+                        data-testid="catalog-overlay-stats"
+                        className="position-absolute px-2 py-1 rounded"
+                        style={{ top: 8, right: 8, zIndex: 10, pointerEvents: 'none', background: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: '0.8rem' }}
+                    >
+                        <span>Catalog: {catalogStats.plotted} plotted / {catalogStats.total} total</span>
+                        {catalogStats.truncated && (
+                            <span data-testid="catalog-overlay-warning" className="d-block text-warning mt-1">
+                                Capped at {MAX_CATALOG_POINTS} rows.
+                            </span>
+                        )}
                     </div>
                 )}
                 {/* ONLY RENDER IF ZOOM IS READY */}

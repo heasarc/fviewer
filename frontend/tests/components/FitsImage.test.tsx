@@ -318,6 +318,14 @@ describe('FitsImage catalog overlay', () => {
         expect(dots(container)).toHaveLength(0);
     });
 
+    it('shows plotted/total counts and warns when the catalog is truncated', async () => {
+        const ra = Array.from({ length: 2005 }, (_, i) => i + 5);
+        const dec = Array.from({ length: 2005 }, (_, i) => i + 5);
+        const { container } = mount(mk({}, ra, dec));
+        await waitFor(() => expect(container.textContent).toContain('Catalog: 2000 plotted / 2005 total'));
+        expect(container.textContent).toContain('Capped at 2000 rows.');
+    });
+
     it('logs when readColumn rejects', async () => {
         const err = vi.spyOn(console, 'error').mockImplementation(() => {});
         const o = mk();

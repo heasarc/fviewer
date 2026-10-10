@@ -71,6 +71,11 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
 
     const [editingCell, setEditingCell] = useState<{ row: number, colName: string } | null>(null);
     const [editValue, setEditValue] = useState<string>('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [sortColumn, setSortColumn] = useState<string | null>(null);
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+    const [hiddenColumns, setHiddenColumns] = useState<Record<string, boolean>>({});
+    const [showColumnMenu, setShowColumnMenu] = useState(false);
 
     // Tracks requested chunk ranges (e.g., "0-50") to prevent spamming the Web Worker
     // with duplicate requests while waiting for the WASM thread to respond.
@@ -94,26 +99,59 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
         return () => observer.disconnect();
     }, []);
 
+    const visibleColumns = useMemo(() => columns.filter((col) => !hiddenColumns[col.name]), [columns, hiddenColumns]);
+
+    const filteredRowIndexes = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        let rows = Array.from({ length: numRows }, (_, index) => index);
+
+        if (query) {
+            rows = rows.filter((rowIndex) =>
+                visibleColumns.some((col) => {
+                    const value = dataMap[col.name]?.[rowIndex];
+                    return String(value ?? '').toLowerCase().includes(query);
+                })
+            );
+        }
+
+        if (sortColumn) {
+            rows.sort((a, b) => {
+                const av = dataMap[sortColumn]?.[a];
+                const bv = dataMap[sortColumn]?.[b];
+                const aValue = av === undefined || av === null ? '' : av;
+                const bValue = bv === undefined || bv === null ? '' : bv;
+
+                if (typeof aValue === 'number' && typeof bValue === 'number') {
+                    return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+                }
+
+                return (String(aValue).localeCompare(String(bValue), undefined, { numeric: true }) * (sortDirection === 'asc' ? 1 : -1));
+            });
+        }
+
+        return rows;
+    }, [dataMap, numRows, searchQuery, sortColumn, sortDirection, visibleColumns]);
+
     // --- Virtualization Math ---
     // Calculate exactly which indices to render based on the scroll position.
     const visibleRowCount = Math.ceil(containerHeight / rowHeight) + 10;
-    const totalHeight = numRows * rowHeight;
+    const totalHeight = filteredRowIndexes.length * rowHeight;
     const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - 4);
-    const endIndex = Math.min(numRows - 1, startIndex + visibleRowCount);
+    const endIndex = Math.min(filteredRowIndexes.length - 1, startIndex + visibleRowCount);
 
     const rowNumWidth = 60;
-    const totalWidth = rowNumWidth + columns.reduce((sum, _, idx) => sum + getColWidth(idx), 0);
+    const totalWidth = rowNumWidth + visibleColumns.reduce((sum, _, idx) => sum + getColWidth(idx), 0);
 
     // --- Lazy Load Trigger ---
     // Monitors the currently visible view (plus a 50-row buffer). If the `dataMap` 
     // is missing data for these rows, it queues a fetch request to the Web Worker.
     useEffect(() => {
-        if (!onFetchData || columns.length === 0) return;
+        if (!onFetchData || visibleColumns.length === 0) return;
 
         const fetchStart = Math.max(0, startIndex - 50);
         const fetchEnd = Math.min(numRows - 1, endIndex + 50);
 
-        const testCol = columns[0].name; 
+        const testCol = visibleColumns[0].name; 
         let needsFetch = false;
         
         for (let i = fetchStart; i <= fetchEnd; i++) {
@@ -137,7 +175,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
             }, 100);
             return () => clearTimeout(timer);
         }
-    }, [startIndex, endIndex, columns, dataMap, numRows, onFetchData]);
+    }, [startIndex, endIndex, visibleColumns, dataMap, numRows, onFetchData]);
 
     // Auto-scroll when selection changes from outside (e.g., clicking the Image overlay)
     useEffect(() => {
@@ -207,18 +245,20 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
     // --- Render Visible Rows ---
     const visibleRows = useMemo(() => {
         const rows = [];
-        for (let i = startIndex; i <= endIndex; i++) {
-            const isSelected = selectedRow === i; // <--- Check selection
+        const visibleRowIndices = filteredRowIndexes.slice(startIndex, endIndex + 1);
+        for (let displayIndex = 0; displayIndex < visibleRowIndices.length; displayIndex++) {
+            const rowIndex = visibleRowIndices[displayIndex];
+            const isSelected = selectedRow === rowIndex;
             rows.push(
                 <div 
-                    key={i} 
+                    key={rowIndex} 
                     role="row"
                     className="d-flex position-absolute start-0 border-bottom"
-                    onClick={() => onRowClick && onRowClick(i)} // <--- Make row clickable
+                    onClick={() => onRowClick && onRowClick(rowIndex)}
                     style={{ 
-                        top: i * rowHeight, width: totalWidth, height: rowHeight,
+                        top: (startIndex + displayIndex) * rowHeight, width: totalWidth, height: rowHeight,
                         // Tint the background green if selected
-                        backgroundColor: isSelected ? 'rgba(0, 255, 0, 0.15)' : (i % 2 === 0 ? 'var(--fv-bg)' : 'var(--fv-panel)'),
+                        backgroundColor: isSelected ? 'rgba(0, 255, 0, 0.15)' : (displayIndex % 2 === 0 ? 'var(--fv-bg)' : 'var(--fv-panel)'),
                         // Add a thick green border to the left edge if selected
                         borderLeft: isSelected ? '4px solid #00ff00' : '4px solid transparent', 
                         borderColor: isSelected ? '#00ff00' : 'rgba(255,255,255,0.05)',
@@ -233,17 +273,16 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                         className="d-flex align-items-center justify-content-end px-2 fw-bold border-end flex-shrink-0" 
                         style={{ 
                             width: rowNumWidth, position: 'sticky', left: 0, zIndex: 2, 
-                            // Make it transparent so the green tint shows through when selected
                             backgroundColor: isSelected ? 'transparent' : 'var(--fv-panel-hover)', 
                             color: isSelected ? '#00ff00' : 'var(--fv-text)'
                         }}
                     >
-                        {i + 1}
+                        {rowIndex + 1}
                     </div>
                     
                     {/* Data Cells */}
-                    {columns.map((col, colIdx) => {
-                        let val = dataMap[col.name]?.[i];
+                    {visibleColumns.map((col, colIdx) => {
+                        let val = dataMap[col.name]?.[rowIndex];
                         
                         // Handle loading state gracefully while waiting for worker chunks
                         const isMissing = val === undefined;
@@ -263,7 +302,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                             }
                         }
 
-                        const isEditing = editingCell?.row === i && editingCell?.colName === col.name;
+                        const isEditing = editingCell?.row === rowIndex && editingCell?.colName === col.name;
 
                         return (
                             <div 
@@ -277,12 +316,13 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                                     color: (val === null || isMissing) ? '#666' : 'inherit'
                                 }}
                                 // Ensure double-click editing only fires for scalars
-                                onDoubleClick={() => !isMissing && !isArray && handleDoubleClick(i, col.name, val)}
+                                onDoubleClick={() => !isMissing && !isArray && handleDoubleClick(rowIndex, col.name, val)}
                                 title={isEditing ? '' : displayVal}
                             >
                                 {isEditing ? (
                                     <input 
                                         type="text"
+                                        aria-label={`Edit ${col.name}`}
                                         className="form-control form-control-sm w-100 h-100 border-0 rounded-0 fw-bold"
                                         style={{ backgroundColor: 'var(--fv-accent)', color: '#000' }}
                                         value={editValue}
@@ -302,7 +342,7 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                                         }}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            if (onVectorClick) onVectorClick(col.name, i, val);
+                                            if (onVectorClick) onVectorClick(col.name, rowIndex, val);
                                         }}
                                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--fv-panel-hover)'}
                                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -321,10 +361,55 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
             );
         }
         return rows;
-    }, [startIndex, endIndex, columns, dataMap, rowHeight, totalWidth, editingCell, editValue, selectedRow]);
+    }, [startIndex, endIndex, visibleColumns, dataMap, rowHeight, totalWidth, editingCell, editValue, selectedRow, filteredRowIndexes]);
+
+    const toggleSort = (colName: string) => {
+        if (sortColumn !== colName) {
+            setSortColumn(colName);
+            setSortDirection('asc');
+            return;
+        }
+        setSortDirection((prev) => prev === 'asc' ? 'desc' : 'asc');
+    };
+
+    const toggleColumn = (colName: string) => {
+        setHiddenColumns((prev) => ({ ...prev, [colName]: !prev[colName] }));
+    };
 
     return (
-        <div className="w-100 h-100">
+        <div className="w-100 h-100 d-flex flex-column">
+            <div className="d-flex align-items-center gap-2 px-2 py-2 border-bottom flex-wrap" style={{ backgroundColor: 'var(--fv-panel)' }}>
+                <div className="input-group input-group-sm" style={{ maxWidth: 260 }}>
+                    <span className="input-group-text" aria-hidden="true"><i className="bi bi-search" /></span>
+                    <input
+                        aria-label="Search table"
+                        className="form-control"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search" 
+                    />
+                </div>
+                <button className="btn btn-sm btn-outline-secondary" type="button" aria-label="Columns" onClick={() => setShowColumnMenu((prev) => !prev)}>
+                    <i className="bi bi-gear me-1" /> Columns
+                </button>
+                <div className="small text-muted ms-auto">
+                    {isReadOnly ? 'Read-only table — editing disabled.' : 'Double-click a cell to edit.'}
+                </div>
+                {showColumnMenu && (
+                    <div className="d-flex flex-wrap gap-2 w-100 mt-1 px-1">
+                        {columns.map((col) => (
+                            <label key={col.name} className="small d-flex align-items-center gap-1">
+                                <input
+                                    type="checkbox"
+                                    checked={!hiddenColumns[col.name]}
+                                    onChange={() => toggleColumn(col.name)}
+                                />
+                                {col.name}
+                            </label>
+                        ))}
+                    </div>
+                )}
+            </div>
             <div 
                 ref={scrollContainerRef}
                 className="w-100 h-100 overflow-auto position-relative"
@@ -346,32 +431,39 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                     >
                         Row
                     </div>
-                    {columns.map((col, idx) => (
+                    {visibleColumns.map((col, idx) => (
                         <div 
                             key={idx} 
-                            // 'position-relative' allows the resizer handle to lock to the right edge
                             className="position-relative d-flex flex-column justify-content-center px-2 text-truncate border-end flex-shrink-0" 
                             style={{ width: getColWidth(idx), borderColor: 'rgba(255,255,255,0.05)' }}
                         >
-                            <span style={{ fontSize: '0.8rem', color: 'var(--fv-accent)' }}>{col.name}</span>
+                            <button
+                                type="button"
+                                className="btn btn-link btn-sm p-0 text-start text-decoration-none"
+                                onClick={() => toggleSort(col.name)}
+                                style={{ fontSize: '0.8rem', color: 'var(--fv-accent)', textAlign: 'left' }}
+                            >
+                                {col.name}
+                                {sortColumn === col.name && (
+                                    <i className={`bi bi-arrow-${sortDirection === 'asc' ? 'up' : 'down'} ms-1`} aria-hidden="true" />
+                                )}
+                            </button>
                             <span style={{ fontSize: '0.65rem', color: 'var(--bs-gray-600)' }}>{col.unit || col.form}</span>
                             
-                            {/* Invisible Drag Handle for Column Resizing */}
                             <div 
                                 style={{
                                     position: 'absolute',
-                                    right: -2, // Pull slightly over the border line
+                                    right: -2,
                                     top: 0,
                                     bottom: 0,
                                     width: '5px',
                                     cursor: 'col-resize',
                                     zIndex: 10,
-                                    // Highlight if THIS specific column is currently being dragged
                                     backgroundColor: resizingCol?.idx === idx ? 'var(--fv-accent)' : 'transparent',
                                     transition: 'background-color 0.2s'
                                 }}
                                 onPointerDown={(e) => {
-                                    e.preventDefault(); // Prevent text highlighting while dragging
+                                    e.preventDefault();
                                     e.stopPropagation();
                                     setResizingCol({ idx, startX: e.clientX, startWidth: getColWidth(idx) });
                                 }}
@@ -389,7 +481,6 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
                 {/* Invisible Spacer to establish the full scrollable height of the table */}
                 <div className="position-absolute top-0 start-0" style={{ height: totalHeight, width: totalWidth, marginTop: '40px' }} />
                 
-                {/* Visible Rows Container (Only renders the subset of active rows) */}
                 <div className="position-absolute top-0 start-0" style={{ width: totalWidth, marginTop: '40px' }}>
                     {visibleRows}
                 </div>

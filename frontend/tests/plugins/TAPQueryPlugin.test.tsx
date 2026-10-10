@@ -23,14 +23,15 @@ const region = (o: any) => ({ id: 'r1', startX: 10, startY: 10, endX: 20, endY: 
 describe('TAPQueryPlugin', () => {
     beforeEach(() => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok));
-        vi.spyOn(window, 'alert').mockImplementation(() => {});
         vi.spyOn(console, 'error').mockImplementation(() => {});
     });
-    afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+    afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
-    it('renders nothing when disconnected', () => {
+    it('keeps the catalogs menu visible but disabled when disconnected', () => {
         setup({ isConnected: false });
-        expect(screen.queryByText('Catalogs')).toBeNull();
+        expect(screen.getByText('Catalogs')).toBeInTheDocument();
+        const button = screen.getByRole('button', { name: /Catalogs/i });
+        expect(button).toBeDisabled();
     });
 
     it('runs a manual query, updates state and closes the modal', async () => {
@@ -55,12 +56,12 @@ describe('TAPQueryPlugin', () => {
         expect(screen.queryByText('Run Query')).toBeNull();
     });
 
-    it('alerts with the server detail on proxy errors', async () => {
+    it('shows the server detail in the modal on proxy errors', async () => {
         (fetch as any).mockResolvedValue({ ok: false, status: 500, json: async () => ({ detail: 'nope' }) });
         setup();
         fireEvent.click(screen.getByText(/Manual ADQL Search/));
         fireEvent.click(screen.getByText('Run Query'));
-        await waitFor(() => expect(window.alert).toHaveBeenCalledWith('Query Failed: nope'));
+        await waitFor(() => expect(screen.getByText('Query Failed: nope')).toBeInTheDocument());
     });
 
     it('falls back to the status code when no detail is given', async () => {
@@ -68,7 +69,7 @@ describe('TAPQueryPlugin', () => {
         setup();
         fireEvent.click(screen.getByText(/Manual ADQL Search/));
         fireEvent.click(screen.getByText('Run Query'));
-        await waitFor(() => expect(window.alert).toHaveBeenCalledWith('Query Failed: Proxy Error: 502'));
+        await waitFor(() => expect(screen.getByText('Query Failed: Proxy Error: 502')).toBeInTheDocument());
     });
 
     it('does nothing for overlay queries without an image', () => {
@@ -108,11 +109,11 @@ describe('TAPQueryPlugin', () => {
         expect(lastAdql()).toMatch(pattern);
     });
 
-    it('alerts when coordinate conversion fails', async () => {
+    it('shows an inline error when coordinate conversion fails', async () => {
         const { ctx } = setup({ imageData: img });
         ctx.fitsWorker.pixToWorld.mockRejectedValue(new Error('no wcs'));
         fireEvent.click(screen.getByText('HEASARC Chandra'));
-        await waitFor(() => expect(window.alert).toHaveBeenCalledWith('Context Query Error: no wcs'));
+        await waitFor(() => expect(screen.getByText('Context Query Error: no wcs')).toBeInTheDocument());
         expect(fetch).not.toHaveBeenCalled();
     });
 });

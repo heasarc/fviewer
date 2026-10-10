@@ -1,5 +1,5 @@
 // src/plugins/TAPQueryPlugin.tsx
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCore } from '../core/FViewerContext';
 import { pluginManager } from '../core/PluginManager';
 import { getApiUrl } from '../hooks/useWebSocket';
@@ -16,11 +16,19 @@ const TAPQueryMenu = () => {
     const [tapUrl, setTapUrl] = useState('https://heasarc.gsfc.nasa.gov/xamin/vo/tap');
     const [query, setQuery] = useState("SELECT TOP 100 * FROM ivoa.obscore");
     const [isFetching, setIsFetching] = useState(false);
+    const [feedback, setFeedback] = useState<{ type: 'error' | 'success' | 'info'; message: string; retry?: () => void } | null>(null);
+
+    useEffect(() => {
+        if (!feedback) return;
+        const timer = window.setTimeout(() => setFeedback(null), 4000);
+        return () => window.clearTimeout(timer);
+    }, [feedback]);
 
     // General handler for both manual ADQL and automatic Image overlays
     const executeQuery = async (targetUrl: string, adqlQuery: string, label: string, clearImage: boolean = true) => {
         setIsFetching(true);
         setIsLoading(true);
+        setFeedback(null);
         
         try {
             // 1. Fetch via our FastAPI proxy to bypass CORS
@@ -56,10 +64,15 @@ const TAPQueryMenu = () => {
                 setActiveHdu(null); 
             }
             
+            setFeedback({ type: 'success', message: `Loaded ${numRows} rows from ${label}.` });
             setIsOpen(false);
         } catch (error: any) {
             console.error("TAP Query Failed:", error);
-            alert(`Query Failed: ${error.message}`);
+            setFeedback({
+                type: 'error',
+                message: `Query Failed: ${error.message}`,
+                retry: () => executeQuery(targetUrl, adqlQuery, label, clearImage)
+            });
         } finally {
             setIsFetching(false);
             setIsLoading(false);
@@ -180,25 +193,57 @@ const TAPQueryMenu = () => {
             await executeQuery(tapUrl, adql, label, false);
             
         } catch (err: any) {
-            alert(`Context Query Error: ${err.message}`);
+            console.error("Context Query Error:", err);
+            setFeedback({
+                type: 'error',
+                message: `Context Query Error: ${err.message}`,
+                retry: () => handleContextQuery(tableName, label, tapUrl)
+            });
             setIsFetching(false);
         }
     };
 
     const heasarcTap = "https://heasarc.gsfc.nasa.gov/xamin/vo/tap";
     const irsaTap = "https://irsa.ipac.caltech.edu/TAP";
-    if (isConnected) {
-        return (
-            <>
-                {/* The Catalogs Dropdown Menu */}
-                <li className="nav-item dropdown">
-                    <button 
-                        className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0 d-flex align-items-center" 
-                        style={{ fontSize: '0.85rem', height: '36px', color: 'var(--fv-text)' }} 
-                        data-bs-toggle="dropdown"
-                    >
-                        Catalogs
-                    </button>
+
+    return (
+        <>
+            {feedback && !isOpen && (
+                <div
+                    className={`position-fixed top-0 end-0 m-3 px-3 py-2 rounded border shadow-sm small ${feedback.type === 'error' ? 'bg-danger text-white border-danger' : 'bg-success text-white border-success'}`}
+                    style={{ zIndex: 2000, maxWidth: '22rem' }}
+                >
+                    <div className="d-flex justify-content-between align-items-center gap-2">
+                        <span>{feedback.message}</span>
+                        {feedback.retry && (
+                            <button type="button" className="btn btn-link btn-sm p-0 text-white" onClick={feedback.retry}>Retry</button>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            <li className="nav-item dropdown">
+                <button
+                    className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0 d-flex align-items-center"
+                    style={{
+                        fontSize: '0.85rem',
+                        height: '36px',
+                        color: 'var(--fv-text)',
+                        background: 'transparent',
+                        border: '1px solid transparent',
+                        boxShadow: 'none',
+                        opacity: isConnected ? 1 : 0.65,
+                    }}
+                    data-bs-toggle={isConnected ? 'dropdown' : undefined}
+                    disabled={!isConnected}
+                    aria-disabled={!isConnected}
+                    title={isConnected ? 'Remote catalog queries' : 'Connect to the API to enable remote catalog queries'}
+                >
+                    <i className={`bi ${isConnected ? 'bi-plug-fill fv-text-primary' : 'bi-plug fv-text-muted'} me-2`} aria-hidden="true"></i>
+                    <span>Catalogs</span>
+                </button>
+
+                {isConnected && (
                     <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
                         {/* 1. Manual Query */}
                         <li>
@@ -236,42 +281,51 @@ const TAPQueryMenu = () => {
                             </button>
                         </li>
                     </ul>
-                </li>
+                )}
 
-                {/* The ADQL Query Modal */}
-                {isOpen && (
-                    <div className="modal d-block" style={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1050 }}>
-                        <div className="modal-dialog modal-dialog-centered">
-                            <div className="modal-content text-white" style={{ backgroundColor: 'var(--fv-panel)', borderColor: 'var(--fv-border)' }}>
-                                <div className="modal-header border-bottom" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-                                    <h5 className="modal-title" style={{ fontSize: '1rem' }}><i className="bi bi-search me-2"></i> Remote TAP Query</h5>
-                                    <button type="button" className="btn-close btn-close-white" onClick={() => setIsOpen(false)}></button>
-                                </div>
-                                <div className="modal-body">
-                                    <div className="mb-3">
-                                        <label className="form-label" style={{ fontSize: '0.85rem' }}>TAP Service URL</label>
-                                        <input type="text" className="form-control form-control-sm bg-dark text-white border-secondary" value={tapUrl} onChange={(e) => setTapUrl(e.target.value)} />
+            </li>
+
+            {/* The ADQL Query Modal */}
+            {isConnected && isOpen && (
+                <div className="modal d-block" style={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1050 }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content text-white" style={{ backgroundColor: 'var(--fv-panel)', borderColor: 'var(--fv-border)' }}>
+                            <div className="modal-header border-bottom" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+                                <h5 className="modal-title" style={{ fontSize: '1rem' }}><i className="bi bi-search me-2"></i> Remote TAP Query</h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setIsOpen(false)}></button>
+                            </div>
+                            <div className="modal-body">
+                                {feedback && (
+                                    <div className={`mb-3 small rounded p-2 ${feedback.type === 'error' ? 'bg-danger-subtle text-white border border-danger' : 'bg-success-subtle text-white border border-success'}`}>
+                                        <div className="d-flex justify-content-between align-items-center gap-2">
+                                            <span>{feedback.message}</span>
+                                            {feedback.retry && (
+                                                <button type="button" className="btn btn-link btn-sm p-0 text-white" onClick={feedback.retry}>Retry</button>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="mb-3">
-                                        <label className="form-label" style={{ fontSize: '0.85rem' }}>ADQL Query</label>
-                                        <textarea className="form-control form-control-sm bg-dark text-white border-secondary font-monospace" rows={4} value={query} onChange={(e) => setQuery(e.target.value)} />
-                                    </div>
+                                )}
+                                <div className="mb-3">
+                                    <label className="form-label" style={{ fontSize: '0.85rem' }}>TAP Service URL</label>
+                                    <input type="text" className="form-control form-control-sm bg-dark text-white border-secondary" value={tapUrl} onChange={(e) => setTapUrl(e.target.value)} />
                                 </div>
-                                <div className="modal-footer border-top-0">
-                                    <button className="btn btn-sm btn-outline-secondary" onClick={() => setIsOpen(false)}>Cancel</button>
-                                    <button className="btn btn-sm btn-primary" onClick={() => executeQuery(tapUrl, query, 'Manual Query', true)} disabled={isFetching}>
-                                        {isFetching ? 'Querying...' : 'Run Query'}
-                                    </button>
+                                <div className="mb-3">
+                                    <label className="form-label" style={{ fontSize: '0.85rem' }}>ADQL Query</label>
+                                    <textarea className="form-control form-control-sm bg-dark text-white border-secondary font-monospace" rows={4} value={query} onChange={(e) => setQuery(e.target.value)} />
                                 </div>
+                            </div>
+                            <div className="modal-footer border-top-0">
+                                <button className="btn btn-sm btn-outline-secondary" onClick={() => setIsOpen(false)}>Cancel</button>
+                                <button className="btn btn-sm btn-primary" onClick={() => executeQuery(tapUrl, query, 'Manual Query', true)} disabled={isFetching}>
+                                    {isFetching ? 'Querying...' : 'Run Query'}
+                                </button>
                             </div>
                         </div>
                     </div>
-                )}
-            </>
-        );
-    } else {
-        return <></>
-    }
+                </div>
+            )}
+        </>
+    );
 };
 
 export function initTAPQueryPlugin() {

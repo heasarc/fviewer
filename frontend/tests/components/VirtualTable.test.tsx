@@ -78,6 +78,18 @@ describe('VirtualTable', () => {
         fireEvent.click(within(cell(0, 3)).getByRole('button'));
     });
 
+    it('shows editing hints, read-only messaging and discovery controls', () => {
+        mount();
+        expect(screen.getByLabelText('Search table')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Columns/i })).toBeInTheDocument();
+        expect(screen.getByText('Double-click a cell to edit.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /ID/i })).toBeInTheDocument();
+
+        cleanup();
+        mount({ isReadOnly: true });
+        expect(screen.getByText('Read-only table — editing disabled.')).toBeInTheDocument();
+    });
+
     it('highlights the selected row', () => {
         mount({ selectedRow: 1 });
         expect((rows()[1] as HTMLElement).style.backgroundColor).toBe('rgba(0, 255, 0, 0.15)');
@@ -115,17 +127,17 @@ describe('VirtualTable', () => {
         it('does not edit read-only tables, vectors, or missing cells', () => {
             mount({ isReadOnly: true });
             fireEvent.doubleClick(cell(0, 0));
-            expect(screen.queryByRole('textbox')).toBeNull();
+            expect(screen.queryByRole('textbox', { name: /Edit/i })).toBeNull();
             cleanup();
             mount();
             fireEvent.doubleClick(cell(0, 3));
             fireEvent.doubleClick(cell(0, 2));
-            expect(screen.queryByRole('textbox')).toBeNull();
+            expect(screen.queryByRole('textbox', { name: /Edit/i })).toBeNull();
             cleanup();
             const data: any = mkData(2); data.ID[0] = undefined;
             mount({ numRows: 2, dataMap: data });
             fireEvent.doubleClick(cell(0, 0));
-            expect(screen.queryByRole('textbox')).toBeNull();
+            expect(screen.queryByRole('textbox', { name: /Edit/i })).toBeNull();
         });
     });
 
