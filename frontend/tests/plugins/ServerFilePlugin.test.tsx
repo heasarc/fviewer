@@ -51,19 +51,19 @@ describe('ServerFilePlugin', () => {
         expect(updater([{ id: 'old' }])[0]).toEqual({ id: 'old' });
     });
 
-    it('alerts when region loading has no image data', async () => {
+    it('shows inline feedback when region loading has no image data', async () => {
         vi.stubGlobal('fetch', mockFetch({ ok: true, text: async () => '' }));
         renderPluginSlot(initServerFilePlugin, 'menubar:file', { serverModalMode: 'region', imageData: null });
         fireEvent.click(await screen.findByText('r.reg'));
-        await waitFor(() => expect(window.alert).toHaveBeenCalled());
+        await waitFor(() => expect(screen.getByText('No image data available for region coordinate conversion.')).toBeInTheDocument());
     });
 
-    it('alerts when the download fails', async () => {
+    it('shows inline feedback when the download fails', async () => {
         vi.stubGlobal('fetch', mockFetch({ ok: false }));
         const processFile = vi.fn();
         renderPluginSlot(initServerFilePlugin, 'menubar:file', { serverModalMode: 'fits', processFile });
         fireEvent.click(await screen.findByText('a.fits'));
-        await waitFor(() => expect(window.alert).toHaveBeenCalledWith('Failed to load file from server.'));
+        await waitFor(() => expect(screen.getByText('Failed to load file from server.')).toBeInTheDocument());
         expect(processFile).not.toHaveBeenCalled();
     });
 });

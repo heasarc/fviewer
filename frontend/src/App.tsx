@@ -41,6 +41,13 @@ function App() {
         rowIndex: number;
         data: any;
     } | null>(null);
+    const [feedback, setFeedback] = useState<{ type: 'error' | 'success' | 'info'; message: string; retry?: () => void } | null>(null);
+
+    useEffect(() => {
+        if (!feedback) return;
+        const timer = window.setTimeout(() => setFeedback(null), 4000);
+        return () => window.clearTimeout(timer);
+    }, [feedback]);
 
     // State for the Bottom Drawer (Table) visibility and height
     const [isTableDrawerOpen, setIsTableDrawerOpen] = useState(true);
@@ -204,7 +211,10 @@ function App() {
 
         try {
             const numericValue = Number(newValue);
-            if (isNaN(numericValue)) return alert("Only numeric edits are supported.");
+            if (isNaN(numericValue)) {
+                setFeedback({ type: 'error', message: 'Only numeric edits are supported.' });
+                return;
+            }
             await writeCell(colNum, rowIndex + 1, numericValue);
             setTableData(prevData => {
                 const newData = { ...prevData };
@@ -213,8 +223,14 @@ function App() {
                 newData[colName] = newCol;
                 return newData;
             });
+            setFeedback({ type: 'success', message: 'Cell updated.' });
         } catch (error) {
             console.error("Failed to write cell:", error);
+            setFeedback({
+                type: 'error',
+                message: 'Failed to update table cell.',
+                retry: () => handleCellEdit(colName, colNum, rowIndex, newValue)
+            });
         }
     };
 
@@ -225,19 +241,27 @@ function App() {
         if (!selectedVector || !tableInfo) return;
         try {
             const numericValue = Number(newValue);
-            if (isNaN(numericValue)) return alert("Only numeric edits are supported.");
+            if (isNaN(numericValue)) {
+                setFeedback({ type: 'error', message: 'Only numeric edits are supported.' });
+                return;
+            }
             
             // Find the 1-indexed column number
             const colNum = tableInfo.columns.findIndex((c: any) => c.name === selectedVector.colName) + 1;
             
             // Call the worker with the 4th argument (arrayIndex)
             await writeCell(colNum, selectedVector.rowIndex + 1, numericValue, arrayIndex);
+            setFeedback({ type: 'success', message: 'Vector value updated.' });
             
             // Note: The VectorModal already optimistically updates its local TypedArray view, 
             // so we don't need to manually update tableData here to see the change!
         } catch (error) {
             console.error("Failed to write vector element:", error);
-            alert("Failed to save edit.");
+            setFeedback({
+                type: 'error',
+                message: 'Failed to save edit.',
+                retry: () => handleVectorEdit(arrayIndex, newValue)
+            });
         }
     };
 
@@ -254,8 +278,14 @@ function App() {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            setFeedback({ type: 'success', message: 'Saved edited FITS file.' });
         } catch (error) {
             console.error("Failed to save:", error);
+            setFeedback({
+                type: 'error',
+                message: 'Failed to save edited FITS file.',
+                retry: handleSave
+            });
         } finally {
             setIsLoading(false);
         }
@@ -311,6 +341,20 @@ function App() {
             
             {/* Hidden File Input */}
             <input type="file" ref={fileInputRef} accept={FITS_FORMATS} style={{ display: 'none' }} onChange={handleFileUpload} />
+
+            {feedback && (
+                <div
+                    className={`position-fixed top-0 end-0 m-3 px-3 py-2 rounded border shadow-sm small ${feedback.type === 'error' ? 'bg-danger text-white border-danger' : 'bg-success text-white border-success'}`}
+                    style={{ zIndex: 2000, maxWidth: '22rem' }}
+                >
+                    <div className="d-flex justify-content-between align-items-center gap-2">
+                        <span>{feedback.message}</span>
+                        {feedback.retry && (
+                            <button type="button" className="btn btn-link btn-sm p-0 text-white" onClick={feedback.retry}>Retry</button>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* 2. Top Menubar */}
             <nav className="navbar navbar-expand-md navbar-dark flex-shrink-0 border-bottom px-3 py-0" style={{ minHeight: '36px', backgroundColor: '#13151f', borderColor: 'var(--fv-border)' }}>

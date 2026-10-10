@@ -102,13 +102,13 @@ describe('FitsHeaderModal', () => {
         await waitFor(() => expect(onUpdateKeyword).toHaveBeenCalledTimes(1));
     });
 
-    it('alerts when a value update fails', async () => {
+    it('shows inline feedback when a value update fails', async () => {
         const { onUpdateKeyword } = mount();
         onUpdateKeyword.mockRejectedValue(new Error('bad'));
         fireEvent.doubleClick(editValueOf('NAXIS'));
         fireEvent.change(screen.getByDisplayValue('2'), { target: { value: 'x' } });
         fireEvent.keyDown(screen.getByDisplayValue('x'), { key: 'Enter' });
-        await waitFor(() => expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('Failed to update NAXIS')));
+        await waitFor(() => expect(screen.getByText(/Failed to update NAXIS/)).toBeInTheDocument());
     });
 
     it('does not allow editing comment-only cards', () => {
@@ -181,12 +181,12 @@ describe('FitsHeaderModal', () => {
             await waitFor(() => expect(onUpdateKeyword).toHaveBeenCalledWith('HIERARCH VERYLONGNAME', '', false, ''));
         });
 
-        it('alerts on failure and keeps the form values', async () => {
+        it('shows inline feedback on failure and keeps the form values', async () => {
             const { onUpdateKeyword } = open();
             onUpdateKeyword.mockRejectedValue(new Error('x'));
             fireEvent.change(screen.getByPlaceholderText('KEYWORD'), { target: { value: 'k' } });
             fireEvent.click(screen.getByText('Add'));
-            await waitFor(() => expect(window.alert).toHaveBeenCalledWith('Failed to add keyword.'));
+            await waitFor(() => expect(screen.getByText('Failed to add keyword.')).toBeInTheDocument());
             expect(screen.getByPlaceholderText('KEYWORD')).toHaveValue('K');
         });
     });

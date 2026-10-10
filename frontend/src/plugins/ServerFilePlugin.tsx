@@ -1,5 +1,6 @@
 // src/plugins/ServerFilePlugin.tsx
 import { createPortal } from 'react-dom';
+import { useEffect, useState } from 'react';
 import { useCore } from '../core/FViewerContext';
 import { pluginManager } from '../core/PluginManager';
 import { getApiUrl } from '../hooks/useWebSocket';
@@ -9,6 +10,13 @@ import { ServerFileModal } from '../components/ServerFileModal';
 const ServerFilePluginComponent = () => {
     const { processFile, isConnected, setIsLoading, imageData, fitsWorker,
         setRegions, serverModalMode, setServerModalMode } = useCore();
+    const [feedback, setFeedback] = useState<{ type: 'error' | 'success' | 'info'; message: string; retry?: () => void } | null>(null);
+
+    useEffect(() => {
+        if (!feedback) return;
+        const timer = window.setTimeout(() => setFeedback(null), 4000);
+        return () => window.clearTimeout(timer);
+    }, [feedback]);
 
     // Server File listing
     const handleServerFileSelect = async (serverPath: string) => {
@@ -43,7 +51,11 @@ const ServerFilePluginComponent = () => {
             }
         } catch (error) {
             console.error("Error loading server file:", error);
-            alert("Failed to load file from server.");
+            setFeedback({
+                type: 'error',
+                message: error instanceof Error && error.message ? error.message : 'Failed to load file from server.',
+                retry: () => handleServerFileSelect(serverPath)
+            });
         } finally {
             setIsLoading(false);
             setServerModalMode(null);
@@ -52,6 +64,20 @@ const ServerFilePluginComponent = () => {
 
     return (
         <>
+            {feedback && (
+                <div
+                    className={`position-fixed top-0 end-0 m-3 px-3 py-2 rounded border shadow-sm small ${feedback.type === 'error' ? 'bg-danger text-white border-danger' : 'bg-success text-white border-success'}`}
+                    style={{ zIndex: 2000, maxWidth: '22rem' }}
+                >
+                    <div className="d-flex justify-content-between align-items-center gap-2">
+                        <span>{feedback.message}</span>
+                        {feedback.retry && (
+                            <button type="button" className="btn btn-link btn-sm p-0 text-white" onClick={feedback.retry}>Retry</button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {isConnected && (
                 <li>
                     <button className="dropdown-item fv-dropdown-item" onClick={() => setServerModalMode('fits')}>

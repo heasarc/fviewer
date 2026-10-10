@@ -30,6 +30,13 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
     const [newComment, setNewComment] = useState('');
     const [isNumeric, setIsNumeric] = useState(false);
     const [showAddForm, setShowAddForm] = useState(false);
+    const [feedback, setFeedback] = useState<{ type: 'error' | 'success' | 'info'; message: string; retry?: () => void } | null>(null);
+
+    React.useEffect(() => {
+        if (!feedback) return;
+        const timer = window.setTimeout(() => setFeedback(null), 4000);
+        return () => window.clearTimeout(timer);
+    }, [feedback]);
 
     const cards = useMemo(() => {
         if (!rawHeader) return [];
@@ -117,8 +124,13 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
         if (editingKey === card.keyword && editValue !== card.value) {
             try {
                 await onUpdateKeyword(card.keyword, editValue, card.isNumeric, card.comment);
+                setFeedback({ type: 'success', message: `Updated ${card.keyword}.` });
             } catch (err) {
-                alert(`Failed to update ${card.keyword}. Ensure the value matches the FITS standard type.`);
+                setFeedback({
+                    type: 'error',
+                    message: `Failed to update ${card.keyword}. Ensure the value matches the FITS standard type.`,
+                    retry: () => handleSaveEdit(card)
+                });
             }
         }
         setEditingKey(null);
@@ -137,7 +149,7 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
 
     const handleAddKeyword = async () => {
         if (!newKey.trim()) {
-            alert("Keyword name is required.");
+            setFeedback({ type: 'error', message: 'Keyword name is required.' });
             return;
         }
         
@@ -147,6 +159,7 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
         
         try {
             await onUpdateKeyword(formattedKey, newValue, isNumeric, newComment);
+            setFeedback({ type: 'success', message: `Added ${formattedKey}.` });
             // Clear form on success
             setNewKey('');
             setNewValue('');
@@ -154,7 +167,11 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
             setIsNumeric(false);
         } catch (error) {
             console.error("Failed to add keyword:", error);
-            alert("Failed to add keyword.");
+            setFeedback({
+                type: 'error',
+                message: 'Failed to add keyword.',
+                retry: handleAddKeyword
+            });
         }
     };
 
@@ -172,6 +189,15 @@ export const FitsHeaderModal: React.FC<FitsHeaderModalProps> = ({ isOpen, onClos
                         <h5 className="mb-0 fw-bold d-flex align-items-center gap-2" style={{ color: 'var(--fv-text-bright)' }}>
                             <i className="bi bi-card-list" style={{ color: 'var(--fv-accent)' }}></i> FITS Header
                         </h5>
+                        
+                        {feedback && (
+                            <div className={`small rounded px-2 py-1 border ${feedback.type === 'error' ? 'border-danger text-danger bg-danger-subtle' : 'border-success text-success bg-success-subtle'}`}>
+                                <span>{feedback.message}</span>
+                                {feedback.retry && (
+                                    <button type="button" className="btn btn-link btn-sm p-0 ms-2" onClick={feedback.retry}>Retry</button>
+                                )}
+                            </div>
+                        )}
                         
                         {/* Search Input (Styled like the main toolbar) */}
                         <div className="input-group input-group-sm shadow-sm ms-3" style={{ width: '250px' }}>

@@ -279,7 +279,8 @@ describe('App', () => {
         it('rejects non numeric cell edit', async () => {
             const ctx = await setup();
             fireEvent.click(screen.getByText('edit-bad'));
-            expect(window.alert).toHaveBeenCalledWith('Only numeric edits are supported.');
+            expect(window.alert).not.toHaveBeenCalled();
+            expect(screen.getByText('Only numeric edits are supported.')).toBeInTheDocument();
             expect(ctx.fitsWorker.writeCell).not.toHaveBeenCalled();
         });
 
@@ -297,17 +298,17 @@ describe('App', () => {
             fireEvent.click(screen.getByText('vedit'));
             await waitFor(() => expect(ctx.fitsWorker.writeCell).toHaveBeenCalledWith(0, 3, 9, 1));
             fireEvent.click(screen.getByText('vedit-bad'));
-            expect(window.alert).toHaveBeenCalledWith('Only numeric edits are supported.');
+            expect(screen.getByText('Only numeric edits are supported.')).toBeInTheDocument();
             fireEvent.click(screen.getByText('vclose'));
             expect(screen.queryByTestId('vmodal')).toBeNull();
         });
 
-        it('alerts on vector write failure', async () => {
+        it('shows inline feedback on vector write failure', async () => {
             const ctx = await setup();
             ctx.fitsWorker.writeCell.mockRejectedValue(new Error('w'));
             fireEvent.click(screen.getByText('vec'));
             fireEvent.click(screen.getByText('vedit'));
-            await waitFor(() => expect(window.alert).toHaveBeenCalledWith('Failed to save edit.'));
+            await waitFor(() => expect(screen.getByText('Failed to save edit.')).toBeInTheDocument());
         });
 
         it('collapses and expands the table drawer', async () => {
