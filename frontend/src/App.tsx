@@ -20,7 +20,8 @@ function App() {
         activeHdu, tableInfo, setTableInfo, 
         imageData, setImageData, isLoading, setIsLoading,
         isPlotterOpen, processFile, regions, setRegions, setIsConnected,
-        setCurrentSlice, selectedCatalogRow, setSelectedCatalogRow
+        setCurrentSlice, selectedCatalogRow, setSelectedCatalogRow,
+        setZoom, setPan, setFlipX, setFlipY, setRotation
     } = useCore();
 
     // Deconstruct the worker methods we need for this file
@@ -92,6 +93,14 @@ function App() {
         
         // Optional: If activeDataType was strictly 'votable', you might want to 
         // switch it back to 'fits' or handle that context shift if necessary.
+    };
+
+    const handleResetView = () => {
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+        setFlipX(false);
+        setFlipY(false);
+        setRotation(0);
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -335,7 +344,6 @@ function App() {
                             <li className="nav-item dropdown">
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">Edit</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
-                                    <li><button className="dropdown-item fv-dropdown-item"><i className="bi bi-layout-three-columns"></i> Manage Columns</button></li>
                                     <ExtensionSlot name="menubar:edit" />
                                 </ul>
                             </li>
@@ -344,7 +352,7 @@ function App() {
                             <li className="nav-item dropdown">
                                 <button className="btn menubar-btn text-start w-100 px-3 py-2 py-md-0" style={{ fontSize: '0.85rem', height: '36px' }} data-bs-toggle="dropdown">View</button>
                                 <ul className="dropdown-menu fv-dropdown-menu shadow position-absolute">
-                                    <li><button className="dropdown-item fv-dropdown-item"><i className="bi bi-aspect-ratio"></i> Reset View</button></li>
+                                    <li><button className="dropdown-item fv-dropdown-item" onClick={handleResetView}><i className="bi bi-aspect-ratio"></i> Reset View</button></li>
                                     <ExtensionSlot name="menubar:view" />
                                 </ul>
                             </li>

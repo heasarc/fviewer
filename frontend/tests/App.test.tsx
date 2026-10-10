@@ -129,6 +129,19 @@ describe('App', () => {
         expect(click).toHaveBeenCalled();
     });
 
+    it('resets image display settings from the View menu and omits unavailable column management', () => {
+        const { ctx } = renderApp();
+
+        expect(screen.queryByText('Manage Columns')).toBeNull();
+        fireEvent.click(screen.getByText('Reset View'));
+
+        expect(ctx.setZoom).toHaveBeenCalledWith(1);
+        expect(ctx.setPan).toHaveBeenCalledWith({ x: 0, y: 0 });
+        expect(ctx.setFlipX).toHaveBeenCalledWith(false);
+        expect(ctx.setFlipY).toHaveBeenCalledWith(false);
+        expect(ctx.setRotation).toHaveBeenCalledWith(0);
+    });
+
     it('loads an image HDU (2D)', async () => {
         const img = { data: new Float32Array(4), width: 2, height: 2 };
         const { ctx } = renderApp({
