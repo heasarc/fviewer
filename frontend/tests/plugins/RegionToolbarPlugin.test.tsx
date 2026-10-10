@@ -22,6 +22,44 @@ describe('RegionToolbarPlugin', () => {
         expect(mockSetDrawMode).toHaveBeenCalledWith('circle');
     });
 
+    it('should show the active draw mode and allow returning to pan', () => {
+        const mockSetDrawMode = vi.fn();
+        renderPluginSlot(initRegionToolbarPlugin, 'fitsimage:toolbar:left', {
+            drawMode: 'circle',
+            setDrawMode: mockSetDrawMode
+        });
+
+        expect(screen.getByTestId('draw-mode-label')).toHaveTextContent('Draw: Circle');
+        fireEvent.click(screen.getByTitle(/Return to Pointer/i));
+        expect(mockSetDrawMode).toHaveBeenCalledWith('pan');
+    });
+
+    it('should return to pan on Escape and hide Pan button in pan mode', () => {
+        const mockSetDrawMode = vi.fn();
+        const { unmount } = renderPluginSlot(initRegionToolbarPlugin, 'fitsimage:toolbar:left', {
+            drawMode: 'box',
+            setDrawMode: mockSetDrawMode
+        }) as any;
+        fireEvent.keyDown(window, { key: 'Escape' });
+        expect(mockSetDrawMode).toHaveBeenCalledWith('pan');
+        unmount?.();
+        cleanup();
+
+        renderPluginSlot(initRegionToolbarPlugin, 'fitsimage:toolbar:left', { drawMode: 'pan' });
+        expect(screen.queryByTitle(/Return to Pointer/i)).not.toBeInTheDocument();
+        expect(screen.getByTestId('draw-mode-label')).toHaveTextContent('Regions');
+    });
+
+    it('should close the dropdown after a selection', () => {
+        renderPluginSlot(initRegionToolbarPlugin, 'fitsimage:toolbar:left');
+        const toggle = screen.getByTitle('Regions Menu');
+        const toggleClick = vi.spyOn(toggle, 'click');
+        toggle.setAttribute('aria-expanded', 'true');
+
+        fireEvent.click(screen.getByText(/Circle/i));
+        expect(toggleClick).toHaveBeenCalled();
+    });
+
     it('should clear all regions when requested', () => {
         const mockSetRegions = vi.fn();
         const mockSetSelectedRegionId = vi.fn();

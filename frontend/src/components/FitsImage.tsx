@@ -491,6 +491,15 @@ export const FitsImage: React.FC<FitsImageProps> = ({
                 onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUpOrLeave} onMouseLeave={handleMouseUpOrLeave}
             >
+                {drawMode !== 'pan' && (
+                    <div
+                        data-testid="draw-hint"
+                        className="position-absolute px-2 py-1 rounded"
+                        style={{ top: 8, left: 8, zIndex: 10, pointerEvents: 'none', background: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: '0.8rem' }}
+                    >
+                        {`Click and drag to draw ${drawMode === 'ellipse' ? 'an' : 'a'} ${drawMode}. Press Esc to return to pan.`}
+                    </div>
+                )}
                 {/* ONLY RENDER IF ZOOM IS READY */}
                 {zoom !== null && (
                     <div style={{

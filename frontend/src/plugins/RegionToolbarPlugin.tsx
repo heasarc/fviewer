@@ -1,7 +1,15 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useCore } from '../core/FViewerContext';
 import { pluginManager } from '../core/PluginManager';
 import { parseDS9Regions, serializeDS9Regions } from '../utils/regionUtils';
+
+const DRAW_MODE_INFO: Record<string, { label: string; icon: string }> = {
+    pan: { label: 'Pointer / Pan', icon: 'bi-arrows-move' },
+    circle: { label: 'Circle', icon: 'bi-circle' },
+    box: { label: 'Box', icon: 'bi-square' },
+    ellipse: { label: 'Ellipse', icon: 'bi-circle' },
+    annulus: { label: 'Annulus', icon: 'bi-bullseye' },
+};
 
 const RegionToolbarPluginComponent = () => {
     const { 
@@ -15,6 +23,27 @@ const RegionToolbarPluginComponent = () => {
 
     const [saveFormat, setSaveFormat] = useState<'image' | 'physical' | 'fk5'>('image');
     const regionInputRef = useRef<HTMLInputElement>(null);
+    const toggleRef = useRef<HTMLButtonElement>(null);
+
+    // Close the menu after an action; the Save format select and disabled items keep it open.
+    const closeMenuOnSelect = (e: React.MouseEvent) => {
+        const target = e.target as HTMLElement;
+        const button = target.closest('button');
+        if (!button || button.disabled) return;
+        if (toggleRef.current?.getAttribute('aria-expanded') === 'true') toggleRef.current.click();
+    };
+
+    useEffect(() => {
+        if (drawMode === 'pan') return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== 'Escape') return;
+            const tag = (e.target as HTMLElement | null)?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            setDrawMode('pan');
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [drawMode, setDrawMode]);
 
     // Get the currently selected region
     const selectedRegion = regions.find((r: any) => r.id === selectedRegionId);
@@ -67,10 +96,13 @@ const RegionToolbarPluginComponent = () => {
             <input type="file" ref={regionInputRef} accept=".reg,.txt" style={{ display: 'none' }} onChange={handleLoadRegions} />
 
             <div className="dropdown">
-                <button className="fv-btn dropdown-toggle" data-bs-toggle="dropdown" title="Regions Menu">
-                    <i className="bi bi-bounding-box"></i> <span className="ms-1">Regions</span>
+                <button ref={toggleRef} className={`fv-btn dropdown-toggle ${drawMode !== 'pan' ? 'active' : ''}`} data-bs-toggle="dropdown" title="Regions Menu">
+                    <i className={`bi ${DRAW_MODE_INFO[drawMode]?.icon ?? 'bi-bounding-box'}`}></i>{' '}
+                    <span className="ms-1" data-testid="draw-mode-label">
+                        {drawMode === 'pan' ? 'Regions' : `Draw: ${DRAW_MODE_INFO[drawMode]?.label ?? drawMode}`}
+                    </span>
                 </button>
-                <ul className="dropdown-menu fv-dropdown-menu shadow">
+                <ul className="dropdown-menu fv-dropdown-menu shadow" onClick={closeMenuOnSelect}>
                     
                     {/* DRAWING MODES */}
                     <li><button className="dropdown-item fv-dropdown-item" onClick={() => setDrawMode('pan')}><span style={{ width: '16px' }}>{drawMode === 'pan' && <i className="bi bi-check2"></i>}</span><i className="bi bi-arrows-move"></i> Pointer / Pan</button></li>
@@ -123,6 +155,11 @@ const RegionToolbarPluginComponent = () => {
                     </li>
                 </ul>
             </div>
+            {drawMode !== 'pan' && (
+                <button className="fv-btn" title="Return to Pointer / Pan (Esc)" onClick={() => setDrawMode('pan')}>
+                    <i className="bi bi-arrows-move"></i> <span className="ms-1">Pan</span>
+                </button>
+            )}
         </div>
     );
 };
