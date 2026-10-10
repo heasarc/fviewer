@@ -42,11 +42,11 @@ export function useCoreCommands(
 
         commandRegistry.register('get_regions', async (command, sendReply) => {
             if (command.format === 'physical') {
-                const ltv1 = imageData?.ltv1 ?? 0;
-                const ltv2 = imageData?.ltv2 ?? 0;
-                const ltm1_1 = imageData?.ltm1_1 ?? 1;
-                const ltm2_2 = imageData?.ltm2_2 ?? 1;
-                const avgLtm = Math.abs(ltm1_1 + ltm2_2) / 2;
+                const ltv1 = Number.isFinite(imageData?.ltv1) ? imageData.ltv1 : 0;
+                const ltv2 = Number.isFinite(imageData?.ltv2) ? imageData.ltv2 : 0;
+                const ltm1_1 = Number.isFinite(imageData?.ltm1_1) && Math.abs(imageData.ltm1_1) > 0 ? imageData.ltm1_1 : 1;
+                const ltm2_2 = Number.isFinite(imageData?.ltm2_2) && Math.abs(imageData.ltm2_2) > 0 ? imageData.ltm2_2 : 1;
+                const avgLtm = (Math.abs(ltm1_1) + Math.abs(ltm2_2)) / 2 || 1;
 
                 const physRegions = regions.map(r => {
                     let cx = 0, cy = 0, w = 0, h = 0, radius = 0;
@@ -84,9 +84,9 @@ export function useCoreCommands(
                 }
 
                 // Use the native WCS scale provided by your FITS header
-                const scaleX = Math.abs(imageData.pixScale.scaleX || 1);
-                const scaleY = Math.abs(imageData.pixScale.scaleY || 1);
-                const avgScale = (scaleX + scaleY) / 2;
+                const scaleX = Number.isFinite(imageData.pixScale.scaleX) && Math.abs(imageData.pixScale.scaleX) > 0 ? Math.abs(imageData.pixScale.scaleX) : 1;
+                const scaleY = Number.isFinite(imageData.pixScale.scaleY) && Math.abs(imageData.pixScale.scaleY) > 0 ? Math.abs(imageData.pixScale.scaleY) : 1;
+                const avgScale = (scaleX + scaleY) / 2 || 1;
 
                 const wcsRegions = [];
                 for (const r of regions) {
@@ -159,17 +159,17 @@ export function useCoreCommands(
             // 2. CONVERT TO PIXELS (IMAGE) IF REQUESTED
             if (format === 'physical') {
                 // Fallbacks in case the image data isn't fully loaded yet
-                const ltv1 = imageData?.ltv1 ?? 0;
-                const ltv2 = imageData?.ltv2 ?? 0;
-                const ltm1_1 = imageData?.ltm1_1 ?? 1;
-                const ltm2_2 = imageData?.ltm2_2 ?? 1;
+                const ltv1 = Number.isFinite(imageData?.ltv1) ? imageData.ltv1 : 0;
+                const ltv2 = Number.isFinite(imageData?.ltv2) ? imageData.ltv2 : 0;
+                const ltm1_1 = Number.isFinite(imageData?.ltm1_1) && Math.abs(imageData.ltm1_1) > 0 ? imageData.ltm1_1 : 1;
+                const ltm2_2 = Number.isFinite(imageData?.ltm2_2) && Math.abs(imageData.ltm2_2) > 0 ? imageData.ltm2_2 : 1;
 
                 // Physical to Image math: Image = LTM * Phys + LTV
                 x = (ltm1_1 * x) + ltv1;
                 y = (ltm2_2 * y) + ltv2;
 
                 // Scale sizes (radius, width, height) using the matrix
-                const avgLtm = Math.abs(ltm1_1 + ltm2_2) / 2;
+                const avgLtm = (Math.abs(ltm1_1) + Math.abs(ltm2_2)) / 2 || 1;
                 if (radius !== undefined) radius *= avgLtm;
                 if (width !== undefined) width *= Math.abs(ltm1_1);
                 if (height !== undefined) height *= Math.abs(ltm2_2);
@@ -184,9 +184,9 @@ export function useCoreCommands(
                 }
 
                 // Use the native WCS scale
-                const scaleX = Math.abs(imageData.pixScale.scaleX || 1);
-                const scaleY = Math.abs(imageData.pixScale.scaleY || 1);
-                const avgScale = (scaleX + scaleY) / 2;
+                const scaleX = Number.isFinite(imageData.pixScale.scaleX) && Math.abs(imageData.pixScale.scaleX) > 0 ? Math.abs(imageData.pixScale.scaleX) : 1;
+                const scaleY = Number.isFinite(imageData.pixScale.scaleY) && Math.abs(imageData.pixScale.scaleY) > 0 ? Math.abs(imageData.pixScale.scaleY) : 1;
+                const avgScale = (scaleX + scaleY) / 2 || 1;
 
                 // Convert center
                 const pix = await worldToPix(x, y);

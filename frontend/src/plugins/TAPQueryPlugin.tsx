@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useCore } from '../core/FViewerContext';
 import { pluginManager } from '../core/PluginManager';
 import { getApiUrl } from '../hooks/useWebSocket';
+import { haversineDegrees } from '../utils/regionUtils';
 
 const TAPQueryMenu = () => {
     const { 
@@ -91,17 +92,13 @@ const TAPQueryMenu = () => {
             const getDegRadius = async (cx: number, cy: number, rPx: number) => {
                 // FLIP THE Y-AXIS FOR WCS!
                 const c_wcs = await fitsWorker.pixToWorld(cx, imgH - cy);
-                const e_wcs = await fitsWorker.pixToWorld(cx + rPx, imgH - cy);
-                
-                const ra1 = c_wcs.ra * (Math.PI / 180);
-                const dec1 = c_wcs.dec * (Math.PI / 180);
-                const ra2 = e_wcs.ra * (Math.PI / 180);
-                const dec2 = e_wcs.dec * (Math.PI / 180);
-                
-                const a = Math.sin((dec2 - dec1) / 2) ** 2 + 
-                          Math.cos(dec1) * Math.cos(dec2) * Math.sin((ra2 - ra1) / 2) ** 2;
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                return { center: c_wcs, radiusDeg: c * (180 / Math.PI) };
+                const e_wcs = await fitsWorker.pixToWorld(cx + Math.abs(rPx), imgH - cy);
+
+                if (!c_wcs || !e_wcs || !Number.isFinite(c_wcs.ra) || !Number.isFinite(c_wcs.dec) || !Number.isFinite(e_wcs.ra) || !Number.isFinite(e_wcs.dec)) {
+                    return { center: c_wcs ?? { ra: 0, dec: 0 }, radiusDeg: 0 };
+                }
+
+                return { center: c_wcs, radiusDeg: haversineDegrees(c_wcs.ra, c_wcs.dec, e_wcs.ra, e_wcs.dec) };
             };
 
             if (activeRegion) {

@@ -27,6 +27,42 @@ export type DrawMode = 'pan' | 'circle' | 'box' | 'ellipse' | 'annulus';
 
 const DEFAULT_PHYSICAL_TRANSFORM: PhysicalTransform = { ltv1: 0, ltv2: 0, ltm1_1: 1, ltm2_2: 1 };
 
+export const asFiniteNumber = (value: unknown, fallback = 0): number => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+};
+
+export const haversineDegrees = (ra1Deg: number, dec1Deg: number, ra2Deg: number, dec2Deg: number): number => {
+    const ra1 = asFiniteNumber(ra1Deg) * (Math.PI / 180);
+    const dec1 = asFiniteNumber(dec1Deg) * (Math.PI / 180);
+    const ra2 = asFiniteNumber(ra2Deg) * (Math.PI / 180);
+    const dec2 = asFiniteNumber(dec2Deg) * (Math.PI / 180);
+
+    if (!Number.isFinite(ra1) || !Number.isFinite(dec1) || !Number.isFinite(ra2) || !Number.isFinite(dec2)) {
+        return 0;
+    }
+
+    const deltaRa = ra2 - ra1;
+    const deltaDec = dec2 - dec1;
+    const a = Math.sin(deltaDec / 2) ** 2 + Math.cos(dec1) * Math.cos(dec2) * Math.sin(deltaRa / 2) ** 2;
+    const clampedA = Math.min(1, Math.max(0, a));
+    const c = 2 * Math.atan2(Math.sqrt(clampedA), Math.sqrt(Math.max(0, 1 - clampedA)));
+    return Number.isFinite(c) ? c * (180 / Math.PI) : 0;
+};
+
+const safeWcsOffset = (raDeg: number, decDeg: number, angularOffsetDeg: number) => {
+    const safeAngularOffset = Math.abs(asFiniteNumber(angularOffsetDeg, 0));
+    if (safeAngularOffset <= 0) return { ra: asFiniteNumber(raDeg), dec: asFiniteNumber(decDeg) };
+
+    const safeDec = asFiniteNumber(decDeg);
+    const cosLat = Math.cos(safeDec * (Math.PI / 180));
+    if (Math.abs(cosLat) < 1e-12) {
+        return { ra: asFiniteNumber(raDeg), dec: safeDec + safeAngularOffset };
+    }
+
+    return { ra: asFiniteNumber(raDeg) + (safeAngularOffset / Math.abs(cosLat)), dec: safeDec };
+};
+
 // Helper to safely parse DS9 strings, handling sexagesimal and unit suffixes
 const parseDS9Arg = (val: string, index: number) => {
     let s = val.trim().toLowerCase();
@@ -110,55 +146,65 @@ export const parseDS9Regions = async (
         const args = typeMatch[2].split(',').map(parseDS9Arg);
         
         try {
-            let cx = args[0], cy = args[1];
+            let cx = asFiniteNumber(args[0], Number.NaN);
+            let cy = asFiniteNumber(args[1], Number.NaN);
             let pxRadius = 0, pxWidth = 0, pxHeight = 0, pxInner = 0;
             
             if (coordSystem === 'physical') {
-                cx = (physicalTransform.ltm1_1 * args[0]) + physicalTransform.ltv1;
-                cy = (physicalTransform.ltm2_2 * args[1]) + physicalTransform.ltv2;
-                pxWidth = args[2] * Math.abs(physicalTransform.ltm1_1);
-                pxHeight = args[3] * Math.abs(physicalTransform.ltm2_2);
+                const ltm1_1 = asFiniteNumber(physicalTransform.ltm1_1, 1);
+                const ltm2_2 = asFiniteNumber(physicalTransform.ltm2_2, 1);
+                const ltv1 = asFiniteNumber(physicalTransform.ltv1, 0);
+                const ltv2 = asFiniteNumber(physicalTransform.ltv2, 0);
+
+                cx = (ltm1_1 * asFiniteNumber(args[0], 0)) + ltv1;
+                cy = (ltm2_2 * asFiniteNumber(args[1], 0)) + ltv2;
+                pxWidth = asFiniteNumber(args[2], 0) * Math.abs(ltm1_1);
+                pxHeight = asFiniteNumber(args[3], 0) * Math.abs(ltm2_2);
                 
                 if (type === 'annulus') {
-                    pxInner = args[2] * Math.abs(physicalTransform.ltm1_1);
-                    pxRadius = args[3] * Math.abs(physicalTransform.ltm1_1);
+                    pxInner = asFiniteNumber(args[2], 0) * Math.abs(ltm1_1);
+                    pxRadius = asFiniteNumber(args[3], 0) * Math.abs(ltm1_1);
                 } else {
-                    pxRadius = args[2] * Math.abs(physicalTransform.ltm1_1);
+                    pxRadius = asFiniteNumber(args[2], 0) * Math.abs(ltm1_1);
                     pxInner = pxRadius / 2;
                 }
             } else if (coordSystem !== 'image') {
                 // --- WCS to Image: Use exact WCS offsets to find pixel sizes ---
-                const cp = await worldToPix(args[0], args[1]);
-                if (cp) {
+                const cp = await worldToPix(asFiniteNumber(args[0], Number.NaN), asFiniteNumber(args[1], Number.NaN));
+                if (cp && Number.isFinite(cp.x) && Number.isFinite(cp.y)) {
                     cx = cp.x; cy = cp.y;
+                    const radiusArg = asFiniteNumber(args[2], 0);
+                    const heightArg = asFiniteNumber(args[3], 0);
                     
                     if (type === 'circle') {
-                        // Offset Dec by radius to find edge
-                        const ep = await worldToPix(args[0], args[1] + args[2]);
-                        if (ep) pxRadius = Math.hypot(ep.x - cp.x, ep.y - cp.y);
+                        const ep = await worldToPix(asFiniteNumber(args[0], Number.NaN), asFiniteNumber(args[1], Number.NaN) + radiusArg);
+                        if (ep && Number.isFinite(ep.x) && Number.isFinite(ep.y)) pxRadius = Math.hypot(ep.x - cp.x, ep.y - cp.y);
                     } else if (type === 'annulus') {
-                        const inP = await worldToPix(args[0], args[1] + args[2]);
-                        const outP = await worldToPix(args[0], args[1] + args[3]);
-                        if (inP) pxInner = Math.hypot(inP.x - cp.x, inP.y - cp.y);
-                        if (outP) pxRadius = Math.hypot(outP.x - cp.x, outP.y - cp.y);
+                        const inP = await worldToPix(asFiniteNumber(args[0], Number.NaN), asFiniteNumber(args[1], Number.NaN) + asFiniteNumber(args[2], 0));
+                        const outP = await worldToPix(asFiniteNumber(args[0], Number.NaN), asFiniteNumber(args[1], Number.NaN) + asFiniteNumber(args[3], 0));
+                        if (inP && Number.isFinite(inP.x) && Number.isFinite(inP.y)) pxInner = Math.hypot(inP.x - cp.x, inP.y - cp.y);
+                        if (outP && Number.isFinite(outP.x) && Number.isFinite(outP.y)) pxRadius = Math.hypot(outP.x - cp.x, outP.y - cp.y);
                     } else {
                         // Box/Ellipse: args[2] is width/rx, args[3] is height/ry
-                        const ex = await worldToPix(args[0] + (args[2] / Math.cos(args[1] * Math.PI / 180)), args[1]);
-                        const ey = await worldToPix(args[0], args[1] + args[3]);
-                        if (ex) pxWidth = Math.hypot(ex.x - cp.x, ex.y - cp.y);
-                        if (ey) pxHeight = Math.hypot(ey.x - cp.x, ey.y - cp.y);
+                        const widthOffset = safeWcsOffset(asFiniteNumber(args[0], 0), asFiniteNumber(args[1], 0), radiusArg);
+                        const heightOffset = safeWcsOffset(asFiniteNumber(args[0], 0), asFiniteNumber(args[1], 0), heightArg);
+
+                        const ex = await worldToPix(widthOffset.ra, widthOffset.dec);
+                        const ey = await worldToPix(asFiniteNumber(args[0], 0), heightOffset.dec);
+                        if (ex && Number.isFinite(ex.x) && Number.isFinite(ex.y)) pxWidth = Math.hypot(ex.x - cp.x, ex.y - cp.y);
+                        if (ey && Number.isFinite(ey.x) && Number.isFinite(ey.y)) pxHeight = Math.hypot(ey.x - cp.x, ey.y - cp.y);
                     }
                 } else {
                     continue; // Fix 3: Skip region if WCS origin conversion fails
                 }
             } else {
                 // Pure Image coords
-                pxWidth = args[2]; pxHeight = args[3]; 
+                pxWidth = asFiniteNumber(args[2], 0); pxHeight = asFiniteNumber(args[3], 0); 
                 if (type === 'annulus') {
-                    pxInner = args[2];
-                    pxRadius = args[3];
+                    pxInner = asFiniteNumber(args[2], 0);
+                    pxRadius = asFiniteNumber(args[3], 0);
                 } else {
-                    pxRadius = args[2];
+                    pxRadius = asFiniteNumber(args[2], 0);
                     pxInner = pxRadius / 2;
                 }
             }
@@ -213,11 +259,10 @@ export const serializeDS9Regions = async (
     const getDegDistance = async (x1: number, y1: number, x2: number, y2: number) => {
         const p1 = await pixToWorld(x1, y1);
         const p2 = await pixToWorld(x2, y2);
-        if (!p1 || !p2) return 0;
-        const ra1 = p1.ra * (Math.PI / 180), dec1 = p1.dec * (Math.PI / 180);
-        const ra2 = p2.ra * (Math.PI / 180), dec2 = p2.dec * (Math.PI / 180);
-        const a = Math.sin((dec2 - dec1) / 2) ** 2 + Math.cos(dec1) * Math.cos(dec2) * Math.sin((ra2 - ra1) / 2) ** 2;
-        return (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))) * (180 / Math.PI);
+        if (!p1 || !p2 || !Number.isFinite(p1.ra) || !Number.isFinite(p1.dec) || !Number.isFinite(p2.ra) || !Number.isFinite(p2.dec)) {
+            return 0;
+        }
+        return haversineDegrees(p1.ra, p1.dec, p2.ra, p2.dec);
     };
     
     for (const r of regions) {
@@ -242,24 +287,39 @@ export const serializeDS9Regions = async (
 
         if (format === 'fk5') {
             const worldCenter = await pixToWorld(outCx, outCy);
-            if (worldCenter) { outCx = worldCenter.ra; outCy = worldCenter.dec; }
+            if (worldCenter && Number.isFinite(worldCenter.ra) && Number.isFinite(worldCenter.dec)) {
+                outCx = worldCenter.ra;
+                outCy = worldCenter.dec;
+            } else {
+                outCx = asFiniteNumber(outCx, 0);
+                outCy = asFiniteNumber(outCy, 0);
+            }
             
             // --- Use exact Haversine WCS distances instead of pixScale ---
             if (r.type === 'box' || r.type === 'ellipse') {
-                w = await getDegDistance(cx, cy, cx + (w/2), cy) * 2;
-                h = await getDegDistance(cx, cy, cx, cy + (h/2)) * 2;
+                const widthHalf = Math.max(Math.abs(asFiniteNumber(w, 0)) / 2, 0);
+                const heightHalf = Math.max(Math.abs(asFiniteNumber(h, 0)) / 2, 0);
+                w = await getDegDistance(cx, cy, cx + widthHalf, cy) * 2;
+                h = await getDegDistance(cx, cy, cx, cy + heightHalf) * 2;
             } else {
-                radius = await getDegDistance(cx, cy, cx + radius, cy);
-                inner = await getDegDistance(cx, cy, cx + inner, cy);
+                radius = await getDegDistance(cx, cy, cx + Math.abs(asFiniteNumber(radius, 0)), cy);
+                inner = await getDegDistance(cx, cy, cx + Math.abs(asFiniteNumber(inner, 0)), cy);
             }
         } else if (format === 'physical') {
-            outCx = (outCx - physicalTransform.ltv1) / physicalTransform.ltm1_1;
-            outCy = (outCy - physicalTransform.ltv2) / physicalTransform.ltm2_2;
-            w /= Math.abs(physicalTransform.ltm1_1);
-            h /= Math.abs(physicalTransform.ltm2_2);
-            const pScaleAvg = (Math.abs(physicalTransform.ltm1_1) + Math.abs(physicalTransform.ltm2_2)) / 2;
-            radius /= pScaleAvg;
-            inner /= pScaleAvg;
+            const ltv1 = asFiniteNumber(physicalTransform.ltv1, 0);
+            const ltv2 = asFiniteNumber(physicalTransform.ltv2, 0);
+            const ltm1_1 = asFiniteNumber(physicalTransform.ltm1_1, 1);
+            const ltm2_2 = asFiniteNumber(physicalTransform.ltm2_2, 1);
+            const safeLtm1 = Math.abs(ltm1_1) > 0 ? ltm1_1 : 1;
+            const safeLtm2 = Math.abs(ltm2_2) > 0 ? ltm2_2 : 1;
+
+            outCx = (outCx - ltv1) / safeLtm1;
+            outCy = (outCy - ltv2) / safeLtm2;
+            w /= Math.abs(safeLtm1);
+            h /= Math.abs(safeLtm2);
+            const pScaleAvg = (Math.abs(safeLtm1) + Math.abs(safeLtm2)) / 2;
+            radius /= pScaleAvg || 1;
+            inner /= pScaleAvg || 1;
         }
 
         if (r.type === 'box') {

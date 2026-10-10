@@ -219,5 +219,13 @@ describe('regionUtils', () => {
             expect(ds9).toContain('circle('); 
             // Expect distance calculation to have defaulted to 0
         });
+
+        it('should sanitize invalid WCS numbers instead of emitting NaN', async () => {
+            const invalidPixToWorld = vi.fn().mockResolvedValue({ ra: Number.NaN, dec: Number.NaN });
+            const ds9 = await serializeDS9Regions(regions, 'fk5', width, height, invalidPixToWorld, mockPixelScale);
+
+            expect(ds9).toContain('fk5\n');
+            expect(ds9).not.toContain('NaN');
+        });
     });
 });
