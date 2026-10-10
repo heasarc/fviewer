@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, cleanup, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { FitsImage } from '../../src/components/FitsImage';
 import { FViewerContext } from '../../src/core/FViewerContext';
 import { createMockContext } from '../utils/PluginTestWrapper';

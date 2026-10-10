@@ -76,10 +76,25 @@ describe('App', () => {
         const { ctx } = renderApp({ fileName: 'x.fits' });
         expect(screen.getByText('FViewer')).toBeTruthy();
         expect(screen.getByText('x.fits')).toBeTruthy();
+        expect(screen.getByRole('heading', { name: 'Explore your astronomical data' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: /Open a FITS file/ })).toBeTruthy();
+        expect(screen.getByText(/drop a supported file here/)).toBeTruthy();
         expect(screen.getByText(/FViewer Version/)).toBeTruthy();
         expect(screen.queryByTestId('fits-image')).toBeNull();
         expect(ctx.setIsConnected).toHaveBeenCalledWith(true);
         expect((screen.getByText(/Save Edited FITS/).closest('button') as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('opens a dropped file from the empty state', () => {
+        const { ctx } = renderApp();
+        const dropTarget = screen.getByRole('heading', { name: 'Explore your astronomical data' }).closest('section');
+        const file = new File(['data'], 'observation.fits');
+        const dropEvent = new Event('drop', { bubbles: true, cancelable: true });
+        Object.defineProperty(dropEvent, 'dataTransfer', { value: { files: [file] } });
+
+        fireEvent(dropTarget!, dropEvent);
+
+        expect(ctx.processFile).toHaveBeenCalledWith(file);
     });
 
     it('shows disconnected state and loading spinner', () => {

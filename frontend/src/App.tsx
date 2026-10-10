@@ -9,7 +9,7 @@ import { VirtualTable } from './components/VirtualTable';
 import { VectorModal } from './components/VectorModal';
 import { FitsImage } from './components/FitsImage';
 import fviewerLogo from '/fviewer-logo.svg';
-import { FITS_FORMATS } from './utils/constants';
+import { ALLOWED_EXTS, FITS_FORMATS } from './utils/constants';
 
 function App() {
 
@@ -45,6 +45,7 @@ function App() {
     const [isTableDrawerOpen, setIsTableDrawerOpen] = useState(true);
     const [tableHeight, setTableHeight] = useState(300); // Default 300px height
     const isDraggingRef = useRef(false);
+    const [isFileDragOver, setIsFileDragOver] = useState(false);
 
     // Native Drag-to-Resize Handlers
     const startDrag = useCallback((e: React.MouseEvent) => {
@@ -397,6 +398,52 @@ function App() {
                     
                     {/* Center: Image or Table Viewer */}
                     <div className="flex-grow-1 overflow-hidden p-3 d-flex flex-column">
+                        {activeHdu === null && activeDataType === 'fits' && !imageData && !tableInfo && (
+                            <section
+                                className={`flex-grow-1 d-flex align-items-center justify-content-center rounded border ${isFileDragOver ? 'border-info' : ''}`}
+                                style={{
+                                    borderColor: isFileDragOver ? 'var(--fv-accent)' : 'var(--fv-border)',
+                                    borderStyle: 'dashed',
+                                    backgroundColor: isFileDragOver ? 'var(--fv-panel)' : 'transparent',
+                                    transition: 'background-color 0.15s, border-color 0.15s',
+                                }}
+                                onDragEnter={(event) => {
+                                    event.preventDefault();
+                                    setIsFileDragOver(true);
+                                }}
+                                onDragOver={(event) => event.preventDefault()}
+                                onDragLeave={(event) => {
+                                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                                        setIsFileDragOver(false);
+                                    }
+                                }}
+                                onDrop={(event) => {
+                                    event.preventDefault();
+                                    setIsFileDragOver(false);
+                                    const file = event.dataTransfer.files[0];
+                                    if (file) void processFile(file);
+                                }}
+                            >
+                                <div className="text-center px-3 py-5" style={{ maxWidth: '520px' }}>
+                                    <h1 className="h4 mb-2" style={{ color: 'var(--fv-text-bright)' }}>Explore your astronomical data</h1>
+                                    <p className="fv-text-muted mb-4">
+                                        Open a FITS image, table, or spectrum to get started.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary mb-3"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        <i className="bi bi-folder2-open me-2" aria-hidden="true"></i>
+                                        Open a FITS file
+                                    </button>
+                                    <p className="small fv-text-muted mb-2">or drop a supported file here</p>
+                                    <p className="small fv-text-muted mb-0">
+                                        Supports {ALLOWED_EXTS.filter(ext => !ext.endsWith('.gz')).join(', ')}, including .gz-compressed files.
+                                    </p>
+                                </div>
+                            </section>
+                        )}
                         {(activeHdu !== null || activeDataType === 'votable') && (
                             <div className="fade-in d-flex flex-column flex-grow-1 gap-3 overflow-hidden">
                                 
