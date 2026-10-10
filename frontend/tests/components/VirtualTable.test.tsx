@@ -78,12 +78,19 @@ describe('VirtualTable', () => {
         fireEvent.click(within(cell(0, 3)).getByRole('button'));
     });
 
-    it('shows editing hints, read-only messaging and discovery controls', () => {
+    it('shows editing hints, read-only messaging and a compact column dropdown', () => {
         mount();
         expect(screen.getByLabelText('Search table')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Columns/i })).toBeInTheDocument();
         expect(screen.getByText('Double-click a cell to edit.')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /ID/i })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /Columns/i }));
+        expect(screen.getByRole('menu', { name: /column visibility menu/i })).toBeInTheDocument();
+        expect(screen.getAllByRole('menuitemcheckbox')).toHaveLength(cols.length);
+
+        fireEvent.mouseDown(document.body);
+        expect(screen.queryByRole('menu', { name: /column visibility menu/i })).toBeNull();
 
         cleanup();
         mount({ isReadOnly: true });

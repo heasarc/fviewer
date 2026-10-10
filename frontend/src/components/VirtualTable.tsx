@@ -376,39 +376,87 @@ export const VirtualTable: React.FC<VirtualTableProps> = ({
         setHiddenColumns((prev) => ({ ...prev, [colName]: !prev[colName] }));
     };
 
+    useEffect(() => {
+        if (!showColumnMenu) return;
+
+        const handlePointerDown = (event: MouseEvent) => {
+            const target = event.target as Node;
+            const toggleButton = document.querySelector('[aria-label="Columns"]');
+            const menu = document.querySelector('[aria-label="Column visibility menu"]');
+
+            if (toggleButton && menu && !toggleButton.contains(target) && !menu.contains(target)) {
+                setShowColumnMenu(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handlePointerDown);
+        return () => document.removeEventListener('mousedown', handlePointerDown);
+    }, [showColumnMenu]);
+
     return (
         <div className="w-100 h-100 d-flex flex-column">
             <div className="d-flex align-items-center gap-2 px-2 py-2 border-bottom flex-wrap" style={{ backgroundColor: 'var(--fv-panel)' }}>
-                <div className="input-group input-group-sm" style={{ maxWidth: 260 }}>
-                    <span className="input-group-text" aria-hidden="true"><i className="bi bi-search" /></span>
+                <div className="input-group input-group-sm" style={{ maxWidth: 260, backgroundColor: 'var(--fv-bg)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <span className="input-group-text" aria-hidden="true" style={{ backgroundColor: 'var(--fv-panel-hover)', color: 'var(--fv-text)', borderColor: 'var(--fv-border)' }}><i className="bi bi-search" /></span>
                     <input
                         aria-label="Search table"
                         className="form-control"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search" 
+                        placeholder="Search"
+                        style={{ backgroundColor: 'var(--fv-bg)', color: 'var(--fv-text-bright)', borderColor: 'var(--fv-border)', borderLeft: 'none' }}
                     />
                 </div>
-                <button className="btn btn-sm btn-outline-secondary" type="button" aria-label="Columns" onClick={() => setShowColumnMenu((prev) => !prev)}>
-                    <i className="bi bi-gear me-1" /> Columns
-                </button>
+                <div className="position-relative">
+                    <button
+                        className="btn btn-sm btn-outline-secondary"
+                        type="button"
+                        aria-label="Columns"
+                        aria-expanded={showColumnMenu}
+                        onClick={() => setShowColumnMenu((prev) => !prev)}
+                    >
+                        <i className="bi bi-gear me-1" /> Columns
+                    </button>
+                    {showColumnMenu && (
+                        <div
+                            className="dropdown-menu show position-absolute shadow-sm mt-1"
+                            role="menu"
+                            aria-label="Column visibility menu"
+                            style={{
+                                left: 0,
+                                top: '100%',
+                                minWidth: '12rem',
+                                maxHeight: '18rem',
+                                overflowY: 'auto',
+                                zIndex: 20,
+                                padding: '0.25rem 0',
+                            }}
+                        >
+                            {columns.map((col, index) => (
+                                <label
+                                    key={col.name}
+                                    role="menuitemcheckbox"
+                                    aria-checked={!hiddenColumns[col.name]}
+                                    className="small d-flex align-items-center justify-content-between gap-2 px-3 py-2"
+                                    style={{
+                                        cursor: 'pointer',
+                                        backgroundColor: index % 2 === 0 ? 'rgba(126, 200, 227, 0.06)' : 'transparent',
+                                    }}
+                                >
+                                    <span className="text-truncate">{col.name}</span>
+                                    <input
+                                        type="checkbox"
+                                        checked={!hiddenColumns[col.name]}
+                                        onChange={() => toggleColumn(col.name)}
+                                    />
+                                </label>
+                            ))}
+                        </div>
+                    )}
+                </div>
                 <div className="small text-muted ms-auto">
                     {isReadOnly ? 'Read-only table — editing disabled.' : 'Double-click a cell to edit.'}
                 </div>
-                {showColumnMenu && (
-                    <div className="d-flex flex-wrap gap-2 w-100 mt-1 px-1">
-                        {columns.map((col) => (
-                            <label key={col.name} className="small d-flex align-items-center gap-1">
-                                <input
-                                    type="checkbox"
-                                    checked={!hiddenColumns[col.name]}
-                                    onChange={() => toggleColumn(col.name)}
-                                />
-                                {col.name}
-                            </label>
-                        ))}
-                    </div>
-                )}
             </div>
             <div 
                 ref={scrollContainerRef}
