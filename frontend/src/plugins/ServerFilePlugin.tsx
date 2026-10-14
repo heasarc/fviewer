@@ -23,7 +23,7 @@ const ServerFilePluginComponent = () => {
         try {
             setIsLoading(true);
             const response = await fetch(getApiUrl(`api/file?path=${encodeURIComponent(serverPath)}`));
-            if (!response.ok) throw new Error("Failed to fetch file");
+            if (!response.ok) throw new Error('Failed to load file from server.');
             
             // Route based on the mode
             if (serverModalMode === 'region' || serverPath.endsWith('.reg')) {

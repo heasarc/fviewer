@@ -62,7 +62,7 @@ describe('ServerFilePlugin', () => {
         vi.stubGlobal('fetch', mockFetch({ ok: false }));
         const processFile = vi.fn();
         renderPluginSlot(initServerFilePlugin, 'menubar:file', { serverModalMode: 'fits', processFile });
-        fireEvent.click(await screen.findByText('a.fits'));
+        fireEvent.click(await screen.findByText('a.fits'));        
         await waitFor(() => expect(screen.getByText('Failed to load file from server.')).toBeInTheDocument());
         expect(processFile).not.toHaveBeenCalled();
     });
