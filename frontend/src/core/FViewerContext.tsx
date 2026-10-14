@@ -7,6 +7,13 @@ import { useRegions } from '../hooks/useRegions';
 import type { DrawMode } from '../utils/regionUtils';
 import { FITS_FORMATS, ALLOWED_EXTS } from '../utils/constants';
 
+// Define the Feedback type so it can be shared
+export type FeedbackMessage = {
+    type: 'error' | 'success' | 'info';
+    message: string;
+    retry?: () => void;
+};
+
 // Define what our context exposes to the app and plugins
 interface CoreContextType {
     fitsWorker: ReturnType<typeof useFits>;
@@ -75,6 +82,10 @@ interface CoreContextType {
     setActiveDataType: React.Dispatch<React.SetStateAction<'fits' | 'votable'>>;
     selectedCatalogRow: number | null;
     setSelectedCatalogRow: React.Dispatch<React.SetStateAction<number | null>>;
+
+    // Add Feedback state
+    feedback: FeedbackMessage | null;
+    setFeedback: React.Dispatch<React.SetStateAction<FeedbackMessage | null>>;
 }
 
 export const FViewerContext = createContext<CoreContextType | null>(null);
@@ -119,6 +130,9 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
 
     // Catalogs
     const [selectedCatalogRow, setSelectedCatalogRow] = useState<number | null>(null);
+
+    // Initialize the Feedback state here
+    const [feedback, setFeedback] = useState<FeedbackMessage | null>(null);
 
     // More about regions
     const {
@@ -205,7 +219,8 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
         selectedRegionId, setSelectedRegionId, hoveredRegionId, setHoveredRegionId,
         dragAction, setDragAction, deleteSelectedRegion, handleRegionDrag,
         isSidebarOpen, setIsSidebarOpen,
-        selectedCatalogRow, setSelectedCatalogRow
+        selectedCatalogRow, setSelectedCatalogRow,
+        feedback, setFeedback
     };
 
     return (

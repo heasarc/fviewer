@@ -76,6 +76,9 @@ export const createMockContext = (overrides = {}) => {
         currentSlice: [],
         setCurrentSlice: vi.fn(),
         
+        feedback: null,
+        setFeedback: vi.fn(),
+        
         ...overrides,
     };
 };

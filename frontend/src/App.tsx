@@ -21,7 +21,8 @@ function App() {
         imageData, setImageData, isLoading, setIsLoading,
         isPlotterOpen, processFile, regions, setRegions, setIsConnected,
         setCurrentSlice, selectedCatalogRow, setSelectedCatalogRow,
-        setZoom, setPan, setFlipX, setFlipY, setRotation
+        setZoom, setPan, setFlipX, setFlipY, setRotation,
+        feedback, setFeedback,
     } = useCore();
 
     // Deconstruct the worker methods we need for this file
@@ -41,13 +42,12 @@ function App() {
         rowIndex: number;
         data: any;
     } | null>(null);
-    const [feedback, setFeedback] = useState<{ type: 'error' | 'success' | 'info'; message: string; retry?: () => void } | null>(null);
 
     useEffect(() => {
         if (!feedback) return;
         const timer = window.setTimeout(() => setFeedback(null), 4000);
         return () => window.clearTimeout(timer);
-    }, [feedback]);
+    }, [feedback, setFeedback]);
 
     // State for the Bottom Drawer (Table) visibility and height
     const [isTableDrawerOpen, setIsTableDrawerOpen] = useState(true);
