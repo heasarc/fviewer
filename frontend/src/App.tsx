@@ -9,7 +9,6 @@ import { VirtualTable } from './components/VirtualTable';
 import { VectorModal } from './components/VectorModal';
 import { FitsImage } from './components/FitsImage';
 import fviewerLogo from '/fviewer-logo.svg';
-import { ALLOWED_EXTS, FITS_FORMATS } from './utils/constants';
 
 function App() {
 
@@ -340,7 +339,8 @@ function App() {
         <div className="vh-100 d-flex flex-column overflow-hidden" style={{ backgroundColor: 'var(--fv-bg)', color: 'var(--fv-text)' }}>
             
             {/* Hidden File Input */}
-            <input type="file" ref={fileInputRef} accept={FITS_FORMATS} style={{ display: 'none' }} onChange={handleFileUpload} />
+            <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
+
 
             {feedback && (
                 <div
@@ -503,9 +503,9 @@ function App() {
                                         <i className="bi bi-folder2-open me-2" aria-hidden="true"></i>
                                         Open a FITS file
                                     </button>
-                                    <p className="small fv-text-muted mb-2">or drop a supported file here</p>
+                                    <p className="small fv-text-muted mb-2">or drop any valid file here</p>
                                     <p className="small fv-text-muted mb-0">
-                                        Supports {ALLOWED_EXTS.filter(ext => !ext.endsWith('.gz')).join(', ')}, including .gz-compressed files.
+                                        Supports FITS files, including .gz-compressed files.
                                     </p>
                                 </div>
                             </section>

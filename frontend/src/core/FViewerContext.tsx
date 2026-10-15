@@ -5,7 +5,6 @@ import { useFits } from '../hooks/useFits';
 import { useVOTable } from '../hooks/useVOTable';
 import { useRegions } from '../hooks/useRegions';
 import type { DrawMode } from '../utils/regionUtils';
-import { FITS_FORMATS, ALLOWED_EXTS } from '../utils/constants';
 
 // Define the Feedback type so it can be shared
 export type FeedbackMessage = {
@@ -147,30 +146,66 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
 
     // handle the logic of opening a file, from upload or from the API
     const processFile = async (file: File) => {
-        const fileName = file.name.toLowerCase();
-        const isValid = ALLOWED_EXTS.some(ext => fileName.endsWith(ext));
-        if (!isValid) {
-            alert(`Please select a valid FITS file. Allowed extensions: ${FITS_FORMATS}`);
-            return;
-        }
-
-        setFileName(file.name);
         setIsLoading(true);
-        
-        // --- Completely sanitize state before loading a new file ---
-        setActiveHdu(null); 
-        setActiveDataType('fits'); // Reset back to FITS mode (crucial if a VOTable was loaded)
-        setImageData(null);
-        setTableInfo(null);
-        setSelectedCatalogRow(null);
-        setRegions([]); // Wipe all regions from the previous image/catalog
-        // ------------------------------------------------------------
-        
+
         try {
+            // --- 1. MAGIC BYTE & GZIP DETECTION ---
+            const headerBuffer = await file.slice(0, 2).arrayBuffer();
+            const headerBytes = new Uint8Array(headerBuffer);
+            const isGzip = headerBytes.length >= 2 && headerBytes[0] === 0x1f && headerBytes[1] === 0x8b;
+
+            let first80Bytes: ArrayBuffer | null = null;
+
+            if (isGzip) {
+                // Stream just the first chunk to check the FITS header without decompressing the whole file
+                try {
+                    const stream = file.stream().pipeThrough(new DecompressionStream('gzip'));
+                    const reader = stream.getReader();
+                    const { value } = await reader.read();
+                    if (value) {
+                        first80Bytes = value.slice(0, 80).buffer;
+                    }
+                    await reader.cancel(); // Stop decompressing immediately
+                } catch (err) {
+                    console.warn("Failed to read gzip stream", err);
+                }
+            } else {
+                // Uncompressed: read the first 80 bytes directly
+                first80Bytes = await file.slice(0, 80).arrayBuffer();
+            }
+
+            if (!first80Bytes) {
+                setFeedback({ type: 'error', message: 'Could not read file contents.' });
+                setIsLoading(false);
+                return;
+            }
+
+            // Decode to string and check for standard FITS signature
+            const decoder = new TextDecoder('ascii');
+            const headerText = decoder.decode(first80Bytes);
+            const isFits = /^SIMPLE\s*=\s*T/.test(headerText);
+
+            if (!isFits) {
+                setFeedback({ type: 'error', message: 'The selected file is not a valid FITS file.' });
+                setIsLoading(false);
+                return;
+            }
+
+            setFileName(file.name);
+            
+            // --- Completely sanitize state before loading a new file ---
+            setActiveHdu(null); 
+            setActiveDataType('fits'); 
+            setImageData(null);
+            setTableInfo(null);
+            setSelectedCatalogRow(null);
+            setRegions([]); 
+            // ------------------------------------------------------------
+            
             let buffer: ArrayBuffer;
 
-            // Intercept and decompress gzip files natively
-            if (file.name.toLowerCase().endsWith('.gz')) {
+            // Use the magic byte detection instead of file.name to decide how to load it
+            if (isGzip) {
                 const ds = new DecompressionStream('gzip');
                 const decompressedStream = file.stream().pipeThrough(ds);
                 buffer = await new Response(decompressedStream).arrayBuffer();
@@ -184,9 +219,10 @@ export const FViewerProvider = ({ children }: { children: ReactNode }) => {
             
             const firstValid = list.find((h: any) => h.type !== 'empty');
             setActiveHdu(firstValid ? firstValid.index : 1);
+            setFeedback({ type: 'success', message: `Successfully loaded ${file.name}.` });
         } catch (error) {
             console.error("Failed to load file:", error);
-            alert("Failed to load FITS file.");
+            setFeedback({ type: 'error', message: 'Failed to load FITS file.' });
         } finally {
             setIsLoading(false);
         }
