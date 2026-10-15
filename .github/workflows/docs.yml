@@ -2,8 +2,8 @@ name: Deploy Docs to GitHub Pages
 
 on:
   push:
-    branches:
-      - main # Change to master if that is your default branch
+    tags:
+      - '*'
 
 # Required permissions for GitHub Pages
 permissions:
