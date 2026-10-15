@@ -91,19 +91,35 @@ describe('FViewerContext', () => {
     });
 
     describe('processFile', () => {
-        it('should alert and abort if the file extension is invalid', async () => {
+        it('should reject content that is not valid FITS based on header bytes, regardless of filename extension', async () => {
             const { result } = renderHook(() => useCore(), { wrapper });
-            const badFile = { name: 'image.jpg' } as File;
+            const payload = new Uint8Array(80).fill(0x20);
+            payload.set(new TextEncoder().encode('NOT FITS DATA'), 0);
+
+            const badFile = {
+                name: 'image.jpg',
+                slice: vi.fn((start: number, end: number) => {
+                    const bytes = start === 0 && end === 2 ? Uint8Array.from([0x00, 0x00]) : payload;
+                    return {
+                        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
+                    };
+                }),
+                arrayBuffer: vi.fn()
+            } as unknown as File;
 
             await act(async () => {
                 await result.current.processFile(badFile);
             });
 
-            expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('Please select a valid FITS file'));
+            expect(result.current.feedback).toMatchObject({
+                type: 'error',
+                message: expect.stringContaining('missing SIMPLE=T signature')
+            });
             expect(result.current.isLoading).toBe(false);
+            expect(vi.mocked(result.current.fitsWorker.openFile)).not.toHaveBeenCalled();
         });
 
-        it('should sanitize state, load a standard .fits file, and find the first valid HDU', async () => {
+        it('should sanitize state, load a FITS file by signature rather than extension, and find the first valid HDU', async () => {
             const { result } = renderHook(() => useCore(), { wrapper });
             
             // 1. Mess up the state beforehand to ensure sanitization wipes it
@@ -113,8 +129,15 @@ describe('FViewerContext', () => {
                 result.current.setImageData({ data: 'mock' });
             });
 
+            const header = new TextEncoder().encode('SIMPLE  =                    T');
             const goodFile = {
-                name: 'test.fits',
+                name: 'test.bin',
+                slice: vi.fn((start: number, end: number) => {
+                    const bytes = start === 0 && end === 2 ? Uint8Array.from([0x00, 0x00]) : new Uint8Array(header);
+                    return {
+                        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
+                    };
+                }),
                 arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8))
             } as unknown as File;
 
@@ -146,7 +169,17 @@ describe('FViewerContext', () => {
 
         it('should fallback to activeHdu = 1 if all HDUs are empty', async () => {
             const { result } = renderHook(() => useCore(), { wrapper });
-            const file = { name: 'empty.fits', arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)) } as unknown as File;
+            const header = new TextEncoder().encode('SIMPLE  =                    T');
+            const file = {
+                name: 'empty.bin',
+                slice: vi.fn((start: number, end: number) => {
+                    const bytes = start === 0 && end === 2 ? Uint8Array.from([0x00, 0x00]) : new Uint8Array(header);
+                    return {
+                        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
+                    };
+                }),
+                arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8))
+            } as unknown as File;
             
             vi.mocked(result.current.fitsWorker.getHduList).mockResolvedValue([
                 { index: 0, type: 'empty' }
@@ -159,11 +192,18 @@ describe('FViewerContext', () => {
             expect(result.current.activeHdu).toBe(1); // Fallback applied
         });
 
-        it('should catch errors during processing, alert the user, and clear isLoading', async () => {
+        it('should catch errors during processing, set feedback, and clear isLoading', async () => {
             const { result } = renderHook(() => useCore(), { wrapper });
+            const header = new TextEncoder().encode('SIMPLE  =                    T');
             const corruptFile = { 
-                name: 'corrupt.fits', 
-                arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)) 
+                name: 'corrupt.bin',
+                slice: vi.fn((start: number, end: number) => {
+                    const bytes = start === 0 && end === 2 ? Uint8Array.from([0x00, 0x00]) : new Uint8Array(header);
+                    return {
+                        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
+                    };
+                }),
+                arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8))
             } as unknown as File;
 
             const error = new Error('WASM Memory Access Out of Bounds');
@@ -174,7 +214,10 @@ describe('FViewerContext', () => {
             });
 
             expect(console.error).toHaveBeenCalledWith('Failed to load file:', error);
-            expect(window.alert).toHaveBeenCalledWith('Failed to load FITS file.');
+            expect(result.current.feedback).toMatchObject({
+                type: 'error',
+                message: 'Failed to load FITS file.'
+            });
             expect(result.current.isLoading).toBe(false); // Ensure finally block executed
         });
     });

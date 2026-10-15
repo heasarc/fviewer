@@ -78,7 +78,7 @@ describe('App', () => {
         expect(screen.getByText('x.fits')).toBeTruthy();
         expect(screen.getByRole('heading', { name: 'Explore your astronomical data' })).toBeTruthy();
         expect(screen.getByRole('button', { name: /Open a FITS file/ })).toBeTruthy();
-        expect(screen.getByText(/drop a supported file here/)).toBeTruthy();
+        expect(screen.getByText(/drop .* file here/i)).toBeTruthy();
         expect(screen.getByText(/FViewer Version/)).toBeTruthy();
         expect(screen.queryByTestId('fits-image')).toBeNull();
         expect(ctx.setIsConnected).toHaveBeenCalledWith(true);

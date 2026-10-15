@@ -15,8 +15,13 @@ const wrapper = ({ children }: { children: React.ReactNode }) => <FViewerProvide
 
 describe('FViewerContext gzip', () => {
     it('decompresses .gz files before opening them', async () => {
+        const header = new TextEncoder().encode('SIMPLE  =                    T');
         const payload = new Uint8Array([1, 2, 3, 4, 5]);
-        const gz = await new Response(new Blob([payload]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
+        const decompressed = new Uint8Array(header.length + payload.length);
+        decompressed.set(header, 0);
+        decompressed.set(payload, header.length);
+
+        const gz = await new Response(new Blob([decompressed]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
         const file = new File([gz], 'img.fits.gz');
 
         const { result } = renderHook(() => useCore(), { wrapper });
@@ -25,7 +30,7 @@ describe('FViewerContext gzip', () => {
         await act(async () => { await result.current.processFile(file); });
 
         expect(openFile).toHaveBeenCalledTimes(1);
-        expect(Array.from(openFile.mock.calls[0][0] as Uint8Array)).toEqual([1, 2, 3, 4, 5]);
+        expect(new TextDecoder().decode(openFile.mock.calls[0][0] as Uint8Array).startsWith('SIMPLE')).toBe(true);
         expect(result.current.activeHdu).toBe(1);
     });
 });
