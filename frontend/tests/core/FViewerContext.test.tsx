@@ -113,7 +113,7 @@ describe('FViewerContext', () => {
 
             expect(result.current.feedback).toMatchObject({
                 type: 'error',
-                message: expect.stringContaining('missing SIMPLE=T signature')
+                message: expect.stringContaining('not a valid FITS file')
             });
             expect(result.current.isLoading).toBe(false);
             expect(vi.mocked(result.current.fitsWorker.openFile)).not.toHaveBeenCalled();
