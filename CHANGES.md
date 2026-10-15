@@ -1,3 +1,24 @@
+# 0.4.0
+  - Allow reading fits files based on content rather than file extension.
+  - Enhancements:
+    - Add checksum verification.
+    - Add support for BITPIX=64, TLOGICAL in tables.
+    - Expose alternative WCS in the header.
+    - Replace alert() with feedback messages in the app.
+    - UX/UI imporvements:
+      - Add some guidance to the starting screen to use up the empty space.
+      - Add an option for side-by-side view when both image and table are visible.
+      - Region mode shows up in the drop down button when viewing an image.
+      - Catalog menu visible all the time but disabled with when not connected.
+      - Make the column selector a dropdown rather than a long list of checkboxes.
+      - Make the plotter into overlay for small screens
+    - Add useful agent skills.
+    - Use public releases of votable-wasm and wasm-cfitsio instead of hardcoded local ones.
+  - Bug fixes:
+    - Fix HIERARCH and CONTINUE keyword parsing
+    - Add a delay between closing the browser and the server shutdow to allow for things like browser referesh etc.
+    - Fix 'Reset View' button that was not working correctly.
+
 # 0.3.8
   - Enhancements:
    - Increment port if 8000 is in use instead of failing.
