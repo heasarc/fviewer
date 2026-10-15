@@ -92,20 +92,20 @@ def test_list_directory_root(client, dummy_filesystem):
     assert data["current_path"] == "."
     items = data["items"]
 
-    # We should have exactly 4 items:
-    # subfolder, image.img, valid.fits, valid.fits.gz
-    # The invalid.txt and .hidden.fits must be filtered out!
-    assert len(items) == 4
+    # We should now list all non-hidden entries in the workspace root.
+    # Hidden files and extension filtering are intentionally not applied here.
+    assert len(items) == 5
 
     # Check that sorting works (folders first, then alphabetical)
     assert items[0]["name"] == "subfolder"
     assert items[0]["is_dir"] is True
 
-    # Verify no '..' in root
+    # Verify no '..' in root and that non-hidden files remain visible
     names = [item["name"] for item in items]
     assert ".." not in names
     assert "valid.fits" in names
-    assert "invalid.txt" not in names
+    assert "invalid.txt" in names
+    assert ".hidden.fits" not in names
 
 
 def test_list_directory_subfolder(client, dummy_filesystem):

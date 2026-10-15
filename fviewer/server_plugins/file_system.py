@@ -61,10 +61,6 @@ def list_directory(path: str = "."):
     if not secure_path.is_dir():
         raise HTTPException(status_code=404, detail="Directory not found")
 
-    # Allowed astronomical extensions
-    bases = [".fits", ".fit", ".arf", ".rmf", ".rsp", ".pha", ".img", ".reg"]
-    extensions = tuple(f"{b}{x}" for b in bases for x in ["", ".gz"])
-
     items = []
     try:
         # Add a "Go Up" option if not at the root
@@ -73,20 +69,21 @@ def list_directory(path: str = "."):
                 {
                     "name": "..",
                     "path": str(
-                        secure_path.parent.relative_to(WORKSPACE_ROOT)
-                    ),
+                        secure_path.parent.relative_to(WORKSPACE_ROOT)),
                     "is_dir": True,
                 }
             )
 
         for entry in secure_path.iterdir():
+            # Skip hidden files
             if entry.name.startswith("."):
                 continue
 
             is_dir = entry.is_dir()
 
-            if not is_dir and not entry.name.lower().endswith(extensions):
-                continue
+            # No extension filtering or disk reads!
+            # We list all files, and the React frontend's magic byte check will
+            # safely reject non-FITS files on demand when the user clicks them.
 
             items.append(
                 {
@@ -96,6 +93,7 @@ def list_directory(path: str = "."):
                 }
             )
 
+        # Sort directories first, then alphabetically
         items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
 
         return {
