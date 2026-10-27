@@ -50,7 +50,7 @@ jobs:
         run: npm run build
 
       - name: Run Python backend tests
-        run: pytest
+        run: uv run pytest
 
       - name: Run end-to-end tests
-        run: pytest tests_e2e/ -q
+        run: uv run pytest tests_e2e/ -q
