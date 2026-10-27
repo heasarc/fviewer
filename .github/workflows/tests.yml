@@ -37,9 +37,12 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Install Playwright browser
+      - name: Install frontend Playwright browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium
+
+      - name: Install Python Playwright browser
+        run: uv run python -m playwright install --with-deps chromium
 
       - name: Run frontend tests
         working-directory: frontend
