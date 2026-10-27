@@ -33,6 +33,7 @@ path = "fviewer/__init__.py"
 dev = [
     "hatchling>=1.29.0",
     "httpx>=0.28.1",
+    "httpx2>=0.28.1",
     "mkdocs-material>=9.7.7",
     "mkdocstrings[python]>=1.0.6",
     "pytest>=9.0.3",

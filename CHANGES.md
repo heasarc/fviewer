@@ -1,3 +1,7 @@
+# 0.4.1
+  - Security updates to the python lock file
+  - Add github action for tests.
+
 # 0.4.0
   - Allow reading fits files based on content rather than file extension.
   - Enhancements:
