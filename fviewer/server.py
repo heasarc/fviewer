@@ -49,8 +49,8 @@ ORIGINS = [os.getenv("FVIEWER_ORIGIN", "")]
 LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$"
 SHUTDOWN_GRACE_PERIOD_SECONDS = 5
 
-
-app = FastAPI(title="FViewer API", root_path=ROOT_PATH)
+clear_path = re.sub(r'/+', '/', ROOT_PATH).rstrip('/')
+app = FastAPI(title="FViewer API", root_path=clear_path)
 
 
 app.add_middleware(
