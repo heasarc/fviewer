@@ -20,6 +20,12 @@ This will automatically open a browser window to the application at `http://127.
 
 You specify custom host and port by passing them to the command line.
 
+Use `-v` or `--version` to print the installed FViewer version:
+
+```bash
+fviewer --version
+```
+
 Calling `fviewer` with a file name will load it automatically. The path may be
 relative or absolute; when an external file is supplied, its parent directory
 is available in the File browser for that server session.

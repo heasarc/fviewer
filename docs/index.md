@@ -53,7 +53,13 @@ Simply type:
 fviewer
 ```
 
-Pass the `-h` or `--help` option to see other command line options. You pass a file name to open and control the host, port or browser behavior.
+Pass the `-h` or `--help` option to see other command line options. Use `-v`
+or `--version` to print the installed FViewer version. You can pass a file
+name to open and control the host, port or browser behavior.
+
+```bash
+fviewer --version
+```
 
 This command starts a lightweight, secure local server and will automatically open FViewer in your default web browser
 (usually at `http://localhost:8000`). From there, you can use the **File** menu to browse the server workspace and open FITS files.
