@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import patch
 
-from fviewer.cli import main, open_browser, open_file_on_startup
+from fviewer.cli import app, main, open_browser, open_file_on_startup
 
 
 # --- Function Tests ---
@@ -85,14 +85,13 @@ def test_main_no_browser_flag(mock_find_port, mock_timer, mock_uvicorn):
 
 
 @patch("fviewer.cli.uvicorn.run")
-@patch("fviewer.cli.os.path.exists")
-@patch("sys.argv", ["fviewer", "ghost.fits"])
-def test_main_missing_file(mock_exists, mock_uvicorn, capsys):
+def test_main_missing_file(mock_uvicorn, capsys, tmp_path):
     """Test that a bad file path triggers sys.exit(1)."""
-    mock_exists.return_value = False
+    missing_file = tmp_path / "ghost.fits"
 
-    with pytest.raises(SystemExit) as exc_info:
-        main()
+    with patch("sys.argv", ["fviewer", str(missing_file)]):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
 
     assert exc_info.value.code == 1
     mock_uvicorn.assert_not_called()  # Server should not start!
@@ -102,16 +101,21 @@ def test_main_missing_file(mock_exists, mock_uvicorn, capsys):
 @patch("fviewer.cli.uvicorn.run")
 @patch("fviewer.cli.threading.Thread")
 @patch("fviewer.cli.threading.Timer")
-@patch("fviewer.cli.os.path.exists")
-@patch("sys.argv", ["fviewer", "real.fits"])
-def test_main_valid_file(mock_exists, mock_timer, mock_thread, mock_uvicorn):
+@patch("fviewer.cli.find_available_port", return_value=9000)
+def test_main_valid_file(
+        mock_find_port, mock_timer, mock_thread, mock_uvicorn, tmp_path):
     """Test providing a valid file spawns the loader thread."""
-    mock_exists.return_value = True
+    file_path = tmp_path / "real.fits"
+    file_path.touch()
 
-    main()
+    with patch("sys.argv", ["fviewer", str(file_path)]):
+        main()
 
     # Thread should be started with the right target
     mock_thread.assert_called_once()
     _, kwargs = mock_thread.call_args
     assert kwargs["target"] == open_file_on_startup
     assert kwargs["daemon"] is True
+    assert kwargs["args"] == (str(file_path.resolve()), "127.0.0.1", 9000)
+    assert str(file_path.parent.resolve()) in app.state.allowed_external_dirs
+    mock_find_port.assert_called_once_with("127.0.0.1", 8000, max_attempts=100)
