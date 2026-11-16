@@ -42,7 +42,7 @@ Every feature in FViewer (the Header Editor, the Plotter, the Region Toolbar) is
 The backend is equally modular, utilizing FastAPI for routing and a clever "Mixin Pattern" for the Python client.
 
 ### FastAPI Server Plugins
-The FastAPI server is divided using `APIRouter`. Base routes handle the WebSocket and static files, while specific logic is extracted into separate files. For example, `file_system.py` securely handles local directory browsing (strictly confined to avoid path traversal), and `tap_proxy.py` safely tunnels external catalog queries to bypass browser CORS restrictions.
+The FastAPI server is divided using `APIRouter`. Base routes handle the WebSocket and static files, while specific logic is extracted into separate files. For example, `file_system.py` securely handles local directory browsing (strictly confined to avoid path traversal), `tap_proxy.py` safely tunnels external catalog queries to bypass browser CORS restrictions, and `upload.py` provides temporary in-memory storage for FITS blobs uploaded from the Python client (used when loading `astropy.io.fits.HDUList` objects instead of file paths).
 
 ### Python API Mixins
 To keep the Python API "flat" and easy to use (e.g., `viewer.load_file()`), while keeping the actual source code perfectly organized, FViewer uses **Mixins**.

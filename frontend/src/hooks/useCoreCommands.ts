@@ -23,13 +23,22 @@ export function useCoreCommands(
         // --- Register Core Commands ---
 
         commandRegistry.register('load_file', async (command, sendReply) => {
-            // Fetch the file through the FastAPI backend to ensure path traversal 
-            // restrictions are enforced by the server.
-            const response = await fetch(getApiUrl(`api/file?path=${encodeURIComponent(command.path)}`));
+            let response: Response;
+            let filename: string;
+
+            if (command.upload_id) {
+                // Blob mode: fetch from the temporary upload endpoint
+                response = await fetch(getApiUrl(`api/upload/${command.upload_id}`));
+                filename = command.name || 'memory.fits';
+            } else {
+                // Path mode: fetch through the secure file endpoint
+                response = await fetch(getApiUrl(`api/file?path=${encodeURIComponent(command.path)}`));
+                filename = command.path.split('/').pop() || 'remote.fits';
+            }
+
             if (!response.ok) throw new Error("Failed to fetch file");
 
             const blob = await response.blob();
-            const filename = command.path.split('/').pop() || 'remote.fits';
             const file = new File([blob], filename, { type: 'application/octet-stream' });
             processFile(file);
             ack(command, sendReply);

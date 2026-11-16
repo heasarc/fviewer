@@ -129,6 +129,138 @@ def test_load_file(viewer):
 
 
 @responses.activate
+def test_load_file_hdulist(viewer):
+    """Test that load_file accepts an astropy HDUList and uploads it."""
+    from unittest.mock import patch
+    import types
+
+    viewer.client_id = "test_client"
+
+    # 1. Mock the upload endpoint
+    responses.add(
+        responses.POST,
+        f"{viewer.base_url}/upload",
+        json={"upload_id": "abc-123"},
+        status=200
+    )
+
+    # 2. Mock the command endpoint
+    responses.add(
+        responses.POST,
+        f"{viewer.base_url}/command",
+        json={"status": "ok"},
+        status=200
+    )
+
+    # Build a fake astropy.io.fits module with a real HDUList class
+    fake_fits = types.ModuleType("astropy.io.fits")
+
+    class FakeHDUList:
+        def writeto(self, fileobj, **kwargs):
+            fileobj.write(b"SIMPLE  =                    T")
+
+    fake_fits.HDUList = FakeHDUList
+
+    hdulist = FakeHDUList()
+
+    with patch.dict("sys.modules", {
+        "astropy": types.ModuleType("astropy"),
+        "astropy.io": types.ModuleType("astropy.io"),
+        "astropy.io.fits": fake_fits,
+    }):
+        result = viewer.load_file(hdulist, name="obs.fits")
+
+    assert result["status"] == "ok"
+
+    # Verify upload was called (first call)
+    upload_req = responses.calls[0].request
+    assert "/upload" in upload_req.url
+
+    # Verify command payload references the upload_id
+    cmd_body = json.loads(responses.calls[1].request.body)
+    assert cmd_body["action"] == "load_file"
+    assert cmd_body["upload_id"] == "abc-123"
+    assert cmd_body["name"] == "obs.fits"
+
+
+@responses.activate
+def test_load_file_hdulist_default_name(viewer):
+    """HDUList without an explicit name defaults to 'memory.fits'."""
+    from unittest.mock import patch
+    import types
+
+    viewer.client_id = "test_client"
+
+    responses.add(
+        responses.POST,
+        f"{viewer.base_url}/upload",
+        json={"upload_id": "def-456"},
+        status=200
+    )
+    responses.add(
+        responses.POST,
+        f"{viewer.base_url}/command",
+        json={"status": "ok"},
+        status=200
+    )
+
+    fake_fits = types.ModuleType("astropy.io.fits")
+
+    class FakeHDUList:
+        def writeto(self, fileobj, **kwargs):
+            fileobj.write(b"SIMPLE  =                    T")
+
+    fake_fits.HDUList = FakeHDUList
+
+    with patch.dict("sys.modules", {
+        "astropy": types.ModuleType("astropy"),
+        "astropy.io": types.ModuleType("astropy.io"),
+        "astropy.io.fits": fake_fits,
+    }):
+        viewer.load_file(FakeHDUList())
+
+    cmd_body = json.loads(responses.calls[1].request.body)
+    assert cmd_body["name"] == "memory.fits"
+
+
+def test_load_file_invalid_type(viewer):
+    """Passing an unsupported type raises TypeError."""
+    viewer.client_id = "test_client"
+
+    with pytest.raises(TypeError) as exc_info:
+        viewer.load_file(42)
+
+    assert "must be a string path or an astropy.io.fits.HDUList" in str(
+        exc_info.value
+    )
+
+
+def test_load_file_wrong_object_with_astropy(viewer):
+    """Non-HDUList object raises TypeError when astropy is available."""
+    from unittest.mock import patch
+    import types
+
+    viewer.client_id = "test_client"
+
+    fake_fits = types.ModuleType("astropy.io.fits")
+
+    class FakeHDUList:
+        pass
+
+    fake_fits.HDUList = FakeHDUList
+
+    with patch.dict("sys.modules", {
+        "astropy": types.ModuleType("astropy"),
+        "astropy.io": types.ModuleType("astropy.io"),
+        "astropy.io.fits": fake_fits,
+    }):
+        with pytest.raises(TypeError) as exc_info:
+            viewer.load_file(42)
+
+    assert "got int" in str(exc_info.value)
+
+
+@responses.activate
 def test_get_regions_format_validation(viewer):
     """Test that get_regions enforces local format validation."""
     viewer.client_id = "test_client"

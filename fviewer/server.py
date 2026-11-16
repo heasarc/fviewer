@@ -34,6 +34,9 @@ from .server_plugins.file_system import router as file_system_router
 # TAP proxy plugin
 from .server_plugins.tap_proxy import router as tap_proxy_router
 
+# Upload plugin (in-memory blob storage for HDUList uploads)
+from .server_plugins.upload import router as upload_router
+
 # If running standalone, this defaults to "" (empty string)
 # If running in Jupyter, this becomes "/fviewer"
 ROOT_PATH = os.getenv("FVIEWER_ROOT_PATH", "")
@@ -65,6 +68,7 @@ app.add_middleware(
 # Mount the Plugin Routers
 app.include_router(file_system_router)
 app.include_router(tap_proxy_router)
+app.include_router(upload_router)
 
 
 def verify_token(authorization: str = Header(None)):

@@ -38,6 +38,27 @@ viewer.set_zoom(2.0)
 viewer.pan_to(150.5, -12.3) # Pan to an X, Y pixel coordinate
 ```
 
+### Loading In-Memory Data (Astropy HDULists)
+
+> **Note:** Passing an Astropy `HDUList` to `load_file` is available in FViewer version 0.4.1 and later.
+
+If you already have FITS data in memory—for example from an `astropy.io.fits.open()` call or a pipeline that constructs HDUs on the fly—you can pass the `HDUList` directly to `load_file` without writing it to disk first. This is especially useful when working inside Jupyter notebooks where the frontend cannot traverse arbitrary filesystem paths for security reasons.
+
+```python
+from astropy.io.fits import HDUList, PrimaryHDU, ImageHDU
+import numpy as np
+
+# Build an HDUList in memory
+primary = PrimaryHDU()
+image = ImageHDU(data=np.random.normal(size=(512, 512)), name="SCI")
+hdulist = HDUList([primary, image])
+
+# Load it directly into the viewer
+viewer.load_file(hdulist, name="simulated_obs.fits")
+```
+
+The optional `name` keyword controls the filename displayed in the viewer UI (defaults to `"memory.fits"` when omitted). Astropy is only required when you actually pass an `HDUList`—it is not a required dependency for path-based loading.
+
 ### Working with Regions Programmatically
 
 You don't have to draw regions by hand. You can inject regions into the viewer directly from your Python analysis, or extract regions that you drew manually on the screen back into Python.

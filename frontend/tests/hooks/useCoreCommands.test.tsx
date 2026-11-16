@@ -75,6 +75,28 @@ describe('Core Commands Plugin', () => {
             expect(mockSendReply).toHaveBeenCalledWith({ message_id: 'm1', status: 'ok' });
         });
 
+        it('should fetch from upload endpoint when upload_id is provided', async () => {
+            const handler = setupHook();
+            await handler({ action: 'load_file', upload_id: 'abc-123', name: 'obs.fits', message_id: 'm_up' });
+
+            const fetchUrl = (globalThis.fetch as any).mock.calls[0][0] as string;
+            expect(fetchUrl).toContain('api/upload/abc-123');
+            expect(mockProcessFile).toHaveBeenCalled();
+
+            const createdFile = mockProcessFile.mock.calls[0][0];
+            expect(createdFile).toBeInstanceOf(File);
+            expect(createdFile.name).toBe('obs.fits');
+            expect(mockSendReply).toHaveBeenCalledWith({ message_id: 'm_up', status: 'ok' });
+        });
+
+        it('should use default name for upload_id without explicit name', async () => {
+            const handler = setupHook();
+            await handler({ action: 'load_file', upload_id: 'def-456', message_id: 'm_def' });
+
+            const createdFile = mockProcessFile.mock.calls[0][0];
+            expect(createdFile.name).toBe('memory.fits');
+        });
+
         it('should halt execution if file fetch fails', async () => {
             const handler = setupHook();
             globalThis.fetch = vi.fn().mockResolvedValue({ ok: false } as Response);

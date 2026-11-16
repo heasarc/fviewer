@@ -1,8 +1,9 @@
 # Copyright 2026, University of Maryland, All Rights Reserved
 
+import io
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import requests
 from urllib.parse import urljoin
@@ -182,6 +183,62 @@ class FViewer(ImageControlMixin, RegionsMixin, DataCubeMixin):
         response.raise_for_status()
         return response.json()
 
-    def load_file(self, path: str) -> Dict[str, Any]:
-        """Loads a FITS file into the viewer."""
-        return self._send("load_file", path=path)
+    def load_file(
+        self,
+        path_or_hdulist: Union[str, Any],
+        *,
+        name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Loads a FITS file into the viewer.
+
+        Args:
+            path_or_hdulist: Either a filesystem path (str) to a FITS file,
+                or an ``astropy.io.fits.HDUList`` object.
+            name: Display filename shown in the viewer UI. Only used when
+                an HDUList is passed. Defaults to ``"memory.fits"``.
+
+        Returns:
+            The JSON acknowledgment from the frontend.
+
+        Raises:
+            TypeError: If *path_or_hdulist* is neither a str nor an HDUList.
+        """
+        if isinstance(path_or_hdulist, str):
+            return self._send("load_file", path=path_or_hdulist)
+
+        # Defer the import so astropy remains an optional dependency
+        try:
+            from astropy.io.fits import HDUList
+        except ImportError:
+            raise TypeError(
+                "path_or_hdulist must be a string path or an "
+                "astropy.io.fits.HDUList. "
+                "Install astropy to pass HDUList objects."
+            )
+
+        if not isinstance(path_or_hdulist, HDUList):
+            raise TypeError(
+                "path_or_hdulist must be a string path or an "
+                "astropy.io.fits.HDUList, "
+                f"got {type(path_or_hdulist).__name__}."
+            )
+
+        display_name = name or "memory.fits"
+
+        # Serialize the HDUList into an in-memory FITS byte stream
+        buf = io.BytesIO()
+        path_or_hdulist.writeto(buf)
+        buf.seek(0)
+
+        # Upload the bytes to the server's temporary store
+        upload_resp = requests.post(
+            f"{self.base_url}/upload",
+            files={"file": (display_name, buf, "application/octet-stream")},
+            headers=self.headers,
+        )
+        upload_resp.raise_for_status()
+        upload_id = upload_resp.json()["upload_id"]
+
+        return self._send(
+            "load_file", upload_id=upload_id, name=display_name
+        )

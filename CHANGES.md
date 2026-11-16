@@ -1,4 +1,5 @@
 # 0.4.1
+  - Add support for loading astropy HDUList from python, in addition to a file path.
   - Security updates to the python lock file
   - Add github action for tests.
 

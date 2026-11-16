@@ -27,12 +27,12 @@ The React frontend avoids monolithic components (like a giant `App.tsx` or a mas
 The Python API uses the **Mixin Pattern** to maintain a flat, Jupyter-friendly namespace while keeping the source code perfectly modular and Flake8-compliant.
 *   **Core (`api.py`):** Handles WebSocket initialization, HTTP POST routing (`_send`), and Jupyter token auth.
 *   **Mixins (`fviewer/plugins/`):** Contributors write Mixin classes (e.g., `ImageControlMixin`, `RegionsMixin`) containing their specific Python commands.
-*   **Composition:** `class FViewer(ImageControlMixin, RegionsMixin):`. Users instantiate `viewer = FViewer()`. Commands (e.g., `load_file`, `add_region`, `get_colormap`) are sent via HTTP POST to the FastAPI server.
+*   **Composition:** `class FViewer(ImageControlMixin, RegionsMixin):`. Users instantiate `viewer = FViewer()`. Commands (e.g., `load_file`, `add_region`, `get_colormap`) are sent via HTTP POST to the FastAPI server. `load_file` also accepts `astropy.io.fits.HDUList` objects (astropy is a lazy/optional dependency): the HDUList is serialized to bytes, uploaded to the server's temporary in-memory store, and the frontend fetches it from a one-time-use URL.
 
 #### 3. FastAPI Backend Architecture (`server.py`)
 The FastAPI server is divided using `APIRouter`.
 *   **Core Server:** Handles the `/ws` WebSocket endpoint, CORS regex matching, JWT Authentication, and static file mounting. Uses an `asyncio.Future` pattern (`send_and_wait`) to bridge synchronous Python requests to asynchronous React WebSocket replies.
-*  **Server Plugins (`fviewer/server_plugins/`):** Specific backend logic extracted into routers, such as `file_system.py` (secure local directory browsing) and `tap_proxy.py` (uses a synchronous `requests` call running in a background thread to safely tunnel TAP queries and bypass browser CORS without blocking async WebSockets).
+*  **Server Plugins (`fviewer/server_plugins/`):** Specific backend logic extracted into routers, such as `file_system.py` (secure local directory browsing), `tap_proxy.py` (uses a synchronous `requests` call running in a background thread to safely tunnel TAP queries and bypass browser CORS without blocking async WebSockets), and `upload.py` (temporary in-memory blob storage enabling `load_file` to accept `astropy.io.fits.HDUList` objects—bytes are uploaded once, served to the frontend via a one-time-use URL, then deleted from memory).
 
 #### Core Frontend Components (The "Shell")
 1.  **`App.tsx`:** A 100vh flexbox shell. Renders:
