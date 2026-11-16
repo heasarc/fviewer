@@ -9,6 +9,7 @@ import socket
 from pathlib import Path
 from fviewer.server import app
 from fviewer.api import FViewer
+from fviewer import __version__
 
 
 def open_browser(url: str):
@@ -67,6 +68,9 @@ def main():
     parser.add_argument(
         "--no-browser", action="store_true", default=False,
         help="Don't open the browser automatically")
+    parser.add_argument(
+        "-v", "--version", action="version",
+        version=f"%(prog)s {__version__}")
 
     args = parser.parse_args()
 

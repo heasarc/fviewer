@@ -2,6 +2,7 @@
 import pytest
 from unittest.mock import patch
 
+from fviewer import __version__
 from fviewer.cli import app, main, open_browser, open_file_on_startup
 
 
@@ -46,6 +47,17 @@ def test_open_file_on_startup_exception(mock_print, mock_fviewer):
 
 
 # --- Main CLI Argument Tests ---
+
+@pytest.mark.parametrize("version_flag", ["-v", "--version"])
+def test_main_version(version_flag, capsys):
+    """Test that both version flags print the package version and exit."""
+    with patch("sys.argv", ["fviewer", version_flag]):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+    assert exc_info.value.code == 0
+    assert capsys.readouterr().out == f"fviewer {__version__}\n"
+
 
 @patch("fviewer.cli.uvicorn.run")
 @patch("fviewer.cli.threading.Timer")
