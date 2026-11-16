@@ -14,6 +14,18 @@ When you open a file, the screen is divided into a few key areas:
 -   **The Center Workspace:** The main area where your images and tables are displayed.
 -   **The Right Sidebar (Plotter):** A collapsible panel for making quick graphs of your data.
 
+### Opening files
+
+Use **File > Open** to browse the FViewer workspace. For a server started with
+`FVIEWER_ALLOWED_DIRS`, the file picker also provides each configured directory
+as a separate location. Multiple directories are separated with `:` on
+macOS/Linux and `;` on Windows. The command-line form also accepts an absolute
+file path, for example `fviewer /data/observations/m51.fits`; the file's parent
+directory is then available for that server session.
+
+The browser cannot navigate above the workspace or an allowed directory, and
+paths outside those locations cannot be opened.
+
 ## 2. Navigating FITS Files (The Left Sidebar)
 A single FITS file often contains multiple pieces of data—such as a primary image, other images, data tables—all bundled together. These are called **HDUs** (Header Data Units). 
 

@@ -56,7 +56,28 @@ fviewer
 Pass the `-h` or `--help` option to see other command line options. You pass a file name to open and control the host, port or browser behavior.
 
 This command starts a lightweight, secure local server and will automatically open FViewer in your default web browser
-(usually at `http://localhost:8000`). From there, you can use the **File** menu to browse your computer and open FITS files.
+(usually at `http://localhost:8000`). From there, you can use the **File** menu to browse the server workspace and open FITS files.
+
+#### Opening files outside the workspace
+
+The file browser is restricted to the workspace by default. You can explicitly
+allow additional directories with `FVIEWER_ALLOWED_DIRS`:
+
+```bash
+FVIEWER_ALLOWED_DIRS=/data/observations:/data/catalogs fviewer
+```
+
+Use `;` instead of `:` between directories on Windows. The File menu shows the
+workspace and each allowed directory as separate locations. You can also pass
+an absolute file path to `fviewer`; its parent directory is temporarily made
+available to the browser for that server session:
+
+```bash
+fviewer /data/observations/m51.fits
+```
+
+Only allowed directories and their descendants can be listed or read. Paths
+outside those boundaries are rejected.
 
 ### 2. Browser-Only Mode (No Installation Required)
 If you just need to quickly inspect files and don't want to install anything, FViewer can run entirely inside your web browser without a backend server. 

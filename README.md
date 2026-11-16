@@ -20,7 +20,32 @@ This will automatically open a browser window to the application at `http://127.
 
 You specify custom host and port by passing them to the command line.
 
-Calling `fviewer` with a file name will load it automatically.
+Calling `fviewer` with a file name will load it automatically. The path may be
+relative or absolute; when an external file is supplied, its parent directory
+is available in the File browser for that server session.
+
+### Files outside the workspace
+
+The server normally confines file browsing and file loading to the workspace
+directory (the directory where FViewer was started, or `FVIEWER_WORKSPACE` if
+set). To make additional directories available, set `FVIEWER_ALLOWED_DIRS`
+before starting FViewer. Separate multiple directories with the platform path
+separator (`:` on macOS/Linux, `;` on Windows):
+
+```bash
+FVIEWER_ALLOWED_DIRS=/data/observations:/data/catalogs fviewer
+```
+
+On Windows, use:
+
+```bash
+set FVIEWER_ALLOWED_DIRS=C:\data\observations;C:\data\catalogs
+fviewer
+```
+
+Only the configured directories and their descendants are exposed. Paths are
+resolved before access checks, so parent-directory traversal and symlink paths
+outside an allowed directory remain blocked.
 
 ---
 
@@ -42,8 +67,10 @@ viewer.wait_for_ready(timeout=15)
 ```
 
 ### 2. Load a FITS File
-Use the `load_file` method to open a FITS file. 
-*Note: For security reasons, the file path must be relative to the directory where you started the FViewer server.*
+Use the `load_file` method to open a FITS file. Relative paths are resolved
+from the FViewer workspace. Absolute paths can be loaded when their directory
+is allowed by `FVIEWER_ALLOWED_DIRS` (or when the file was supplied as the
+optional path to the `fviewer` command).
 
 ```python
 # Loads the file into the UI and automatically displays the Primary HDU

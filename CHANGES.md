@@ -1,3 +1,6 @@
+# 0.4.2
+  - Add support for opening files from the command line that are outside the working space.
+  - Enhancements:
 # 0.4.1
   - Add support for loading astropy HDUList from python, in addition to a file path.
   - Enhancements:
