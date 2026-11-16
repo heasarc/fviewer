@@ -1,7 +1,10 @@
 # 0.4.1
   - Add support for loading astropy HDUList from python, in addition to a file path.
-  - Security updates to the python lock file
-  - Add github action for tests.
+  - Enhancements:
+    - Security updates to the python lock file
+    - Add github action for tests.
+  - Bug fixes:
+    - Update wasm-cfitsio to 0.0.11 to fix a bug in reading WCS keywords. 
 
 # 0.4.0
   - Allow reading fits files based on content rather than file extension.
