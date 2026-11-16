@@ -4,9 +4,9 @@ import argparse
 import uvicorn
 import webbrowser
 import threading
-import os
 import sys
 import socket
+from pathlib import Path
 from fviewer.server import app
 from fviewer.api import FViewer
 
@@ -87,18 +87,26 @@ def main():
 
     url = f"http://{args.host}:{actual_port}"
 
-    # do the check here before starting the browser
-    abs_path = None
+    # Initialize the allowed directories set
+    if not hasattr(app.state, "allowed_external_dirs"):
+        app.state.allowed_external_dirs = set()
+
+    abs_path_str = None
     if args.filepath:
-        abs_path = abs_path = os.path.abspath(args.filepath)
-        if not os.path.exists(abs_path):
-            print(f"Error: File not found -> {abs_path}")
+        abs_path_obj = Path(args.filepath).resolve()
+        abs_path_str = str(abs_path_obj)
+
+        if not abs_path_obj.exists():
+            print(f"Error: File not found -> {abs_path_str}")
             sys.exit(1)
+
+        # Add the PARENT DIRECTORY of the file to the allowed directories
+        app.state.allowed_external_dirs.add(str(abs_path_obj.parent))
+
         # Start the client commands in a background thread
-        # daemon=True ensures this thread doesn't prevent the app from exiting
         threading.Thread(
             target=open_file_on_startup,
-            args=(abs_path, args.host, actual_port),
+            args=(abs_path_str, args.host, actual_port),
             daemon=True
         ).start()
 

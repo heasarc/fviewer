@@ -10,11 +10,31 @@ interface ServerFileModalProps {
     mode?: 'fits' | 'region' | null;
 }
 
+interface RootFolder {
+    name: string;
+    path: string;
+}
+
 export function ServerFileModal({ isOpen, onClose, onFileSelect, mode }: ServerFileModalProps) {
     const [currentPath, setCurrentPath] = useState<string>('.');
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
+    const [roots, setRoots] = useState<RootFolder[]>([]);
 
+    // 1. Fetch the allowed root directories when the modal opens
+    useEffect(() => {
+        if (!isOpen) return;
+        fetch(getApiUrl(`api/fs/roots`))
+            .then(res => res.json())
+            .then(data => {
+                if (data.roots) {
+                    setRoots(data.roots);
+                }
+            })
+            .catch(err => console.error("Failed to fetch roots", err));
+    }, [isOpen]);
+
+    // 2. Fetch the directory contents whenever currentPath changes
     useEffect(() => {
         if (!isOpen) return;
         
@@ -33,17 +53,18 @@ export function ServerFileModal({ isOpen, onClose, onFileSelect, mode }: ServerF
 
     if (!isOpen) return null;
 
-    // Filter items based on the current mode
     const visibleItems = items.filter(item => {
-        if (item.is_dir) return true; // Always show directories
-        
+        if (item.is_dir) return true;
         const isReg = item.name.toLowerCase().endsWith('.reg');
-        if (mode === 'region') {
-            return isReg; // Only show .reg files
-        } else {
-            return !isReg; // Hide .reg files when looking for FITS
-        }
+        if (mode === 'region') return isReg;
+        return !isReg;
     });
+
+    // Helper to keep the dropdown selector matching the current navigation tree
+    const activeRootPath = roots
+        .slice()
+        .sort((a, b) => b.path.length - a.path.length) // Match most specific path first
+        .find(r => currentPath === r.path || currentPath.startsWith(r.path))?.path || '.';
 
     return (
         <div className="modal show d-block" style={{ backgroundColor: 'var(--fv-panel)' }}>
@@ -56,8 +77,25 @@ export function ServerFileModal({ isOpen, onClose, onFileSelect, mode }: ServerF
                         <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
                     </div>
                     <div className="modal-body p-0">
-                        <div className="bg-dark p-2 border-bottom border-secondary text-truncate">
-                            <small className="text-muted">{currentPath}</small>
+                        {/* Updated Navigation Bar with Drive Selector */}
+                        <div className="bg-dark p-2 border-bottom border-secondary d-flex align-items-center gap-2">
+                            {roots.length > 1 && (
+                                <select 
+                                    className="form-select form-select-sm w-auto bg-dark text-white border-secondary"
+                                    value={activeRootPath}
+                                    onChange={(e) => setCurrentPath(e.target.value)}
+                                    title="Switch Location"
+                                >
+                                    {roots.map((root, i) => (
+                                        <option key={i} value={root.path}>
+                                            {root.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                            <small className="text-muted text-truncate flex-grow-1" title={currentPath}>
+                                {currentPath}
+                            </small>
                         </div>
                         
                         {loading ? (
