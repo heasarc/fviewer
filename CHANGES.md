@@ -1,5 +1,7 @@
 # 0.4.4
   - Add --version (-v) to the command line interface.
+  - Enhancements:
+    - Document how to use fviewer in a remote machine.
 # 0.4.3
   - Add support for opening files from the command line that are outside the working space.
 # 0.4.1
