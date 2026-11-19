@@ -85,6 +85,35 @@ fviewer /data/observations/m51.fits
 Only allowed directories and their descendants can be listed or read. Paths
 outside those boundaries are rejected.
 
+#### Running on a remote machine
+
+You can run FViewer on a remote machine and access it from your local browser
+through an SSH tunnel. Start FViewer on the remote machine with a fixed port
+and disable automatic browser launching:
+
+```bash
+fviewer --no-browser --host 127.0.0.1 --port 8000 /data/observations/m51.fits
+```
+
+Leave that process running. In a second terminal on your local machine, create
+an SSH tunnel that forwards a local port to the remote FViewer port:
+
+```bash
+ssh -N -L 8000:127.0.0.1:8000 user@remote-host
+```
+
+Then open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your local
+browser. The FITS file is read by the remote FViewer server; only the web
+interface is accessed through the SSH tunnel. If local port `8000` is already
+in use, choose another local port, for example:
+
+```bash
+ssh -N -L 9000:127.0.0.1:8000 user@remote-host
+```
+
+and open [http://127.0.0.1:9000](http://127.0.0.1:9000) instead. Keep both the
+remote FViewer process and the SSH tunnel running while you use the viewer.
+
 ### 2. Browser-Only Mode (No Installation Required)
 If you just need to quickly inspect files and don't want to install anything, FViewer can run entirely inside your web browser without a backend server. 
 
